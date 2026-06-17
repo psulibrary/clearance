@@ -7,12 +7,12 @@ export async function GET() {
     const pool = await getPool();
     const p = await getSchemaPrefix();
     const result = await pool.request().query(`
-      SELECT DISTINCT GradeLevel
+      SELECT DISTINCT Gender
       FROM ${t(p,'Patron')}
-      WHERE GradeLevel IS NOT NULL AND GradeLevel <> ''
-      ORDER BY GradeLevel
+      WHERE Gender IS NOT NULL AND Gender <> ''
+      ORDER BY Gender
     `);
-    return NextResponse.json({ levels: result.recordset.map((r: { GradeLevel: string }) => r.GradeLevel) });
+    return NextResponse.json({ genders: result.recordset.map((r: { Gender: string }) => r.Gender) });
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }

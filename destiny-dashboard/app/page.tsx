@@ -28,7 +28,7 @@ interface Stats {
   activePatronsThisYear: number;
   activePatronsLast30Days: number;
   newPatronsThisYear: number;
-  gradeLevel: string;
+  gender: string;
   activeFines: number;
   totalFinesBalance: number;
   totalFinesEverCollected: number;
@@ -150,28 +150,28 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
-  const [gradeLevels, setGradeLevels] = useState<string[]>([]);
+  const [genders, setGenders] = useState<string[]>([]);
 
   const [year, setYear]             = useState(currentYear);
   const [month, setMonth]           = useState(0);
-  const [gradeLevel, setGradeLevel] = useState('');
+  const [gender, setGender] = useState('');
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams({ year: String(year), month: String(month), gradeLevel });
+    const params = new URLSearchParams({ year: String(year), month: String(month), gender });
     fetch(`/api/stats?${params}`)
       .then(r => r.json())
       .then(d => { setStats(d); setLastUpdated(new Date()); })
       .catch(() => setStats({ error: 'Connection failed' } as Stats))
       .finally(() => setLoading(false));
-  }, [year, month, gradeLevel]);
+  }, [year, month, gender]);
 
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    fetch('/api/grade-levels')
+    fetch('/api/genders')
       .then(r => r.json())
-      .then(d => { if (d.levels) setGradeLevels(d.levels); })
+      .then(d => { if (d.genders) setGenders(d.genders); })
       .catch(() => {});
   }, []);
 
@@ -215,7 +215,7 @@ export default function Dashboard() {
       {/* Print header — only visible when printing */}
       <div className="hidden print:block px-6 py-4 border-b border-gray-300 mb-4">
         <h1 className="text-2xl font-bold">PSU Library — Stats Report</h1>
-        <p className="text-sm text-gray-500">Period: {periodLabel}{gradeLevel ? ` · Grade/Level: ${gradeLevel}` : ''} · Printed {new Date().toLocaleString('en-PH')}</p>
+        <p className="text-sm text-gray-500">Period: {periodLabel}{gender ? ` · Gender: ${gender}` : ''} · Printed {new Date().toLocaleString('en-PH')}</p>
       </div>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
@@ -248,16 +248,16 @@ export default function Dashboard() {
             </select>
           </div>
 
-          {gradeLevels.length > 0 && (
+          {genders.length > 0 && (
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Grade / Level</label>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Gender</label>
               <select
-                value={gradeLevel}
-                onChange={e => setGradeLevel(e.target.value)}
+                value={gender}
+                onChange={e => setGender(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">All Levels</option>
-                {gradeLevels.map(gl => <option key={gl} value={gl}>{gl}</option>)}
+                <option value="">All Genders</option>
+                {genders.map(gl => <option key={gl} value={gl}>{gl}</option>)}
               </select>
             </div>
           )}
@@ -281,7 +281,7 @@ export default function Dashboard() {
         {/* Period context banner */}
         <div className="text-xs text-gray-400 mb-4 print:hidden">
           Showing period-based stats for: <strong className="text-gray-600">{periodLabel}</strong>
-          {gradeLevel && <> · Grade/Level: <strong className="text-gray-600">{gradeLevel}</strong></>}
+          {gender && <> · Gender: <strong className="text-gray-600">{gender}</strong></>}
           </div>
 
         {/* Hero row */}

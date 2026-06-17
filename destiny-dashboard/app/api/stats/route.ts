@@ -5,24 +5,22 @@ import { getSchemaPrefix, t } from '@/lib/schema';
 
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
-  const year       = parseInt(sp.get('year')  || String(new Date().getFullYear()));
-  const month      = parseInt(sp.get('month') || '0');   // 0 = all months
-  const gradeLevel = sp.get('gradeLevel') || '';
+  const year   = parseInt(sp.get('year')  || String(new Date().getFullYear()));
+  const month  = parseInt(sp.get('month') || '0');   // 0 = all months
+  const gender = sp.get('gender') || '';             // e.g. 'M', 'F', ''
 
   try {
     const pool = await getPool();
     const p = await getSchemaPrefix();
     const req = pool.request();
-    req.input('year',       sql.Int,     year);
-    req.input('month',      sql.Int,     month);
-    req.input('gradeLevel', sql.NVarChar, gradeLevel);
+    req.input('year',   sql.Int,     year);
+    req.input('month',  sql.Int,     month);
+    req.input('gender', sql.NVarChar, gender);
 
     const yearFilter  = `YEAR(c2.DateOut) = @year`;
     const monthFilter = month ? `MONTH(c2.DateOut) = @month AND ${yearFilter}` : yearFilter;
 
-    // When gradeLevel is set, join Copy to Patron and filter by GradeLevel
-    const glJoin  = gradeLevel ? `JOIN ${t(p,'Patron')} gl ON c2.PatronID = gl.PatronID AND gl.GradeLevel = @gradeLevel` : '';
-    const glWhere = gradeLevel ? `AND gl.GradeLevel = @gradeLevel` : '';
+    const gJoin = gender ? `JOIN ${t(p,'Patron')} gp ON c2.PatronID = gp.PatronID AND gp.Gender = @gender` : '';
 
     const result = await req.query(`
       SELECT
@@ -48,14 +46,14 @@ export async function GET(request: NextRequest) {
         (SELECT COUNT(*) FROM ${t(p,'Copy')} WHERE DateOut IS NULL AND DateWithdrawn IS NULL)
           AS neverCheckedOut,
 
-        /* ── Circulation (filtered by year/month/gradeLevel) ── */
-        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${glJoin}
+        /* ── Circulation (filtered by year/month/gender) ── */
+        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${gJoin}
            WHERE c2.DateOut >= DATEADD(day,-7,GETDATE()))
           AS checkoutsLast7Days,
-        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${glJoin}
+        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${gJoin}
            WHERE c2.DateOut >= DATEADD(day,-30,GETDATE()))
           AS checkoutsLast30Days,
-        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${glJoin}
+        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${gJoin}
            WHERE ${monthFilter})
           AS checkoutsThisYear,
         (SELECT COUNT(*) FROM ${t(p,'Copy')} WHERE DateReturned >= DATEADD(day,-7,GETDATE()))
@@ -63,7 +61,7 @@ export async function GET(request: NextRequest) {
         (SELECT COUNT(*) FROM ${t(p,'Copy')} WHERE DateReturned >= DATEADD(day,-30,GETDATE()))
           AS checkinsLast30Days,
         (SELECT ISNULL(AVG(CAST(DATEDIFF(day, c2.DateOut, ISNULL(c2.DateReturned, GETDATE())) AS FLOAT)), 0)
-           FROM ${t(p,'Copy')} c2 ${glJoin} WHERE c2.DateOut IS NOT NULL AND ${monthFilter})
+           FROM ${t(p,'Copy')} c2 ${gJoin} WHERE c2.DateOut IS NOT NULL AND ${monthFilter})
           AS avgLoanDays,
 
         /* ── Holds ── */
@@ -74,24 +72,23 @@ export async function GET(request: NextRequest) {
         (SELECT COUNT(*) FROM ${t(p,'Hold')} WHERE YEAR(DatePlaced) = @year)
           AS holdsPlacedThisYear,
 
-
-        /* ── Patrons (gradeLevel filter applied) ── */
+        /* ── Patrons (gender filter applied) ── */
         (SELECT COUNT(*) FROM ${t(p,'Patron')}
-           WHERE ('' = @gradeLevel OR GradeLevel = @gradeLevel))
+           WHERE ('' = @gender OR Gender = @gender))
           AS totalPatrons,
-        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${glJoin}
+        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${gJoin}
            WHERE c2.PatronID IS NOT NULL AND c2.DateReturned IS NULL AND c2.DateWithdrawn IS NULL)
           AS patronsWithCheckouts,
-        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${glJoin}
+        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${gJoin}
            WHERE c2.PatronID IS NOT NULL AND c2.DateReturned IS NULL AND c2.DateWithdrawn IS NULL AND c2.DateDue < GETDATE())
           AS patronsWithOverdue,
         (SELECT COUNT(*) FROM ${t(p,'Patron')}
-           WHERE YEAR(Created) = @year AND ('' = @gradeLevel OR GradeLevel = @gradeLevel))
+           WHERE YEAR(Created) = @year AND ('' = @gender OR Gender = @gender))
           AS newPatronsThisYear,
-        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${glJoin}
+        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${gJoin}
            WHERE ${monthFilter})
           AS activePatronsThisYear,
-        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${glJoin}
+        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${gJoin}
            WHERE c2.DateOut >= DATEADD(day,-30,GETDATE()))
           AS activePatronsLast30Days,
 
@@ -105,7 +102,7 @@ export async function GET(request: NextRequest) {
           AS totalFinesEverCollected
     `);
 
-    return NextResponse.json({ ...result.recordset[0], year, month, gradeLevel });
+    return NextResponse.json({ ...result.recordset[0], year, month, gender });
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
