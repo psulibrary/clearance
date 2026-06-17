@@ -3,9 +3,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.mail import send_mail
-from django.template.loader import render_to_string
-from django.utils.html import strip_tags
 from django.db.models import Q
+from django.utils import timezone
 from .models import Client, Accountability, Branch, UserProfile
 from .forms import ClientForm, AccountabilityForm, ClearanceDecisionForm
 
@@ -139,6 +138,7 @@ def client_detail(request, pk):
         'client': client,
         'accountability_form': accountability_form,
         'role': role,
+        'today': timezone.now().date(),
     })
 
 

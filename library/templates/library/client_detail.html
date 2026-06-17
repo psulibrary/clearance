@@ -1,204 +1,220 @@
 {% extends 'library/base.html' %}
-{% block title %}{{ client.full_name }} - PSU Library Clearance{% endblock %}
+{% block title %}{{ client.full_name }} – PSU Library Clearance{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center mb-4">
-    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm me-3">
+<div class="d-flex align-items-center mb-4 gap-3">
+    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>Back
     </a>
-    <h4 class="fw-bold mb-0">Client Details</h4>
+    <h4 class="fw-bold mb-0">Client Detail</h4>
 </div>
 
-<!-- Client Info Card -->
-<div class="card mb-4">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <span class="fw-semibold"><i class="bi bi-person-badge me-2 text-primary"></i>{{ client.full_name }}</span>
-        {% if client.status == 'pending' %}
-            <span class="badge bg-warning text-dark fs-6">Pending</span>
-        {% elif client.status == 'cleared' %}
-            <span class="badge bg-success fs-6">Cleared</span>
-        {% else %}
-            <span class="badge bg-danger fs-6">Rejected</span>
-        {% endif %}
-    </div>
-    <div class="card-body">
-        <div class="row g-3">
-            <div class="col-md-3">
-                <div class="text-muted small">Student ID</div>
-                <div class="fw-semibold"><code>{{ client.student_id }}</code></div>
-            </div>
-            <div class="col-md-3">
-                <div class="text-muted small">Email</div>
-                <div>{{ client.email }}</div>
-            </div>
-            <div class="col-md-3">
-                <div class="text-muted small">Course</div>
-                <div>{{ client.course|default:"-" }}</div>
-            </div>
-            <div class="col-md-3">
-                <div class="text-muted small">Year Level</div>
-                <div>{{ client.year_level|default:"-" }}</div>
-            </div>
-            <div class="col-md-3">
-                <div class="text-muted small">Branch</div>
-                <div>{{ client.branch.name|default:"-" }}</div>
-            </div>
-            <div class="col-md-3">
-                <div class="text-muted small">Uploaded By</div>
-                <div>{{ client.uploaded_by.get_full_name|default:client.uploaded_by.username }}</div>
-            </div>
-            {% if client.remarks %}
-            <div class="col-12">
-                <div class="text-muted small">Remarks</div>
-                <div class="text-secondary">{{ client.remarks }}</div>
-            </div>
+<div class="row g-4">
+  <!-- Client Info -->
+  <div class="col-lg-4">
+    <div class="card h-auto">
+      <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-person-badge me-2 text-primary"></i>Client Information
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">Student ID</dt>
+          <dd class="col-7"><code>{{ client.student_id }}</code></dd>
+          <dt class="col-5 text-muted">Full Name</dt>
+          <dd class="col-7 fw-semibold">{{ client.full_name }}</dd>
+          <dt class="col-5 text-muted">Email</dt>
+          <dd class="col-7">{{ client.email }}</dd>
+          <dt class="col-5 text-muted">Course</dt>
+          <dd class="col-7">{{ client.course|default:"—" }}</dd>
+          <dt class="col-5 text-muted">Year Level</dt>
+          <dd class="col-7">{{ client.year_level|default:"—" }}</dd>
+          <dt class="col-5 text-muted">Branch</dt>
+          <dd class="col-7">{{ client.branch.name|default:"—" }}</dd>
+          <dt class="col-5 text-muted">Uploaded By</dt>
+          <dd class="col-7">{{ client.uploaded_by.get_full_name|default:client.uploaded_by.username }}</dd>
+          <dt class="col-5 text-muted">Status</dt>
+          <dd class="col-7">
+            {% if client.status == 'pending' %}
+              <span class="badge bg-warning text-dark">Pending</span>
+            {% elif client.status == 'cleared' %}
+              <span class="badge bg-success">Cleared <i class="bi bi-check-circle ms-1"></i></span>
+            {% else %}
+              <span class="badge bg-danger">Rejected</span>
             {% endif %}
+          </dd>
+          {% if client.clearance_signed %}
+          <dt class="col-5 text-muted">Clearance</dt>
+          <dd class="col-7"><span class="badge bg-success"><i class="bi bi-pen me-1"></i>Signed</span></dd>
+          {% endif %}
+          {% if client.remarks %}
+          <dt class="col-5 text-muted">Remarks</dt>
+          <dd class="col-7">{{ client.remarks }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <!-- Clearance Decision (main library only) -->
+    {% if role == 'main_library' or request.user.is_superuser %}
+    {% if client.status == 'pending' %}
+    <div class="card mt-3">
+      <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-pen me-2 text-success"></i>Clearance Decision
+      </div>
+      <div class="card-body">
+        {% if client.has_unresolved_accountabilities %}
+        <div class="alert alert-warning py-2 small mb-3">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          This client still has <strong>unresolved accountabilities</strong>.
         </div>
-    </div>
-</div>
-
-<!-- Main Library: Clearance Decision -->
-{% if role == 'main_library' or request.user.is_superuser %}
-{% if client.status == 'pending' %}
-<div class="card mb-4 border-primary">
-    <div class="card-header bg-primary text-white fw-semibold">
-        <i class="bi bi-clipboard-check me-2"></i>Clearance Decision
-    </div>
-    <div class="card-body">
+        {% endif %}
         <form method="post" action="{% url 'clearance_decide' client.pk %}">
-            {% csrf_token %}
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Decision</label><br>
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="radio" name="decision" id="approve" value="approve" required>
-                    <label class="form-check-label text-success fw-semibold" for="approve">
-                        <i class="bi bi-check-circle me-1"></i>Approve & Sign Clearance
-                    </label>
-                </div>
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="radio" name="decision" id="reject" value="reject">
-                    <label class="form-check-label text-danger fw-semibold" for="reject">
-                        <i class="bi bi-x-circle me-1"></i>Reject Clearance
-                    </label>
-                </div>
+          {% csrf_token %}
+          <div class="mb-3">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="radio" name="decision" id="approve" value="approve" required>
+              <label class="form-check-label text-success fw-semibold" for="approve">
+                <i class="bi bi-check-circle me-1"></i>Approve & Sign Clearance
+              </label>
             </div>
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Remarks (optional)</label>
-                <textarea name="remarks" class="form-control" rows="3" placeholder="Optional remarks or notes"></textarea>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="decision" id="reject" value="reject">
+              <label class="form-check-label text-danger fw-semibold" for="reject">
+                <i class="bi bi-x-circle me-1"></i>Reject Clearance
+              </label>
             </div>
-            <button type="submit" class="btn btn-primary">
-                <i class="bi bi-send me-1"></i>Submit Decision
-            </button>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Remarks (optional)</label>
+            <textarea name="remarks" class="form-control form-control-sm" rows="3" placeholder="Notes or reason..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-send me-1"></i>Submit Decision
+          </button>
         </form>
+      </div>
     </div>
-</div>
-{% endif %}
-{% endif %}
+    {% else %}
+    <div class="card mt-3 border-0">
+      <div class="card-body text-center text-muted small">
+        <i class="bi bi-check2-all fs-3 {% if client.status == 'cleared' %}text-success{% else %}text-danger{% endif %}"></i>
+        <p class="mb-0 mt-1">Decision already made: <strong>{{ client.get_status_display }}</strong></p>
+      </div>
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
 
-<!-- Accountabilities Table -->
-<div class="card mb-4">
-    <div class="card-header bg-white fw-semibold">
-        <i class="bi bi-exclamation-triangle me-2 text-warning"></i>Accountabilities
-        <span class="badge bg-secondary ms-2">{{ client.accountabilities.count }}</span>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-hover mb-0 align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>Book Title</th>
-                    <th>ISBN</th>
-                    <th>Due Date</th>
-                    <th>Details</th>
-                    <th class="text-center">Status</th>
-                    <th>Resolved By</th>
-                    <th class="text-center">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for acc in client.accountabilities.all %}
-            <tr class="{% if acc.resolved %}table-success{% endif %}">
-                <td class="fw-semibold">{{ acc.book_title }}</td>
-                <td><small class="text-muted">{{ acc.isbn|default:"-" }}</small></td>
-                <td>
-                    {% if acc.due_date %}
-                        <span class="{% if not acc.resolved %}text-danger{% endif %}">{{ acc.due_date }}</span>
-                    {% else %}-{% endif %}
-                </td>
-                <td><small>{{ acc.details|default:"-" }}</small></td>
-                <td class="text-center">
-                    {% if acc.resolved %}
-                        <span class="badge bg-success">Resolved</span>
-                    {% else %}
-                        <span class="badge bg-danger">Pending</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if acc.resolved_by %}
-                        <small>{{ acc.resolved_by.get_full_name|default:acc.resolved_by.username }}</small>
-                    {% else %}-{% endif %}
-                </td>
-                <td class="text-center">
-                    {% if not acc.resolved %}
-                        {% if role == 'library_in_charge' and acc.added_by == request.user %}
-                        <form method="post" action="{% url 'accountability_resolve' acc.pk %}" class="d-inline">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Mark this as resolved?')">
-                                <i class="bi bi-check2 me-1"></i>Resolve
-                            </button>
-                        </form>
-                        {% elif role == 'main_library' or request.user.is_superuser %}
-                        <form method="post" action="{% url 'accountability_resolve' acc.pk %}" class="d-inline">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Mark this as resolved?')">
-                                <i class="bi bi-check2 me-1"></i>Resolve
-                            </button>
-                        </form>
-                        {% endif %}
-                    {% else %}
-                        <span class="text-muted small">Done</span>
-                    {% endif %}
-                </td>
+  <!-- Accountabilities -->
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-exclamation-circle me-2 text-danger"></i>Accountabilities</span>
+        <span class="badge bg-danger">{{ client.unresolved_accountabilities.count }} unresolved</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle small">
+          <thead class="table-light">
+            <tr>
+              <th>Book Title</th>
+              <th>ISBN</th>
+              <th>Due Date</th>
+              <th>Details</th>
+              <th class="text-center">Status</th>
+              {% if role == 'library_in_charge' or role == 'main_library' or request.user.is_superuser %}
+              <th class="text-center">Action</th>
+              {% endif %}
             </tr>
-            {% empty %}
-            <tr><td colspan="7" class="text-center text-muted py-3">No accountabilities recorded.</td></tr>
-            {% endfor %}
-            </tbody>
+          </thead>
+          <tbody>
+          {% for acc in client.accountabilities.all %}
+          <tr class="{% if acc.resolved %}table-light text-muted{% endif %}">
+            <td>
+              <i class="bi bi-book me-1 text-primary"></i>
+              <strong>{{ acc.book_title }}</strong>
+            </td>
+            <td>{{ acc.isbn|default:"—" }}</td>
+            <td>
+              {% if acc.due_date %}
+                <span class="{% if not acc.resolved and acc.due_date < today %}text-danger fw-semibold{% endif %}">
+                  {{ acc.due_date }}
+                </span>
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ acc.details|default:"—"|truncatechars:60 }}</td>
+            <td class="text-center">
+              {% if acc.resolved %}
+                <span class="badge bg-success">Resolved</span>
+                <div class="text-muted" style="font-size:0.7rem">{{ acc.resolved_at|date:"M d, Y" }}</div>
+              {% else %}
+                <span class="badge bg-danger">Pending</span>
+              {% endif %}
+            </td>
+            {% if role == 'library_in_charge' or role == 'main_library' or request.user.is_superuser %}
+            <td class="text-center">
+              {% if not acc.resolved %}
+              <form method="post" action="{% url 'accountability_resolve' acc.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-success"
+                        onclick="return confirm('Mark this book as returned/resolved?')">
+                  <i class="bi bi-check2"></i> Resolve
+                </button>
+              </form>
+              {% else %}
+              <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            {% endif %}
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted py-3">No accountabilities recorded.</td></tr>
+          {% endfor %}
+          </tbody>
         </table>
+      </div>
     </div>
-</div>
 
-<!-- Add Accountability (branch in charge only) -->
-{% if role == 'library_in_charge' %}
-<div class="card">
-    <div class="card-header bg-white fw-semibold">
+    <!-- Add Accountability (branch in charge only) -->
+    {% if role == 'library_in_charge' %}
+    <div class="card mt-3">
+      <div class="card-header bg-white fw-semibold">
         <i class="bi bi-plus-circle me-2 text-primary"></i>Add Accountability
-    </div>
-    <div class="card-body">
+      </div>
+      <div class="card-body">
         <form method="post" action="{% url 'accountability_add' client.pk %}">
-            {% csrf_token %}
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Book Title <span class="text-danger">*</span></label>
-                    {{ accountability_form.book_title }}
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">ISBN</label>
-                    {{ accountability_form.isbn }}
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">Due Date</label>
-                    {{ accountability_form.due_date }}
-                </div>
-                <div class="col-12">
-                    <label class="form-label fw-semibold">Details / Notes</label>
-                    {{ accountability_form.details }}
-                </div>
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label small fw-semibold">Book Title <span class="text-danger">*</span></label>
+              {{ accountability_form.book_title }}
             </div>
-            <button type="submit" class="btn btn-primary mt-3">
-                <i class="bi bi-plus-circle me-1"></i>Add Accountability
-            </button>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">ISBN</label>
+              {{ accountability_form.isbn }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Due Date</label>
+              {{ accountability_form.due_date }}
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-semibold">Details / Notes</label>
+              {{ accountability_form.details }}
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm mt-3">
+            <i class="bi bi-plus me-1"></i>Add Accountability
+          </button>
         </form>
+      </div>
     </div>
+    {% endif %}
+  </div>
 </div>
-{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Pass today's date for overdue highlighting
+  const today = new Date().toISOString().split('T')[0];
+</script>
 {% endblock %}
