@@ -147,6 +147,151 @@ function exportCsv(s: Stats, yearLabel: string, monthLabel: string, genderLabel:
   URL.revokeObjectURL(url);
 }
 
+interface Recommendation {
+  priority: 'high' | 'medium' | 'low';
+  category: string;
+  title: string;
+  detail: string;
+  metric?: string;
+}
+
+function buildRecommendations(s: Stats, chedStats: Record<string,number> | null, year: number): Recommendation[] {
+  const recs: Recommendation[] = [];
+  const totalItems = s.totalItems || 1;
+  const totalPatrons = s.totalPatrons || 1;
+  const checkedOut = s.checkedOut || 0;
+
+  // ── Overdue & Compliance ──
+  const overdueRate = checkedOut ? s.overdue / checkedOut : 0;
+  if (overdueRate > 0.25)
+    recs.push({ priority: 'high', category: 'Overdue Management', title: 'High overdue rate — send follow-up notices', detail: `${(overdueRate*100).toFixed(1)}% of checked-out items are overdue. Send automated reminders and review fine policies to encourage returns.`, metric: `${s.overdue.toLocaleString()} overdue of ${checkedOut.toLocaleString()} checked out` });
+  else if (overdueRate > 0.1)
+    recs.push({ priority: 'medium', category: 'Overdue Management', title: 'Overdue rate above 10% — monitor closely', detail: 'Consider sending reminder notices to patrons with upcoming due dates. Review loan periods for high-demand items.', metric: `${(overdueRate*100).toFixed(1)}% overdue rate` });
+
+  const severeOverduePct = s.overdue ? s.overdueOver30Days / s.overdue : 0;
+  if (s.overdueOver30Days > 10 && severeOverduePct > 0.2)
+    recs.push({ priority: 'high', category: 'Overdue Management', title: 'Significant long-term overdue items (>30 days)', detail: 'Items overdue by more than 30 days may never be returned. Escalate to personal contact, consider marking as lost and billing replacement cost.', metric: `${s.overdueOver30Days.toLocaleString()} items overdue >30 days` });
+
+  // ── Collection Health ──
+  const deadStockPct = s.neverCheckedOut / totalItems;
+  if (deadStockPct > 0.4)
+    recs.push({ priority: 'high', category: 'Collection Development', title: 'Large dead stock — conduct weeding campaign', detail: `${(deadStockPct*100).toFixed(1)}% of items have never been borrowed. Run a systematic weeding review using MUSTIE criteria (Misleading, Ugly, Superseded, Trivial, Irrelevant, Elsewhere available). Remove or relocate items to free shelving space.`, metric: `${s.neverCheckedOut.toLocaleString()} of ${totalItems.toLocaleString()} items never borrowed` });
+  else if (deadStockPct > 0.25)
+    recs.push({ priority: 'medium', category: 'Collection Development', title: 'High proportion of unused items', detail: 'Review items that have never circulated. Consider relocating low-use items to storage and promoting underused subjects via displays or bibliographies.', metric: `${(deadStockPct*100).toFixed(1)}% of collection never borrowed` });
+
+  const refreshRate = s.newItemsThisYear / totalItems;
+  if (refreshRate < 0.03)
+    recs.push({ priority: 'high', category: 'Collection Development', title: `Collection refresh rate critically low in ${year}`, detail: 'Less than 3% of the collection is new this year. Accreditation standards (CHED CMO 22 §4.b.4) require regular acquisition. Submit budget request for new titles targeting high-demand subjects.', metric: `${(refreshRate*100).toFixed(1)}% refresh rate (target ≥ 5%)` });
+  else if (refreshRate < 0.05)
+    recs.push({ priority: 'medium', category: 'Collection Development', title: 'Collection refresh rate below 5% target', detail: 'Plan acquisitions focusing on subjects with high circulation turnover and on materials less than 5 years old to improve collection currency scores.', metric: `${(refreshRate*100).toFixed(1)}% refresh rate` });
+
+  const turnover = s.checkoutsThisYear / totalItems;
+  if (turnover < 0.5)
+    recs.push({ priority: 'medium', category: 'Circulation', title: 'Low collection turnover — promote underused materials', detail: 'Less than half an item per item was borrowed this year. Run book displays, subject guides, and faculty reading list integrations to drive discovery of the collection.', metric: `${turnover.toFixed(2)}x turnover (checkouts ÷ items)` });
+
+  // ── Patron Engagement ──
+  const activeRate = s.activePatronsThisYear / totalPatrons;
+  if (activeRate < 0.2)
+    recs.push({ priority: 'high', category: 'Patron Engagement', title: 'Low patron reach — library is underused', detail: `Only ${(activeRate*100).toFixed(1)}% of registered patrons borrowed at least once this year. Run orientation sessions, literacy programs, and coordinate with faculty to integrate library use into coursework.`, metric: `${s.activePatronsThisYear.toLocaleString()} of ${totalPatrons.toLocaleString()} patrons active` });
+  else if (activeRate < 0.4)
+    recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Patron reach below 40% — expand outreach', detail: 'Strengthen faculty liaison programs, create subject-specific reading lists, and promote new acquisitions to relevant departments.', metric: `${(activeRate*100).toFixed(1)}% patron reach rate` });
+
+  const loansPerPatron = s.checkoutsThisYear / totalPatrons;
+  if (loansPerPatron < 2)
+    recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Low borrowing frequency per patron', detail: 'Average patron borrowed fewer than 2 items this year. Explore extended loan periods, reading challenges, or class-integrated library assignments to increase repeat use.', metric: `${loansPerPatron.toFixed(2)} loans per registered patron` });
+
+  // ── Holds ──
+  if (s.pendingHolds > 50 && s.pendingHolds > s.readyHolds * 2)
+    recs.push({ priority: 'medium', category: 'Circulation', title: 'Many unfilled holds — consider additional copies', detail: 'A large backlog of pending holds indicates demand exceeding supply. Identify high-hold titles and request additional copies or e-book licenses.', metric: `${s.pendingHolds.toLocaleString()} pending holds vs ${s.readyHolds.toLocaleString()} ready` });
+
+  // ── Fines ──
+  if (s.totalFinesBalance > 0 && s.activeFines > 100)
+    recs.push({ priority: 'medium', category: 'Revenue', title: 'Outstanding fines balance — review collection process', detail: 'A significant fines balance is outstanding. Review fine notification workflows, consider amnesty programs to recover materials, and ensure fines are linked to patron accounts actively.', metric: `₱${s.totalFinesBalance.toLocaleString('en-PH', {minimumFractionDigits:2})} across ${s.activeFines.toLocaleString()} records` });
+
+  // ── CHED Requirements ──
+  if (chedStats && !chedStats.error) {
+    if ((chedStats.totalTitles ?? 0) < 5000)
+      recs.push({ priority: 'high', category: 'CHED Compliance', title: 'Below CHED minimum title requirement (§4.b.1)', detail: `CHED CMO 22 §4.b.1 requires at least 5,000 titles. Current count is ${Number(chedStats.totalTitles ?? 0).toLocaleString()}. Prioritize acquisitions of unique titles — avoid duplicate copies until the threshold is met.`, metric: `${Number(chedStats.totalTitles ?? 0).toLocaleString()} titles (need 5,000)` });
+
+    const filPct = chedStats.totalItems ? (chedStats.filipianianaItems ?? 0) / chedStats.totalItems : 0;
+    if (filPct < 0.10)
+      recs.push({ priority: 'medium', category: 'CHED Compliance', title: 'Filipiniana collection below 10% (§4.b.2)', detail: `CHED CMO 22 §4.b.2 requires at least 10% Filipiniana materials. Current: ${(filPct*100).toFixed(1)}%. Acquire more Philippine-authored and Philippine-subject titles. Ensure Filipiniana items are correctly tagged in the Sublocation field in Destiny.`, metric: `${(filPct*100).toFixed(1)}% Filipiniana (target ≥ 10%)` });
+
+    if ((chedStats.withdrawnThisYear ?? 0) === 0)
+      recs.push({ priority: 'low', category: 'CHED Compliance', title: 'No weeding recorded this year (§4.a.6)', detail: 'CHED CMO 22 §4.a.6 expects an active weeding program. Document and record withdrawals in Destiny. Even a small, systematic weeding effort satisfies this requirement and demonstrates good collection management.', metric: '0 items withdrawn this year' });
+  }
+
+  // ── ISO Targets ──
+  const itemsPerPatron = totalItems / totalPatrons;
+  if (itemsPerPatron < 3)
+    recs.push({ priority: 'medium', category: 'ISO Standards', title: 'Low items-per-patron ratio (ISO 2789 §6.3.2)', detail: 'ISO 2789 benchmarks suggest at least 3–5 items per registered user for academic libraries. Increase acquisitions or review if patron registration is inflated by inactive records.', metric: `${itemsPerPatron.toFixed(2)} items per patron` });
+
+  if (activeRate > 0.6 && turnover > 2)
+    recs.push({ priority: 'low', category: 'ISO Standards', title: 'Strong performance — document for accreditation', detail: 'High patron reach and collection turnover are excellent accreditation evidence. Prepare an annual library report citing ISO 16439 impact indicators and ISO 11620 performance metrics for submission to AACCUP/PACUCOA.', metric: `${(activeRate*100).toFixed(1)}% reach, ${turnover.toFixed(2)}x turnover` });
+
+  // Sort: high → medium → low
+  const order = { high: 0, medium: 1, low: 2 };
+  return recs.sort((a, b) => order[a.priority] - order[b.priority]);
+}
+
+const PRIORITY_STYLE: Record<string, { badge: string; border: string; icon: string }> = {
+  high:   { badge: 'bg-red-100 text-red-700',    border: 'border-l-4 border-red-500',    icon: '🔴' },
+  medium: { badge: 'bg-amber-100 text-amber-700', border: 'border-l-4 border-amber-400', icon: '🟡' },
+  low:    { badge: 'bg-blue-100 text-blue-700',   border: 'border-l-4 border-blue-400',  icon: '🔵' },
+};
+
+function RecommendedActions({ stats, chedStats, year }: { stats: Stats; chedStats: Record<string,number> | null; year: number }) {
+  const recs = buildRecommendations(stats, chedStats, year);
+  const high   = recs.filter(r => r.priority === 'high');
+  const medium = recs.filter(r => r.priority === 'medium');
+  const low    = recs.filter(r => r.priority === 'low');
+
+  return (
+    <div>
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+        <span>🎯</span>Recommended Actions
+      </h2>
+      <p className="text-xs text-gray-400 mb-4">Auto-generated from current stats. Prioritized by urgency.</p>
+
+      {recs.length === 0 && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center text-green-700">
+          <div className="text-2xl mb-2">✅</div>
+          <div className="font-semibold">All indicators look healthy!</div>
+          <div className="text-sm mt-1">No urgent actions detected based on current data.</div>
+        </div>
+      )}
+
+      <div className="flex gap-3 mb-4 text-xs">
+        {high.length > 0   && <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full font-medium">{high.length} High Priority</span>}
+        {medium.length > 0 && <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">{medium.length} Medium</span>}
+        {low.length > 0    && <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">{low.length} Low / Positive</span>}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        {recs.map((r, i) => {
+          const style = PRIORITY_STYLE[r.priority];
+          return (
+            <div key={i} className={`bg-white rounded-xl shadow-sm p-4 ${style.border}`}>
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <div className="flex items-center gap-2">
+                  <span>{style.icon}</span>
+                  <span className="font-semibold text-gray-800 text-sm">{r.title}</span>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${style.badge}`}>{r.priority.toUpperCase()}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{r.category}</span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 leading-relaxed mb-1">{r.detail}</p>
+              {r.metric && <p className="text-xs text-gray-400 font-mono">📌 {r.metric}</p>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: currentYear - 2015 + 1 }, (_, i) => currentYear - i);
@@ -173,8 +318,12 @@ export default function Dashboard() {
   const [gender, setGender]           = useState('');
   const [patronTypeID, setPatronTypeID] = useState(0);
 
-  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'>('overview');
-  const [chartsLoaded, setChartsLoaded] = useState({ patrons: false, collection: false });
+  type ActivityRow = { name:string; totalPatrons:number; activePatrons:number; totalCheckouts:number; overdueItems:number; activeRate:number; checkoutsPerPatron:number };
+  const [genderActivity, setGenderActivity]       = useState<ActivityRow[]>([]);
+  const [patronTypeActivity, setPatronTypeActivity] = useState<ActivityRow[]>([]);
+
+  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'|'insights'>('overview');
+  const [chartsLoaded, setChartsLoaded] = useState({ patrons: false, collection: false, insights: false });
   const [chedStats, setChedStats] = useState<Record<string,number> | null>(null);
   const [acqData, setAcqData] = useState<{year:number;items:number;titles:number;spend:number}[]>([]);
   const [chedLoaded, setChedLoaded] = useState(false);
@@ -209,6 +358,11 @@ export default function Dashboard() {
       fetch('/api/charts/gender').then(r => r.json()).then(d => { if (d.data) setGenderData(d.data); }).catch(() => {});
       fetch('/api/charts/patron-type').then(r => r.json()).then(d => { if (d.data) setPatronTypeData(d.data); }).catch(() => {});
       setChartsLoaded(p => ({ ...p, patrons: true }));
+    }
+    if (activeTab === 'insights' && !chartsLoaded.insights) {
+      fetch('/api/charts/activity-by-gender').then(r=>r.json()).then(d=>{ if(d.data) setGenderActivity(d.data); }).catch(() => {});
+      fetch('/api/charts/activity-by-patrontype').then(r=>r.json()).then(d=>{ if(d.data) setPatronTypeActivity(d.data); }).catch(() => {});
+      setChartsLoaded(p => ({ ...p, insights: true }));
     }
     if (activeTab === 'collection' && !chartsLoaded.collection) {
       fetch('/api/charts/collection-by-sublocation').then(r=>r.json()).then(d=>{ if(d.data) setSublocData(d.data); }).catch(() => {});
@@ -358,7 +512,7 @@ export default function Dashboard() {
 
         {/* Tab bar */}
         <div className="flex gap-2 mb-6 border-b border-gray-200 print:hidden">
-          {(['overview','patrons','collection','iso','ched'] as const).map(tab => (
+          {(['overview','patrons','collection','iso','ched','insights'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -368,7 +522,7 @@ export default function Dashboard() {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'insights' ? '💡 Insights' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
@@ -792,6 +946,133 @@ export default function Dashboard() {
               </div>
             </>
           )}
+        </div>
+
+        {/* Tab: Insights */}
+        <div className={activeTab === 'insights' ? 'block' : 'hidden print:block'}>
+
+          {/* ── Cross-Activity Analysis ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>📊</span>Who Uses the Library Most?
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">
+              Cross-tabulation of patron demographics vs. actual borrowing activity — not filtered by the selections above, shows the full population comparison.
+            </p>
+
+            {genderActivity.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
+                <p className="text-sm font-semibold text-gray-700 mb-1">Activity by Gender</p>
+                <p className="text-xs text-gray-400 mb-4">Compares registration count, active borrowers, total checkouts, and overdue items per gender group</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Patron Count &amp; Active Borrowers</p>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={genderActivity} margin={{left:10,right:10,top:4,bottom:4}}>
+                        <XAxis dataKey="name" tick={{fontSize:11}} />
+                        <YAxis tick={{fontSize:11}} />
+                        <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                        <Legend />
+                        <Bar dataKey="totalPatrons"  name="Registered" fill="#3b82f6" />
+                        <Bar dataKey="activePatrons" name="Active Borrowers" fill="#10b981" />
+                        <Bar dataKey="overdueItems"  name="Overdue Items" fill="#ef4444" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Engagement Rates (%)</p>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={genderActivity} margin={{left:10,right:10,top:4,bottom:4}}>
+                        <XAxis dataKey="name" tick={{fontSize:11}} />
+                        <YAxis tick={{fontSize:11}} unit="%" />
+                        <Tooltip formatter={(v:unknown) => Number(v).toFixed(1) + '%'} />
+                        <Legend />
+                        <Bar dataKey="activeRate"         name="Active Rate %" fill="#8b5cf6" />
+                        <Bar dataKey="checkoutsPerPatron" name="Checkouts / Patron" fill="#f59e0b" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-500 uppercase tracking-wide">
+                        <th className="text-left p-2 border border-gray-100">Gender</th>
+                        <th className="text-right p-2 border border-gray-100">Registered</th>
+                        <th className="text-right p-2 border border-gray-100">Active Borrowers</th>
+                        <th className="text-right p-2 border border-gray-100">Active Rate</th>
+                        <th className="text-right p-2 border border-gray-100">Total Checkouts</th>
+                        <th className="text-right p-2 border border-gray-100">Checkouts / Patron</th>
+                        <th className="text-right p-2 border border-gray-100">Overdue Items</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {genderActivity.map((r, i) => (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className="p-2 border border-gray-100 font-medium">{r.name}</td>
+                          <td className="p-2 border border-gray-100 text-right">{r.totalPatrons.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-100 text-right text-green-700 font-semibold">{r.activePatrons.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-100 text-right">{r.activeRate}%</td>
+                          <td className="p-2 border border-gray-100 text-right text-blue-700">{r.totalCheckouts.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-100 text-right text-indigo-700 font-semibold">{r.checkoutsPerPatron}</td>
+                          <td className="p-2 border border-gray-100 text-right text-red-600">{r.overdueItems.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {patronTypeActivity.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
+                <p className="text-sm font-semibold text-gray-700 mb-1">Activity by Patron Type</p>
+                <p className="text-xs text-gray-400 mb-4">Which patron groups borrow the most — useful for collection development and service prioritization</p>
+                <ResponsiveContainer width="100%" height={Math.max(240, patronTypeActivity.length * 36)}>
+                  <BarChart data={patronTypeActivity} layout="vertical" margin={{left:140,right:80,top:4,bottom:4}}>
+                    <XAxis type="number" tick={{fontSize:11}} />
+                    <YAxis type="category" dataKey="name" tick={{fontSize:10}} width={135} />
+                    <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                    <Legend />
+                    <Bar dataKey="totalPatrons"  name="Registered" fill="#3b82f6" />
+                    <Bar dataKey="activePatrons" name="Active Borrowers" fill="#10b981" />
+                    <Bar dataKey="overdueItems"  name="Overdue Items" fill="#ef4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="overflow-x-auto mt-4">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-500 uppercase tracking-wide">
+                        <th className="text-left p-2 border border-gray-100">Patron Type</th>
+                        <th className="text-right p-2 border border-gray-100">Registered</th>
+                        <th className="text-right p-2 border border-gray-100">Active</th>
+                        <th className="text-right p-2 border border-gray-100">Active Rate</th>
+                        <th className="text-right p-2 border border-gray-100">Total Checkouts</th>
+                        <th className="text-right p-2 border border-gray-100">Per Patron</th>
+                        <th className="text-right p-2 border border-gray-100">Overdue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {patronTypeActivity.map((r, i) => (
+                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="p-2 border border-gray-100 font-medium">{r.name}</td>
+                          <td className="p-2 border border-gray-100 text-right">{r.totalPatrons.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-100 text-right text-green-700 font-semibold">{r.activePatrons.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-100 text-right">{r.activeRate}%</td>
+                          <td className="p-2 border border-gray-100 text-right text-blue-700">{r.totalCheckouts.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-100 text-right text-indigo-700 font-semibold">{r.checkoutsPerPatron}</td>
+                          <td className="p-2 border border-gray-100 text-right text-red-600">{r.overdueItems.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Recommended Actions ── */}
+          {s && !s.error && <RecommendedActions stats={s} chedStats={chedStats} year={year} />}
         </div>
       </main>
     </div>
