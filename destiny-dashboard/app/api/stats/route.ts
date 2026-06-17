@@ -4,23 +4,44 @@ import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 
 export async function GET(request: NextRequest) {
-  const sp = request.nextUrl.searchParams;
-  const year   = parseInt(sp.get('year')  || String(new Date().getFullYear()));
-  const month  = parseInt(sp.get('month') || '0');   // 0 = all months
-  const gender = sp.get('gender') || '';             // e.g. 'M', 'F', ''
+  const sp          = request.nextUrl.searchParams;
+  const year        = parseInt(sp.get('year')  || String(new Date().getFullYear()));
+  const month       = parseInt(sp.get('month') || '0');
+  const gender      = sp.get('gender')      || '';
+  const patronTypeID = parseInt(sp.get('patronTypeID') || '0');  // 0 = all types
 
   try {
     const pool = await getPool();
     const p = await getSchemaPrefix();
     const req = pool.request();
-    req.input('year',   sql.Int,     year);
-    req.input('month',  sql.Int,     month);
-    req.input('gender', sql.NVarChar, gender);
+    req.input('year',        sql.Int,     year);
+    req.input('month',       sql.Int,     month);
+    req.input('gender',      sql.NVarChar, gender);
+    req.input('patronTypeID', sql.Int,    patronTypeID);
 
     const yearFilter  = `YEAR(c2.DateOut) = @year`;
     const monthFilter = month ? `MONTH(c2.DateOut) = @month AND ${yearFilter}` : yearFilter;
 
-    const gJoin = gender ? `JOIN ${t(p,'Patron')} gp ON c2.PatronID = gp.PatronID AND gp.Gender = @gender` : '';
+    // Build JOIN conditions for optional filters
+    // Both gender and patronType join to Patron/SitePatron — combine into one join when both set
+    let filterJoin = '';
+    if (gender && patronTypeID) {
+      filterJoin = `JOIN ${t(p,'Patron')} gp ON c2.PatronID = gp.PatronID AND gp.Gender = @gender
+                    JOIN ${t(p,'SitePatron')} spt ON c2.PatronID = spt.PatronID AND spt.PatronTypeID = @patronTypeID`;
+    } else if (gender) {
+      filterJoin = `JOIN ${t(p,'Patron')} gp ON c2.PatronID = gp.PatronID AND gp.Gender = @gender`;
+    } else if (patronTypeID) {
+      filterJoin = `JOIN ${t(p,'SitePatron')} spt ON c2.PatronID = spt.PatronID AND spt.PatronTypeID = @patronTypeID`;
+    }
+
+    const patronWhere = [
+      gender      ? `('' = @gender OR Gender = @gender)` : null,
+      patronTypeID ? `PatronID IN (SELECT PatronID FROM ${t(p,'SitePatron')} WHERE PatronTypeID = @patronTypeID)` : null,
+    ].filter(Boolean).join(' AND ');
+    const patronFilter = patronWhere ? `WHERE ${patronWhere}` : '';
+    const patronCreatedFilter = patronWhere
+      ? `WHERE YEAR(Created) = @year AND ${patronWhere}`
+      : `WHERE YEAR(Created) = @year`;
 
     const result = await req.query(`
       SELECT
@@ -46,14 +67,14 @@ export async function GET(request: NextRequest) {
         (SELECT COUNT(*) FROM ${t(p,'Copy')} WHERE DateOut IS NULL AND DateWithdrawn IS NULL)
           AS neverCheckedOut,
 
-        /* ── Circulation (filtered by year/month/gender) ── */
-        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${gJoin}
+        /* ── Circulation (filtered by year/month/gender/patronType) ── */
+        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${filterJoin}
            WHERE c2.DateOut >= DATEADD(day,-7,GETDATE()))
           AS checkoutsLast7Days,
-        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${gJoin}
+        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${filterJoin}
            WHERE c2.DateOut >= DATEADD(day,-30,GETDATE()))
           AS checkoutsLast30Days,
-        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${gJoin}
+        (SELECT COUNT(*) FROM ${t(p,'Copy')} c2 ${filterJoin}
            WHERE ${monthFilter})
           AS checkoutsThisYear,
         (SELECT COUNT(*) FROM ${t(p,'Copy')} WHERE DateReturned >= DATEADD(day,-7,GETDATE()))
@@ -61,7 +82,7 @@ export async function GET(request: NextRequest) {
         (SELECT COUNT(*) FROM ${t(p,'Copy')} WHERE DateReturned >= DATEADD(day,-30,GETDATE()))
           AS checkinsLast30Days,
         (SELECT ISNULL(AVG(CAST(DATEDIFF(day, c2.DateOut, ISNULL(c2.DateReturned, GETDATE())) AS FLOAT)), 0)
-           FROM ${t(p,'Copy')} c2 ${gJoin} WHERE c2.DateOut IS NOT NULL AND ${monthFilter})
+           FROM ${t(p,'Copy')} c2 ${filterJoin} WHERE c2.DateOut IS NOT NULL AND ${monthFilter})
           AS avgLoanDays,
 
         /* ── Holds ── */
@@ -72,23 +93,21 @@ export async function GET(request: NextRequest) {
         (SELECT COUNT(*) FROM ${t(p,'Hold')} WHERE YEAR(DatePlaced) = @year)
           AS holdsPlacedThisYear,
 
-        /* ── Patrons (gender filter applied) ── */
-        (SELECT COUNT(*) FROM ${t(p,'Patron')}
-           WHERE ('' = @gender OR Gender = @gender))
+        /* ── Patrons ── */
+        (SELECT COUNT(*) FROM ${t(p,'Patron')} ${patronFilter})
           AS totalPatrons,
-        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${gJoin}
+        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${filterJoin}
            WHERE c2.PatronID IS NOT NULL AND c2.DateReturned IS NULL AND c2.DateWithdrawn IS NULL)
           AS patronsWithCheckouts,
-        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${gJoin}
+        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${filterJoin}
            WHERE c2.PatronID IS NOT NULL AND c2.DateReturned IS NULL AND c2.DateWithdrawn IS NULL AND c2.DateDue < GETDATE())
           AS patronsWithOverdue,
-        (SELECT COUNT(*) FROM ${t(p,'Patron')}
-           WHERE YEAR(Created) = @year AND ('' = @gender OR Gender = @gender))
+        (SELECT COUNT(*) FROM ${t(p,'Patron')} ${patronCreatedFilter})
           AS newPatronsThisYear,
-        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${gJoin}
+        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${filterJoin}
            WHERE ${monthFilter})
           AS activePatronsThisYear,
-        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${gJoin}
+        (SELECT COUNT(DISTINCT c2.PatronID) FROM ${t(p,'Copy')} c2 ${filterJoin}
            WHERE c2.DateOut >= DATEADD(day,-30,GETDATE()))
           AS activePatronsLast30Days,
 
@@ -102,7 +121,7 @@ export async function GET(request: NextRequest) {
           AS totalFinesEverCollected
     `);
 
-    return NextResponse.json({ ...result.recordset[0], year, month, gender });
+    return NextResponse.json({ ...result.recordset[0], year, month, gender, patronTypeID });
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }

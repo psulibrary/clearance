@@ -29,6 +29,7 @@ interface Stats {
   activePatronsLast30Days: number;
   newPatronsThisYear: number;
   gender: string;
+  patronTypeID: number;
   activeFines: number;
   totalFinesBalance: number;
   totalFinesEverCollected: number;
@@ -86,10 +87,12 @@ function Section({ title, icon, children }: { title: string; icon: string; child
   );
 }
 
-function exportCsv(s: Stats, yearLabel: string, monthLabel: string) {
+function exportCsv(s: Stats, yearLabel: string, monthLabel: string, genderLabel: string, patronTypeLabel: string) {
   const rows: [string, string][] = [
     ['Filter: Year', yearLabel],
     ['Filter: Month', monthLabel],
+    ['Filter: Gender', genderLabel || 'All'],
+    ['Filter: Patron Type', patronTypeLabel || 'All'],
     ['', ''],
     ['COLLECTION', ''],
     ['Total Items', String(s.totalItems)],
@@ -150,21 +153,23 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
-  const [genders, setGenders] = useState<string[]>([]);
+  const [genders, setGenders]       = useState<string[]>([]);
+  const [patronTypes, setPatronTypes] = useState<{ PatronTypeID: number; PatronTypeDescription: string }[]>([]);
 
-  const [year, setYear]             = useState(currentYear);
-  const [month, setMonth]           = useState(0);
-  const [gender, setGender] = useState('');
+  const [year, setYear]               = useState(currentYear);
+  const [month, setMonth]             = useState(0);
+  const [gender, setGender]           = useState('');
+  const [patronTypeID, setPatronTypeID] = useState(0);
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams({ year: String(year), month: String(month), gender });
+    const params = new URLSearchParams({ year: String(year), month: String(month), gender, patronTypeID: String(patronTypeID) });
     fetch(`/api/stats?${params}`)
       .then(r => r.json())
       .then(d => { setStats(d); setLastUpdated(new Date()); })
       .catch(() => setStats({ error: 'Connection failed' } as Stats))
       .finally(() => setLoading(false));
-  }, [year, month, gender]);
+  }, [year, month, gender, patronTypeID]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -172,6 +177,10 @@ export default function Dashboard() {
     fetch('/api/genders')
       .then(r => r.json())
       .then(d => { if (d.genders) setGenders(d.genders); })
+      .catch(() => {});
+    fetch('/api/patron-types')
+      .then(r => r.json())
+      .then(d => { if (d.types) setPatronTypes(d.types); })
       .catch(() => {});
   }, []);
 
@@ -215,7 +224,12 @@ export default function Dashboard() {
       {/* Print header — only visible when printing */}
       <div className="hidden print:block px-6 py-4 border-b border-gray-300 mb-4">
         <h1 className="text-2xl font-bold">PSU Library — Stats Report</h1>
-        <p className="text-sm text-gray-500">Period: {periodLabel}{gender ? ` · Gender: ${gender}` : ''} · Printed {new Date().toLocaleString('en-PH')}</p>
+        <p className="text-sm text-gray-500">
+          Period: {periodLabel}
+          {gender ? ` · Gender: ${gender}` : ''}
+          {patronTypeID ? ` · Type: ${patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription ?? patronTypeID}` : ''}
+          {' · '}Printed {new Date().toLocaleString('en-PH')}
+        </p>
       </div>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
@@ -257,13 +271,26 @@ export default function Dashboard() {
                 className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All Genders</option>
-                {genders.map(gl => <option key={gl} value={gl}>{gl}</option>)}
+                {genders.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+          )}
+          {patronTypes.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Patron Type</label>
+              <select
+                value={patronTypeID}
+                onChange={e => setPatronTypeID(Number(e.target.value))}
+                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={0}>All Types</option>
+                {patronTypes.map(pt => <option key={pt.PatronTypeID} value={pt.PatronTypeID}>{pt.PatronTypeDescription}</option>)}
               </select>
             </div>
           )}
           <div className="ml-auto flex gap-2">
             <button
-              onClick={() => s && exportCsv(s, yearLabel, monthLabel)}
+              onClick={() => s && exportCsv(s, yearLabel, monthLabel, gender, patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription ?? '')}
               disabled={!s || !!s.error}
               className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
             >
@@ -282,6 +309,7 @@ export default function Dashboard() {
         <div className="text-xs text-gray-400 mb-4 print:hidden">
           Showing period-based stats for: <strong className="text-gray-600">{periodLabel}</strong>
           {gender && <> · Gender: <strong className="text-gray-600">{gender}</strong></>}
+          {patronTypeID > 0 && <> · Type: <strong className="text-gray-600">{patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription}</strong></>}
           </div>
 
         {/* Hero row */}
