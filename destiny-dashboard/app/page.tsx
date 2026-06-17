@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface Stats {
   totalItems: number;
@@ -159,6 +159,8 @@ export default function Dashboard() {
   const [patronTypes, setPatronTypes] = useState<{ PatronTypeID: number; PatronTypeDescription: string }[]>([]);
   const [genderData, setGenderData] = useState<{name:string;value:number}[]>([]);
   const [patronTypeData, setPatronTypeData] = useState<{name:string;value:number}[]>([]);
+  const [sublocData, setSublocData] = useState<{name:string;total:number;checkedOut:number;available:number}[]>([]);
+  const [catData, setCatData] = useState<{name:string;total:number;checkedOut:number}[]>([]);
 
   const [year, setYear]               = useState(currentYear);
   const [month, setMonth]             = useState(0);
@@ -188,6 +190,8 @@ export default function Dashboard() {
       .catch(() => {});
     fetch('/api/charts/gender').then(r => r.json()).then(d => { if (d.data) setGenderData(d.data); }).catch(() => {});
     fetch('/api/charts/patron-type').then(r => r.json()).then(d => { if (d.data) setPatronTypeData(d.data); }).catch(() => {});
+    fetch('/api/charts/collection-by-sublocation').then(r=>r.json()).then(d=>{ if(d.data) setSublocData(d.data); });
+    fetch('/api/charts/collection-by-category').then(r=>r.json()).then(d=>{ if(d.data) setCatData(d.data); });
   }, []);
 
   const s = stats;
@@ -415,6 +419,36 @@ export default function Dashboard() {
           </div>
         </div>
 
+        <Section title="Collection Breakdown" icon="📚">
+          <div className="col-span-full print:hidden">
+            <p className="text-sm font-semibold text-gray-700 mb-2">By Sublocation</p>
+            <ResponsiveContainer width="100%" height={Math.max(200, sublocData.length * 36)}>
+              <BarChart data={sublocData} layout="vertical" margin={{left:120,right:40,top:4,bottom:4}}>
+                <XAxis type="number" tick={{fontSize:11}} />
+                <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={115} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="total" name="Total" fill="#3b82f6" />
+                <Bar dataKey="checkedOut" name="Checked Out" fill="#f59e0b" />
+                <Bar dataKey="available" name="Available" fill="#10b981" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="col-span-full print:hidden mt-4">
+            <p className="text-sm font-semibold text-gray-700 mb-2">By Copy Category (Dewey)</p>
+            <ResponsiveContainer width="100%" height={Math.max(200, catData.length * 36)}>
+              <BarChart data={catData} layout="vertical" margin={{left:160,right:40,top:4,bottom:4}}>
+                <XAxis type="number" tick={{fontSize:11}} />
+                <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="total" name="Total" fill="#8b5cf6" />
+                <Bar dataKey="checkedOut" name="Checked Out" fill="#ef4444" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Section>
+
         <Section title="ISO 2789 Performance Indicators" icon="📐">
           <Card label="Loans per Registered User" value={s?.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 2789 §6.2.3 — ${periodLabel}`} color="text-indigo-700" />
           <Card label="Items per Registered User" value={s?.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'} sub="ISO 2789 §6.3.2 collection density" color="text-indigo-700" />
@@ -422,6 +456,17 @@ export default function Dashboard() {
           <Card label="Reservation Rate" value={s?.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub="ISO 2789 §6.2.3.6 holds vs loans" color="text-purple-700" />
           <Card label="Overdue Borrower Rate" value={pct(s?.patronsWithOverdue ?? 0, s?.patronsWithCheckouts ?? 0)} sub="% of active borrowers with overdue items" color="text-red-600" />
           <Card label="Collection Turnover Rate" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—'} sub={`ISO 2789 §6.2.3 loans per item — ${periodLabel}`} color="text-green-700" />
+        </Section>
+
+        <Section title="ISO 16439 Impact Indicators" icon="📊">
+          <Card label="Library Use Rate" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 16439 §5.2 — active users / registered × 100 — ${periodLabel}`} color="text-rose-700" />
+          <Card label="Borrower Penetration Rate" value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="ISO 16439 §5.2 — patrons with active loans / total" color="text-rose-700" />
+          <Card label="Repeat Use Index" value={s?.activePatronsThisYear ? (s.checkoutsThisYear / s.activePatronsThisYear).toFixed(2) : '—'} sub={`ISO 16439 §5.3 — loans per active user — ${periodLabel}`} color="text-orange-700" />
+          <Card label="Collection Use Ratio" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) : '—'} sub={`ISO 16439 §5.3 — loans per item — ${periodLabel}`} color="text-orange-700" />
+          <Card label="Hold Fulfillment Rate" value={((s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) > 0 ? pct(s?.readyHolds ?? 0, (s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) : '—'} sub="ISO 16439 §5.3 — ready holds / total holds" color="text-teal-700" />
+          <Card label="Overdue Rate" value={s?.checkedOut ? pct(s.overdue, s.checkedOut) : '—'} sub="ISO 16439 §5.3 — overdue / checked-out items" color="text-red-700" />
+          <Card label="New User Growth Rate" value={pct(s?.newPatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 16439 §5.2 — new patrons / total — ${s?.year}`} color="text-green-700" />
+          <Card label="Collection Refresh Rate" value={pct(s?.newItemsThisYear ?? 0, s?.totalItems ?? 0)} sub={`ISO 16439 §5.3 — new items / total — ${s?.year}`} color="text-green-700" />
         </Section>
 
         <Section title="Fines & Revenue" icon="💰">
