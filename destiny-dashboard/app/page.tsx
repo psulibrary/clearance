@@ -485,140 +485,187 @@ export default function Dashboard() {
 
         {/* Tab: Collection */}
         <div className={activeTab === 'collection' ? 'block' : 'hidden print:block'}>
-          <Section title="Collection Breakdown" icon="📚">
-            <div className="col-span-full">
-              <p className="text-sm font-semibold text-gray-700 mb-2">By Sublocation</p>
-              <ResponsiveContainer width="100%" height={Math.max(200, sublocData.length * 36)}>
-                <BarChart data={sublocData} layout="vertical" margin={{left:120,right:40,top:4,bottom:4}}>
-                  <XAxis type="number" tick={{fontSize:11}} />
-                  <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={115} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="total" name="Total" fill="#3b82f6" />
-                  <Bar dataKey="checkedOut" name="Checked Out" fill="#f59e0b" />
-                  <Bar dataKey="available" name="Available" fill="#10b981" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="col-span-full mt-4">
-              <p className="text-sm font-semibold text-gray-700 mb-2">By Copy Category (Dewey)</p>
-              <ResponsiveContainer width="100%" height={Math.max(200, catData.length * 36)}>
-                <BarChart data={catData} layout="vertical" margin={{left:160,right:40,top:4,bottom:4}}>
-                  <XAxis type="number" tick={{fontSize:11}} />
-                  <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="total" name="Total" fill="#8b5cf6" />
-                  <Bar dataKey="checkedOut" name="Checked Out" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
 
-            {/* Funding Source */}
-            {fundingData.length > 0 && (
-              <div className="col-span-full mt-4">
-                <p className="text-sm font-semibold text-gray-700 mb-2">By Funding Source</p>
-                <ResponsiveContainer width="100%" height={Math.max(200, fundingData.length * 36)}>
-                  <BarChart data={fundingData} layout="vertical" margin={{left:140,right:40,top:4,bottom:4}}>
+          {/* ── Section 1: Collection Health KPIs ── */}
+          <Section title="Collection Health KPIs" icon="🏥">
+            <Card label="Collection Refresh Rate"   value={pct(s?.newItemsThisYear ?? 0, s?.totalItems ?? 0)}    sub={`new items ÷ total items — ${year} (target ≥ 5%)`}       color={(s?.newItemsThisYear ?? 0) / (s?.totalItems || 1) >= 0.05 ? 'text-green-700' : 'text-amber-600'} />
+            <Card label="Utilization Rate"          value={pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)}          sub="items checked out ÷ total items right now"                color="text-blue-700" />
+            <Card label="Dead Stock Rate"           value={pct(s?.neverCheckedOut ?? 0, s?.totalItems ?? 0)}     sub="items never borrowed — weeding candidates"               color={(s?.neverCheckedOut ?? 0) / (s?.totalItems || 1) > 0.3 ? 'text-red-600' : 'text-amber-600'} />
+            <Card label="Weeding Intensity"         value={pct(s?.withdrawnItems ?? 0, s?.totalItems ?? 0)}      sub="withdrawn ÷ active collection — collection maintenance"   color="text-gray-600" />
+            <Card label="Collection Turnover"       value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—'} sub={`loans ÷ total items — ${periodLabel}`} color="text-indigo-700" />
+            <Card label="Overdue Rate"              value={s?.checkedOut ? pct(s.overdue, s.checkedOut) : '—'}   sub="overdue ÷ all checked-out items"                         color="text-red-600" />
+            <Card label="Severe Overdue Ratio"      value={s?.overdue ? pct(s.overdueOver30Days, s.overdue) : '—'} sub=">30 days overdue ÷ all overdue — non-return risk"      color="text-red-700" />
+            <Card label="Hold Fill Rate"            value={((s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) > 0 ? pct(s?.readyHolds ?? 0, (s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) : '—'} sub="ready holds ÷ total active holds" color="text-teal-700" />
+          </Section>
+
+          {/* ── Section 2: Composition Charts ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <span>📊</span>Collection Composition
+            </h2>
+            <div className="grid grid-cols-1 gap-6">
+
+              {/* Material Type */}
+              {materialTypeData.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                  <p className="text-sm font-semibold text-gray-700 mb-1">By Material Type</p>
+                  <p className="text-xs text-gray-400 mb-3">What the collection contains — Book, Periodical, Thesis, AV, e-Resource, etc.</p>
+                  <ResponsiveContainer width="100%" height={Math.max(200, materialTypeData.length * 40)}>
+                    <BarChart data={materialTypeData} layout="vertical" margin={{left:160,right:60,top:4,bottom:4}}>
+                      <XAxis type="number" tick={{fontSize:11}} />
+                      <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
+                      <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                      <Legend />
+                      <Bar dataKey="items" name="Items" fill="#7c3aed" />
+                      <Bar dataKey="titles" name="Titles" fill="#a78bfa" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Dewey Category */}
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <p className="text-sm font-semibold text-gray-700 mb-1">By Dewey Decimal Category</p>
+                <p className="text-xs text-gray-400 mb-3">Subject distribution of the collection</p>
+                <ResponsiveContainer width="100%" height={Math.max(200, catData.length * 36)}>
+                  <BarChart data={catData} layout="vertical" margin={{left:160,right:40,top:4,bottom:4}}>
+                    <XAxis type="number" tick={{fontSize:11}} />
+                    <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="total" name="Total" fill="#8b5cf6" />
+                    <Bar dataKey="checkedOut" name="Checked Out" fill="#ef4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Sublocation */}
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <p className="text-sm font-semibold text-gray-700 mb-1">By Sublocation / Section</p>
+                <p className="text-xs text-gray-400 mb-3">Physical placement within the library</p>
+                <ResponsiveContainer width="100%" height={Math.max(200, sublocData.length * 36)}>
+                  <BarChart data={sublocData} layout="vertical" margin={{left:140,right:40,top:4,bottom:4}}>
                     <XAxis type="number" tick={{fontSize:11}} />
                     <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={135} />
-                    <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                    <Tooltip />
                     <Legend />
-                    <Bar dataKey="total" name="Total" fill="#0ea5e9" />
-                    <Bar dataKey="checkedOut" name="Checked Out" fill="#f97316" />
+                    <Bar dataKey="total" name="Total" fill="#3b82f6" />
+                    <Bar dataKey="checkedOut" name="Checked Out" fill="#f59e0b" />
+                    <Bar dataKey="available" name="Available" fill="#10b981" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            )}
 
-            {/* Material Type (BibType — Book, AV, e-Resource, etc.) */}
-            {materialTypeData.length > 0 && (
-              <div className="col-span-full mt-4">
-                <p className="text-sm font-semibold text-gray-700 mb-2">By Material Type</p>
-                <p className="text-xs text-gray-400 mb-2">Format of the bibliographic record — Book, Periodical, AV, e-Resource, etc.</p>
-                <ResponsiveContainer width="100%" height={Math.max(200, materialTypeData.length * 36)}>
-                  <BarChart data={materialTypeData} layout="vertical" margin={{left:160,right:60,top:4,bottom:4}}>
-                    <XAxis type="number" tick={{fontSize:11}} />
-                    <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
-                    <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
-                    <Legend />
-                    <Bar dataKey="items" name="Items" fill="#7c3aed" />
-                    <Bar dataKey="titles" name="Titles" fill="#a78bfa" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+              {/* Circulation Policy Type */}
+              {circTypeData.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                  <p className="text-sm font-semibold text-gray-700 mb-1">By Circulation Policy Type</p>
+                  <p className="text-xs text-gray-400 mb-3">Loan rules — Reserve Room (short loan), Regular, Non-circulating, etc.</p>
+                  <ResponsiveContainer width="100%" height={Math.max(200, circTypeData.length * 36)}>
+                    <BarChart data={circTypeData} layout="vertical" margin={{left:160,right:40,top:4,bottom:4}}>
+                      <XAxis type="number" tick={{fontSize:11}} />
+                      <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
+                      <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                      <Legend />
+                      <Bar dataKey="total" name="Total" fill="#6366f1" />
+                      <Bar dataKey="checkedOut" name="Checked Out" fill="#ec4899" />
+                      <Bar dataKey="available" name="Available" fill="#22c55e" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
 
-            {/* Circulation Type (Reserve Room, Regular Loan, etc.) */}
-            {circTypeData.length > 0 && (
-              <div className="col-span-full mt-4">
-                <p className="text-sm font-semibold text-gray-700 mb-2">By Circulation Type</p>
-                <p className="text-xs text-gray-400 mb-2">Loan policy — Reserve Room, Regular, Non-circulating, etc.</p>
-                <ResponsiveContainer width="100%" height={Math.max(200, circTypeData.length * 36)}>
-                  <BarChart data={circTypeData} layout="vertical" margin={{left:160,right:40,top:4,bottom:4}}>
-                    <XAxis type="number" tick={{fontSize:11}} />
-                    <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
-                    <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
-                    <Legend />
-                    <Bar dataKey="total" name="Total" fill="#6366f1" />
-                    <Bar dataKey="checkedOut" name="Checked Out" fill="#ec4899" />
-                    <Bar dataKey="available" name="Available" fill="#22c55e" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+            </div>
+          </div>
 
-            {/* Acquisition Year trend */}
-            {acqYearData.length > 0 && (
-              <div className="col-span-full mt-4">
-                <p className="text-sm font-semibold text-gray-700 mb-2">By Year of Acquisition</p>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={acqYearData} margin={{left:10,right:20,top:4,bottom:4}}>
-                    <XAxis dataKey="year" tick={{fontSize:11}} />
-                    <YAxis tick={{fontSize:11}} />
-                    <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
-                    <Legend />
-                    <Bar dataKey="items" name="Items Added" fill="#3b82f6" />
-                    <Bar dataKey="titles" name="Titles Added" fill="#10b981" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+          {/* ── Section 3: Collection Currency & Growth ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <span>📈</span>Collection Currency &amp; Growth
+            </h2>
+            <div className="grid grid-cols-1 gap-6">
 
-            {/* Publication Year (by decade) */}
-            {pubYearData.length > 0 && (
-              <div className="col-span-full mt-4">
-                <p className="text-sm font-semibold text-gray-700 mb-2">By Publication Year (Decade)</p>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={pubYearData} margin={{left:10,right:20,top:4,bottom:4}}>
-                    <XAxis dataKey="name" tick={{fontSize:11}} />
-                    <YAxis tick={{fontSize:11}} />
-                    <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
-                    <Legend />
-                    <Bar dataKey="items" name="Items" fill="#8b5cf6" />
-                    <Bar dataKey="titles" name="Titles" fill="#f59e0b" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+              {acqYearData.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                  <p className="text-sm font-semibold text-gray-700 mb-1">By Year of Acquisition</p>
+                  <p className="text-xs text-gray-400 mb-3">Annual additions to the collection since 2010</p>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={acqYearData} margin={{left:10,right:20,top:4,bottom:4}}>
+                      <XAxis dataKey="year" tick={{fontSize:11}} />
+                      <YAxis tick={{fontSize:11}} />
+                      <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                      <Legend />
+                      <Bar dataKey="items" name="Items Added" fill="#3b82f6" />
+                      <Bar dataKey="titles" name="Titles Added" fill="#10b981" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
 
-            {/* Publisher */}
-            {publisherData.length > 0 && (
-              <div className="col-span-full mt-4">
-                <p className="text-sm font-semibold text-gray-700 mb-2">By Publisher (Top 20 by Titles)</p>
-                <ResponsiveContainer width="100%" height={Math.max(300, publisherData.length * 28)}>
-                  <BarChart data={publisherData} layout="vertical" margin={{left:160,right:60,top:4,bottom:4}}>
-                    <XAxis type="number" tick={{fontSize:11}} />
-                    <YAxis type="category" dataKey="name" tick={{fontSize:10}} width={155} />
-                    <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
-                    <Legend />
-                    <Bar dataKey="titles" name="Titles" fill="#06b6d4" />
-                    <Bar dataKey="items" name="Items" fill="#84cc16" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </Section>
+              {pubYearData.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                  <p className="text-sm font-semibold text-gray-700 mb-1">By Publication Decade</p>
+                  <p className="text-xs text-gray-400 mb-3">Age profile of the collection — shows currency of holdings</p>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={pubYearData} margin={{left:10,right:20,top:4,bottom:4}}>
+                      <XAxis dataKey="name" tick={{fontSize:11}} />
+                      <YAxis tick={{fontSize:11}} />
+                      <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                      <Legend />
+                      <Bar dataKey="items" name="Items" fill="#8b5cf6" />
+                      <Bar dataKey="titles" name="Titles" fill="#f59e0b" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+            </div>
+          </div>
+
+          {/* ── Section 4: Funding & Publisher ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <span>💰</span>Funding &amp; Publisher Analysis
+            </h2>
+            <div className="grid grid-cols-1 gap-6">
+
+              {fundingData.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                  <p className="text-sm font-semibold text-gray-700 mb-1">By Funding Source</p>
+                  <p className="text-xs text-gray-400 mb-3">Where the collection came from — budget allocation, donations, grants, etc.</p>
+                  <ResponsiveContainer width="100%" height={Math.max(200, fundingData.length * 36)}>
+                    <BarChart data={fundingData} layout="vertical" margin={{left:140,right:40,top:4,bottom:4}}>
+                      <XAxis type="number" tick={{fontSize:11}} />
+                      <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={135} />
+                      <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                      <Legend />
+                      <Bar dataKey="total" name="Total" fill="#0ea5e9" />
+                      <Bar dataKey="checkedOut" name="Checked Out" fill="#f97316" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {publisherData.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Top 20 Publishers by Titles</p>
+                  <p className="text-xs text-gray-400 mb-3">Publisher diversity — important for accreditation collection variety requirements</p>
+                  <ResponsiveContainer width="100%" height={Math.max(300, publisherData.length * 28)}>
+                    <BarChart data={publisherData} layout="vertical" margin={{left:160,right:60,top:4,bottom:4}}>
+                      <XAxis type="number" tick={{fontSize:11}} />
+                      <YAxis type="category" dataKey="name" tick={{fontSize:10}} width={155} />
+                      <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                      <Legend />
+                      <Bar dataKey="titles" name="Titles" fill="#06b6d4" />
+                      <Bar dataKey="items" name="Items" fill="#84cc16" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+            </div>
+          </div>
+
         </div>
 
         {/* Tab: ISO Standards */}

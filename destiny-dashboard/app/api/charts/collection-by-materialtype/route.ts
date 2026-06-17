@@ -2,22 +2,16 @@ import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 
-// Follett Destiny BibType integer codes
 const BIB_TYPE_LABELS: Record<number, string> = {
-  1:  'Book',
-  2:  'Periodical / Serial',
-  3:  'Sound Recording',
-  4:  'Video Recording',
-  5:  'Computer File / Software',
-  6:  'Map',
-  7:  'Music Score',
-  8:  'Kit',
-  9:  'Equipment',
-  10: 'Manuscript',
-  11: 'Picture / Graphic',
-  12: 'Mixed Materials',
-  13: 'e-Book',
-  14: 'e-Resource',
+  0:  'Equipment',
+  2:  'Book',
+  3:  'Web Resource',
+  4:  'e-Book / Digital',
+  5:  'Manuscript / Pamphlet',
+  8:  'Thesis / Dissertation',
+  14: 'Audiovisual',
+  15: 'Periodical / Serial',
+  16: 'Other Print',
 };
 
 export async function GET() {
