@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
+import { getSchemaPrefix, t } from '@/lib/schema';
 
 export async function GET() {
   try {
     const pool = await getPool();
+    const p = await getSchemaPrefix();
     const result = await pool.request().query(`
       SELECT TOP 200
         c.CopyID,
@@ -18,11 +20,11 @@ export async function GET() {
         bm.Title,
         bm.Author,
         cs.SiteName
-      FROM Copy c
-      JOIN Patron p     ON c.PatronID = p.PatronID
-      JOIN BibMaster bm ON c.BibID = bm.BibID
-      LEFT JOIN SitePatron sp ON c.PatronID = sp.PatronID AND c.SiteID = sp.SiteID
-      LEFT JOIN ConfigSite cs ON c.SiteID = cs.SiteID
+      FROM ${t(p,'Copy')} c
+      JOIN ${t(p,'Patron')} p     ON c.PatronID = p.PatronID
+      JOIN ${t(p,'BibMaster')} bm ON c.BibID = bm.BibID
+      LEFT JOIN ${t(p,'SitePatron')} sp ON c.PatronID = sp.PatronID AND c.SiteID = sp.SiteID
+      LEFT JOIN ${t(p,'ConfigSite')} cs ON c.SiteID = cs.SiteID
       WHERE c.PatronID IS NOT NULL
         AND c.DateReturned IS NULL
         AND c.DateDue < GETDATE()
