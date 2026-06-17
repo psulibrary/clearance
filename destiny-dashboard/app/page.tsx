@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface Stats {
   totalItems: number;
@@ -148,13 +149,16 @@ function exportCsv(s: Stats, yearLabel: string, monthLabel: string, genderLabel:
 
 export default function Dashboard() {
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 6 }, (_, i) => currentYear - i);
+  const years = Array.from({ length: currentYear - 2015 + 1 }, (_, i) => currentYear - i);
+  const CHART_COLORS = ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
   const [genders, setGenders]       = useState<string[]>([]);
   const [patronTypes, setPatronTypes] = useState<{ PatronTypeID: number; PatronTypeDescription: string }[]>([]);
+  const [genderData, setGenderData] = useState<{name:string;value:number}[]>([]);
+  const [patronTypeData, setPatronTypeData] = useState<{name:string;value:number}[]>([]);
 
   const [year, setYear]               = useState(currentYear);
   const [month, setMonth]             = useState(0);
@@ -182,6 +186,8 @@ export default function Dashboard() {
       .then(r => r.json())
       .then(d => { if (d.types) setPatronTypes(d.types); })
       .catch(() => {});
+    fetch('/api/charts/gender').then(r => r.json()).then(d => { if (d.data) setGenderData(d.data); }).catch(() => {});
+    fetch('/api/charts/patron-type').then(r => r.json()).then(d => { if (d.data) setPatronTypeData(d.data); }).catch(() => {});
   }, []);
 
   const s = stats;
@@ -372,6 +378,50 @@ export default function Dashboard() {
           <Card label="Patron Activation Rate"      value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="% currently borrowing" color="text-amber-700" />
           <Card label="Patrons with Overdue"        value={fmt(s?.patronsWithOverdue)}       sub="need follow-up" color="text-red-700" />
           <Card label="Overdue Rate"                value={pct(s?.overdue ?? 0, s?.checkedOut ?? 0)} sub="% of checkouts overdue" color="text-red-600" />
+        </Section>
+
+        {/* Demographics & Distribution */}
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2 print:hidden">
+            <span>📊</span>Demographics & Distribution
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:hidden">
+            {/* Gender Pie Chart */}
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <h3 className="text-sm font-semibold text-gray-600 mb-3">Patrons by Gender</h3>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={genderData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({name, percent}: {name?: string;percent?: number}) => `${name ?? ''} ${((percent ?? 0)*100).toFixed(1)}%`}>
+                    {genderData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Patron Type Bar Chart */}
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <h3 className="text-sm font-semibold text-gray-600 mb-3">Top Patron Types</h3>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={patronTypeData} layout="vertical" margin={{left:80}}>
+                  <XAxis type="number" tick={{fontSize:11}} />
+                  <YAxis type="category" dataKey="name" tick={{fontSize:10}} width={80} />
+                  <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                  <Bar dataKey="value" fill="#3b82f6" radius={[0,4,4,0]}>
+                    {patronTypeData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        <Section title="ISO 2789 Performance Indicators" icon="📐">
+          <Card label="Loans per Registered User" value={s?.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 2789 §6.2.3 — ${periodLabel}`} color="text-indigo-700" />
+          <Card label="Items per Registered User" value={s?.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'} sub="ISO 2789 §6.3.2 collection density" color="text-indigo-700" />
+          <Card label="Active Borrower Rate" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 2789 §2.2.2 — ${periodLabel}`} color="text-blue-700" />
+          <Card label="Reservation Rate" value={s?.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub="ISO 2789 §6.2.3.6 holds vs loans" color="text-purple-700" />
+          <Card label="Overdue Borrower Rate" value={pct(s?.patronsWithOverdue ?? 0, s?.patronsWithCheckouts ?? 0)} sub="% of active borrowers with overdue items" color="text-red-600" />
+          <Card label="Collection Turnover Rate" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—'} sub={`ISO 2789 §6.2.3 loans per item — ${periodLabel}`} color="text-green-700" />
         </Section>
 
         <Section title="Fines & Revenue" icon="💰">
