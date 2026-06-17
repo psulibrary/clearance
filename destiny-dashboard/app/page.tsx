@@ -167,6 +167,9 @@ export default function Dashboard() {
   const [gender, setGender]           = useState('');
   const [patronTypeID, setPatronTypeID] = useState(0);
 
+  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'>('overview');
+  const [chartsLoaded, setChartsLoaded] = useState({ patrons: false, collection: false });
+
   const load = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams({ year: String(year), month: String(month), gender, patronTypeID: String(patronTypeID) });
@@ -179,6 +182,7 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Fetch filter dropdown data on mount (small queries, needed for filters)
   useEffect(() => {
     fetch('/api/genders')
       .then(r => r.json())
@@ -188,11 +192,21 @@ export default function Dashboard() {
       .then(r => r.json())
       .then(d => { if (d.types) setPatronTypes(d.types); })
       .catch(() => {});
-    fetch('/api/charts/gender').then(r => r.json()).then(d => { if (d.data) setGenderData(d.data); }).catch(() => {});
-    fetch('/api/charts/patron-type').then(r => r.json()).then(d => { if (d.data) setPatronTypeData(d.data); }).catch(() => {});
-    fetch('/api/charts/collection-by-sublocation').then(r=>r.json()).then(d=>{ if(d.data) setSublocData(d.data); });
-    fetch('/api/charts/collection-by-category').then(r=>r.json()).then(d=>{ if(d.data) setCatData(d.data); });
   }, []);
+
+  // Lazy-load chart data when the relevant tab is first clicked
+  useEffect(() => {
+    if (activeTab === 'patrons' && !chartsLoaded.patrons) {
+      fetch('/api/charts/gender').then(r => r.json()).then(d => { if (d.data) setGenderData(d.data); }).catch(() => {});
+      fetch('/api/charts/patron-type').then(r => r.json()).then(d => { if (d.data) setPatronTypeData(d.data); }).catch(() => {});
+      setChartsLoaded(p => ({ ...p, patrons: true }));
+    }
+    if (activeTab === 'collection' && !chartsLoaded.collection) {
+      fetch('/api/charts/collection-by-sublocation').then(r=>r.json()).then(d=>{ if(d.data) setSublocData(d.data); }).catch(() => {});
+      fetch('/api/charts/collection-by-category').then(r=>r.json()).then(d=>{ if(d.data) setCatData(d.data); }).catch(() => {});
+      setChartsLoaded(p => ({ ...p, collection: true }));
+    }
+  }, [activeTab, chartsLoaded]);
 
   const s = stats;
   const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
@@ -320,179 +334,208 @@ export default function Dashboard() {
           Showing period-based stats for: <strong className="text-gray-600">{periodLabel}</strong>
           {gender && <> · Gender: <strong className="text-gray-600">{gender}</strong></>}
           {patronTypeID > 0 && <> · Type: <strong className="text-gray-600">{patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription}</strong></>}
+        </div>
+
+        {/* Tab bar */}
+        <div className="flex gap-2 mb-6 border-b border-gray-200 print:hidden">
+          {(['overview','patrons','collection','iso'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 text-sm font-medium capitalize border-b-2 transition-colors ${
+                activeTab === tab
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab === 'iso' ? 'ISO Standards' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab: Overview */}
+        <div className={activeTab === 'overview' ? 'block' : 'hidden print:block'}>
+          {/* Hero row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+            <div className="bg-blue-700 text-white rounded-xl p-5 flex flex-col gap-1">
+              <div className="text-4xl font-bold">{fmt(s?.totalItems)}</div>
+              <div className="text-sm font-medium text-blue-100">Total Items</div>
+              <div className="text-xs text-blue-300">{fmt(s?.uniqueTitles)} unique titles</div>
+            </div>
+            <div className="bg-amber-500 text-white rounded-xl p-5 flex flex-col gap-1">
+              <div className="text-4xl font-bold">{fmt(s?.checkedOut)}</div>
+              <div className="text-sm font-medium text-amber-100">Checked Out</div>
+              <div className="text-xs text-amber-200">{pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)} utilization</div>
+            </div>
+            <div className="bg-red-600 text-white rounded-xl p-5 flex flex-col gap-1">
+              <div className="text-4xl font-bold">{fmt(s?.overdue)}</div>
+              <div className="text-sm font-medium text-red-100">Overdue</div>
+              <div className="text-xs text-red-200">{fmt(s?.overdueOver30Days)} over 30 days</div>
+            </div>
+            <div className="bg-green-600 text-white rounded-xl p-5 flex flex-col gap-1">
+              <div className="text-4xl font-bold">{fmt(s?.totalPatrons)}</div>
+              <div className="text-sm font-medium text-green-100">Total Patrons</div>
+              <div className="text-xs text-green-200">{fmt(s?.newPatronsThisYear)} new in {year}</div>
+            </div>
           </div>
 
-        {/* Hero row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-          <div className="bg-blue-700 text-white rounded-xl p-5 flex flex-col gap-1">
-            <div className="text-4xl font-bold">{fmt(s?.totalItems)}</div>
-            <div className="text-sm font-medium text-blue-100">Total Items</div>
-            <div className="text-xs text-blue-300">{fmt(s?.uniqueTitles)} unique titles</div>
-          </div>
-          <div className="bg-amber-500 text-white rounded-xl p-5 flex flex-col gap-1">
-            <div className="text-4xl font-bold">{fmt(s?.checkedOut)}</div>
-            <div className="text-sm font-medium text-amber-100">Checked Out</div>
-            <div className="text-xs text-amber-200">{pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)} utilization</div>
-          </div>
-          <div className="bg-red-600 text-white rounded-xl p-5 flex flex-col gap-1">
-            <div className="text-4xl font-bold">{fmt(s?.overdue)}</div>
-            <div className="text-sm font-medium text-red-100">Overdue</div>
-            <div className="text-xs text-red-200">{fmt(s?.overdueOver30Days)} over 30 days</div>
-          </div>
-          <div className="bg-green-600 text-white rounded-xl p-5 flex flex-col gap-1">
-            <div className="text-4xl font-bold">{fmt(s?.totalPatrons)}</div>
-            <div className="text-sm font-medium text-green-100">Total Patrons</div>
-            <div className="text-xs text-green-200">{fmt(s?.newPatronsThisYear)} new in {year}</div>
+          <Section title="Collection Health" icon="📚">
+            <Card label="Available Now"        value={fmt(s?.available)}         color="text-green-700" />
+            <Card label="Unique Titles"        value={fmt(s?.uniqueTitles)}      />
+            <Card label="New Items This Month" value={fmt(s?.newItemsThisMonth)} sub="added to catalog" />
+            <Card label={`New Items in ${year}`} value={fmt(s?.newItemsThisYear)} sub="added to catalog" />
+            <Card label="Withdrawn Items"      value={fmt(s?.withdrawnItems)}    sub="removed from collection" color="text-gray-500" />
+            <Card label="Never Checked Out"    value={fmt(s?.neverCheckedOut)}   sub={`${deadStockPct} of collection — weeding candidates`} color="text-orange-600" />
+          </Section>
+
+          <Section title={`Circulation Activity — ${periodLabel}`} icon="📤">
+            <Card label="Checkouts (Last 7 Days)"  value={fmt(s?.checkoutsLast7Days)}  color="text-blue-700" />
+            <Card label="Checkouts (Last 30 Days)" value={fmt(s?.checkoutsLast30Days)} color="text-blue-700" />
+            <Card label={`Checkouts — ${periodLabel}`} value={fmt(s?.checkoutsThisYear)} color="text-blue-700" />
+            <Card label="Collection Turnover"      value={turnoverRate}                  sub={`checkouts ÷ total items (${periodLabel})`} color="text-indigo-700" />
+            <Card label="Check-ins (Last 7 Days)"  value={fmt(s?.checkinsLast7Days)}    />
+            <Card label="Check-ins (Last 30 Days)" value={fmt(s?.checkinsLast30Days)}   />
+            <Card label="Avg Loan Duration"        value={days(s?.avgLoanDays)}          sub={`average days per loan (${periodLabel})`} color="text-purple-700" />
+            <Card label="Utilization Rate"         value={pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)} sub="items checked out vs total right now" color="text-amber-700" />
+          </Section>
+
+          <Section title="Holds & Reservations" icon="🔖">
+            <Card label="Pending Holds"                value={fmt(s?.pendingHolds)}        sub="waiting for a copy" />
+            <Card label="Ready for Pickup"             value={fmt(s?.readyHolds)}          sub="holds ready now" color="text-green-700" />
+            <Card label={`Holds Placed — ${periodLabel}`} value={fmt(s?.holdsPlacedThisYear)} sub="total reservations made" color="text-blue-700" />
+            <Card label="Hold Fill Rate"               value={holdFillRate}                 sub="ready vs total active holds" color="text-indigo-700" />
+          </Section>
+
+          <Section title="Fines & Revenue" icon="💰">
+            <Card label="Outstanding Fines"         value={fmt(s?.activeFines)}              sub="open fine records" color="text-red-700" />
+            <Card label="Total Fines Balance"        value={money(s?.totalFinesBalance)}      sub="total amount owed" color="text-red-700" />
+            <Card label="Total Fines Ever Collected" value={money(s?.totalFinesEverCollected)} sub="all-time AmountPaid" color="text-green-700" />
+            <Card label="Avg Balance per Fine"       value={s?.activeFines && s.totalFinesBalance ? money(s.totalFinesBalance / s.activeFines) : '—'} sub="average open fine amount" />
+          </Section>
+        </div>
+
+        {/* Tab: Patrons */}
+        <div className={activeTab === 'patrons' ? 'block' : 'hidden print:block'}>
+          <Section title={`Patron Engagement & Impact — ${periodLabel}`} icon="👥">
+            <Card label="Active Borrowers Now"          value={fmt(s?.patronsWithCheckouts)}    sub="currently have items out" color="text-blue-700" />
+            <Card label="Active Patrons (Last 30 Days)" value={fmt(s?.activePatronsLast30Days)} sub="borrowed in last 30 days" color="text-blue-700" />
+            <Card label={`Active Patrons — ${periodLabel}`} value={fmt(s?.activePatronsThisYear)} sub="borrowed at least once" color="text-green-700" />
+            <Card label={`New Patrons — ${periodLabel}`} value={fmt(s?.newPatronsThisYear)} color="text-green-700" />
+            <Card label="Patron Reach Rate"           value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`% of patrons who borrowed (${periodLabel})`} color="text-indigo-700" />
+            <Card label="Patron Activation Rate"      value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="% currently borrowing" color="text-amber-700" />
+            <Card label="Patrons with Overdue"        value={fmt(s?.patronsWithOverdue)}       sub="need follow-up" color="text-red-700" />
+            <Card label="Overdue Rate"                value={pct(s?.overdue ?? 0, s?.checkedOut ?? 0)} sub="% of checkouts overdue" color="text-red-600" />
+          </Section>
+
+          {/* Demographics & Distribution */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <span>📊</span>Demographics & Distribution
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Gender Pie Chart */}
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <h3 className="text-sm font-semibold text-gray-600 mb-3">Patrons by Gender</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie data={genderData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({name, percent}: {name?: string;percent?: number}) => `${name ?? ''} ${((percent ?? 0)*100).toFixed(1)}%`}>
+                      {genderData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Patron Type Bar Chart */}
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <h3 className="text-sm font-semibold text-gray-600 mb-3">Top Patron Types</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={patronTypeData} layout="vertical" margin={{left:80}}>
+                    <XAxis type="number" tick={{fontSize:11}} />
+                    <YAxis type="category" dataKey="name" tick={{fontSize:10}} width={80} />
+                    <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                    <Bar dataKey="value" fill="#3b82f6" radius={[0,4,4,0]}>
+                      {patronTypeData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
         </div>
 
-        <Section title="Collection Health" icon="📚">
-          <Card label="Available Now"        value={fmt(s?.available)}         color="text-green-700" />
-          <Card label="Unique Titles"        value={fmt(s?.uniqueTitles)}      />
-          <Card label="New Items This Month" value={fmt(s?.newItemsThisMonth)} sub="added to catalog" />
-          <Card label={`New Items in ${year}`} value={fmt(s?.newItemsThisYear)} sub="added to catalog" />
-          <Card label="Withdrawn Items"      value={fmt(s?.withdrawnItems)}    sub="removed from collection" color="text-gray-500" />
-          <Card label="Never Checked Out"    value={fmt(s?.neverCheckedOut)}   sub={`${deadStockPct} of collection — weeding candidates`} color="text-orange-600" />
-        </Section>
-
-        <Section title={`Circulation Activity — ${periodLabel}`} icon="📤">
-          <Card label="Checkouts (Last 7 Days)"  value={fmt(s?.checkoutsLast7Days)}  color="text-blue-700" />
-          <Card label="Checkouts (Last 30 Days)" value={fmt(s?.checkoutsLast30Days)} color="text-blue-700" />
-          <Card label={`Checkouts — ${periodLabel}`} value={fmt(s?.checkoutsThisYear)} color="text-blue-700" />
-          <Card label="Collection Turnover"      value={turnoverRate}                  sub={`checkouts ÷ total items (${periodLabel})`} color="text-indigo-700" />
-          <Card label="Check-ins (Last 7 Days)"  value={fmt(s?.checkinsLast7Days)}    />
-          <Card label="Check-ins (Last 30 Days)" value={fmt(s?.checkinsLast30Days)}   />
-          <Card label="Avg Loan Duration"        value={days(s?.avgLoanDays)}          sub={`average days per loan (${periodLabel})`} color="text-purple-700" />
-          <Card label="Utilization Rate"         value={pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)} sub="items checked out vs total right now" color="text-amber-700" />
-        </Section>
-
-        <Section title="Holds & Reservations" icon="🔖">
-          <Card label="Pending Holds"                value={fmt(s?.pendingHolds)}        sub="waiting for a copy" />
-          <Card label="Ready for Pickup"             value={fmt(s?.readyHolds)}          sub="holds ready now" color="text-green-700" />
-          <Card label={`Holds Placed — ${periodLabel}`} value={fmt(s?.holdsPlacedThisYear)} sub="total reservations made" color="text-blue-700" />
-          <Card label="Hold Fill Rate"               value={holdFillRate}                 sub="ready vs total active holds" color="text-indigo-700" />
-        </Section>
-
-        <Section title={`Patron Engagement & Impact — ${periodLabel}`} icon="👥">
-          <Card label="Active Borrowers Now"          value={fmt(s?.patronsWithCheckouts)}    sub="currently have items out" color="text-blue-700" />
-          <Card label="Active Patrons (Last 30 Days)" value={fmt(s?.activePatronsLast30Days)} sub="borrowed in last 30 days" color="text-blue-700" />
-          <Card label={`Active Patrons — ${periodLabel}`} value={fmt(s?.activePatronsThisYear)} sub="borrowed at least once" color="text-green-700" />
-          <Card label={`New Patrons — ${periodLabel}`} value={fmt(s?.newPatronsThisYear)} color="text-green-700" />
-          <Card label="Patron Reach Rate"           value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`% of patrons who borrowed (${periodLabel})`} color="text-indigo-700" />
-          <Card label="Patron Activation Rate"      value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="% currently borrowing" color="text-amber-700" />
-          <Card label="Patrons with Overdue"        value={fmt(s?.patronsWithOverdue)}       sub="need follow-up" color="text-red-700" />
-          <Card label="Overdue Rate"                value={pct(s?.overdue ?? 0, s?.checkedOut ?? 0)} sub="% of checkouts overdue" color="text-red-600" />
-        </Section>
-
-        {/* Demographics & Distribution */}
-        <div className="mb-8">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2 print:hidden">
-            <span>📊</span>Demographics & Distribution
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:hidden">
-            {/* Gender Pie Chart */}
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-gray-600 mb-3">Patrons by Gender</h3>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={genderData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({name, percent}: {name?: string;percent?: number}) => `${name ?? ''} ${((percent ?? 0)*100).toFixed(1)}%`}>
-                    {genderData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            {/* Patron Type Bar Chart */}
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-gray-600 mb-3">Top Patron Types</h3>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={patronTypeData} layout="vertical" margin={{left:80}}>
+        {/* Tab: Collection */}
+        <div className={activeTab === 'collection' ? 'block' : 'hidden print:block'}>
+          <Section title="Collection Breakdown" icon="📚">
+            <div className="col-span-full">
+              <p className="text-sm font-semibold text-gray-700 mb-2">By Sublocation</p>
+              <ResponsiveContainer width="100%" height={Math.max(200, sublocData.length * 36)}>
+                <BarChart data={sublocData} layout="vertical" margin={{left:120,right:40,top:4,bottom:4}}>
                   <XAxis type="number" tick={{fontSize:11}} />
-                  <YAxis type="category" dataKey="name" tick={{fontSize:10}} width={80} />
-                  <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
-                  <Bar dataKey="value" fill="#3b82f6" radius={[0,4,4,0]}>
-                    {patronTypeData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                  </Bar>
+                  <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={115} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="total" name="Total" fill="#3b82f6" />
+                  <Bar dataKey="checkedOut" name="Checked Out" fill="#f59e0b" />
+                  <Bar dataKey="available" name="Available" fill="#10b981" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+            <div className="col-span-full mt-4">
+              <p className="text-sm font-semibold text-gray-700 mb-2">By Copy Category (Dewey)</p>
+              <ResponsiveContainer width="100%" height={Math.max(200, catData.length * 36)}>
+                <BarChart data={catData} layout="vertical" margin={{left:160,right:40,top:4,bottom:4}}>
+                  <XAxis type="number" tick={{fontSize:11}} />
+                  <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="total" name="Total" fill="#8b5cf6" />
+                  <Bar dataKey="checkedOut" name="Checked Out" fill="#ef4444" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Section>
         </div>
 
-        <Section title="Collection Breakdown" icon="📚">
-          <div className="col-span-full print:hidden">
-            <p className="text-sm font-semibold text-gray-700 mb-2">By Sublocation</p>
-            <ResponsiveContainer width="100%" height={Math.max(200, sublocData.length * 36)}>
-              <BarChart data={sublocData} layout="vertical" margin={{left:120,right:40,top:4,bottom:4}}>
-                <XAxis type="number" tick={{fontSize:11}} />
-                <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={115} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="total" name="Total" fill="#3b82f6" />
-                <Bar dataKey="checkedOut" name="Checked Out" fill="#f59e0b" />
-                <Bar dataKey="available" name="Available" fill="#10b981" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="col-span-full print:hidden mt-4">
-            <p className="text-sm font-semibold text-gray-700 mb-2">By Copy Category (Dewey)</p>
-            <ResponsiveContainer width="100%" height={Math.max(200, catData.length * 36)}>
-              <BarChart data={catData} layout="vertical" margin={{left:160,right:40,top:4,bottom:4}}>
-                <XAxis type="number" tick={{fontSize:11}} />
-                <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="total" name="Total" fill="#8b5cf6" />
-                <Bar dataKey="checkedOut" name="Checked Out" fill="#ef4444" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Section>
+        {/* Tab: ISO Standards */}
+        <div className={activeTab === 'iso' ? 'block' : 'hidden print:block'}>
+          <Section title="ISO 2789 Performance Indicators" icon="📐">
+            <Card label="Loans per Registered User" value={s?.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 2789 §6.2.3 — ${periodLabel}`} color="text-indigo-700" />
+            <Card label="Items per Registered User" value={s?.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'} sub="ISO 2789 §6.3.2 collection density" color="text-indigo-700" />
+            <Card label="Active Borrower Rate" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 2789 §2.2.2 — ${periodLabel}`} color="text-blue-700" />
+            <Card label="Reservation Rate" value={s?.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub="ISO 2789 §6.2.3.6 holds vs loans" color="text-purple-700" />
+            <Card label="Overdue Borrower Rate" value={pct(s?.patronsWithOverdue ?? 0, s?.patronsWithCheckouts ?? 0)} sub="% of active borrowers with overdue items" color="text-red-600" />
+            <Card label="Collection Turnover Rate" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—'} sub={`ISO 2789 §6.2.3 loans per item — ${periodLabel}`} color="text-green-700" />
+          </Section>
 
-        <Section title="ISO 2789 Performance Indicators" icon="📐">
-          <Card label="Loans per Registered User" value={s?.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 2789 §6.2.3 — ${periodLabel}`} color="text-indigo-700" />
-          <Card label="Items per Registered User" value={s?.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'} sub="ISO 2789 §6.3.2 collection density" color="text-indigo-700" />
-          <Card label="Active Borrower Rate" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 2789 §2.2.2 — ${periodLabel}`} color="text-blue-700" />
-          <Card label="Reservation Rate" value={s?.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub="ISO 2789 §6.2.3.6 holds vs loans" color="text-purple-700" />
-          <Card label="Overdue Borrower Rate" value={pct(s?.patronsWithOverdue ?? 0, s?.patronsWithCheckouts ?? 0)} sub="% of active borrowers with overdue items" color="text-red-600" />
-          <Card label="Collection Turnover Rate" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—'} sub={`ISO 2789 §6.2.3 loans per item — ${periodLabel}`} color="text-green-700" />
-        </Section>
+          <Section title="ISO 16439 Impact Indicators" icon="📊">
+            <Card label="Library Use Rate" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 16439 §5.2 — active users / registered × 100 — ${periodLabel}`} color="text-rose-700" />
+            <Card label="Borrower Penetration Rate" value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="ISO 16439 §5.2 — patrons with active loans / total" color="text-rose-700" />
+            <Card label="Repeat Use Index" value={s?.activePatronsThisYear ? (s.checkoutsThisYear / s.activePatronsThisYear).toFixed(2) : '—'} sub={`ISO 16439 §5.3 — loans per active user — ${periodLabel}`} color="text-orange-700" />
+            <Card label="Collection Use Ratio" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) : '—'} sub={`ISO 16439 §5.3 — loans per item — ${periodLabel}`} color="text-orange-700" />
+            <Card label="Hold Fulfillment Rate" value={((s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) > 0 ? pct(s?.readyHolds ?? 0, (s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) : '—'} sub="ISO 16439 §5.3 — ready holds / total holds" color="text-teal-700" />
+            <Card label="Overdue Rate" value={s?.checkedOut ? pct(s.overdue, s.checkedOut) : '—'} sub="ISO 16439 §5.3 — overdue / checked-out items" color="text-red-700" />
+            <Card label="New User Growth Rate" value={pct(s?.newPatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 16439 §5.2 — new patrons / total — ${s?.year}`} color="text-green-700" />
+            <Card label="Collection Refresh Rate" value={pct(s?.newItemsThisYear ?? 0, s?.totalItems ?? 0)} sub={`ISO 16439 §5.3 — new items / total — ${s?.year}`} color="text-green-700" />
+          </Section>
 
-        <Section title="ISO 16439 Impact Indicators" icon="📊">
-          <Card label="Library Use Rate" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 16439 §5.2 — active users / registered × 100 — ${periodLabel}`} color="text-rose-700" />
-          <Card label="Borrower Penetration Rate" value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="ISO 16439 §5.2 — patrons with active loans / total" color="text-rose-700" />
-          <Card label="Repeat Use Index" value={s?.activePatronsThisYear ? (s.checkoutsThisYear / s.activePatronsThisYear).toFixed(2) : '—'} sub={`ISO 16439 §5.3 — loans per active user — ${periodLabel}`} color="text-orange-700" />
-          <Card label="Collection Use Ratio" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) : '—'} sub={`ISO 16439 §5.3 — loans per item — ${periodLabel}`} color="text-orange-700" />
-          <Card label="Hold Fulfillment Rate" value={((s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) > 0 ? pct(s?.readyHolds ?? 0, (s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) : '—'} sub="ISO 16439 §5.3 — ready holds / total holds" color="text-teal-700" />
-          <Card label="Overdue Rate" value={s?.checkedOut ? pct(s.overdue, s.checkedOut) : '—'} sub="ISO 16439 §5.3 — overdue / checked-out items" color="text-red-700" />
-          <Card label="New User Growth Rate" value={pct(s?.newPatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 16439 §5.2 — new patrons / total — ${s?.year}`} color="text-green-700" />
-          <Card label="Collection Refresh Rate" value={pct(s?.newItemsThisYear ?? 0, s?.totalItems ?? 0)} sub={`ISO 16439 §5.3 — new items / total — ${s?.year}`} color="text-green-700" />
-        </Section>
+          <Section title="ISO 11620:2014 Performance Indicators" icon="📋">
+            <Card label="% of Stock Not Used" value={pct(s?.neverCheckedOut ?? 0, s?.totalItems ?? 0)} sub="ISO 11620 B.2.1.3 — items never borrowed / total items" color="text-amber-700" />
+            <Card label="Loans per Capita" value={s?.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 11620 B.2.1.2 — loans / registered users — ${periodLabel}`} color="text-indigo-700" />
+            <Card label="Collection Turnover" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(3) : '—'} sub={`ISO 11620 B.2.1.1 — loans / total items — ${periodLabel}`} color="text-indigo-700" />
+            <Card label="% Target Population Reached" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 11620 B.2.4.1 — active borrowers / registered users — ${periodLabel}`} color="text-blue-700" />
+            <Card label="Hold Request Rate" value={s?.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub="ISO 11620 B.1.1 — holds placed vs loans (demand proxy)" color="text-purple-700" />
+            <Card label="Avg Loan Duration" value={s?.avgLoanDays !== undefined ? s.avgLoanDays.toFixed(1) + ' days' : '—'} sub={`ISO 11620 B.2.1 — avg days per loan — ${periodLabel}`} color="text-cyan-700" />
+          </Section>
 
-        <Section title="ISO 11620:2014 Performance Indicators" icon="📋">
-          <Card label="% of Stock Not Used" value={pct(s?.neverCheckedOut ?? 0, s?.totalItems ?? 0)} sub="ISO 11620 B.2.1.3 — items never borrowed / total items" color="text-amber-700" />
-          <Card label="Loans per Capita" value={s?.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 11620 B.2.1.2 — loans / registered users — ${periodLabel}`} color="text-indigo-700" />
-          <Card label="Collection Turnover" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(3) : '—'} sub={`ISO 11620 B.2.1.1 — loans / total items — ${periodLabel}`} color="text-indigo-700" />
-          <Card label="% Target Population Reached" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 11620 B.2.4.1 — active borrowers / registered users — ${periodLabel}`} color="text-blue-700" />
-          <Card label="Hold Request Rate" value={s?.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub="ISO 11620 B.1.1 — holds placed vs loans (demand proxy)" color="text-purple-700" />
-          <Card label="Avg Loan Duration" value={s?.avgLoanDays !== undefined ? s.avgLoanDays.toFixed(1) + ' days' : '—'} sub={`ISO 11620 B.2.1 — avg days per loan — ${periodLabel}`} color="text-cyan-700" />
-        </Section>
-
-        <Section title="ISO 21001:2018 Educational Support Indicators" icon="🎓">
-          <Card label="Learning Resource Availability" value={pct(s?.available ?? 0, s?.totalItems ?? 0)} sub="ISO 21001 §8.3 — shelf-ready items / total collection" color="text-emerald-700" />
-          <Card label="Learner Support Rate" value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="ISO 21001 §8.3 — learners currently borrowing / registered" color="text-emerald-700" />
-          <Card label="Titles per Learner" value={s?.totalPatrons ? (s.uniqueTitles / s.totalPatrons).toFixed(2) : '—'} sub="ISO 21001 §8.3 — unique titles / registered users (breadth)" color="text-teal-700" />
-          <Card label="Severe Overdue Ratio" value={s?.overdue ? pct(s.overdueOver30Days, s.overdue) : '—'} sub="ISO 21001 §8.3 — items overdue &gt;30 days / all overdue (non-return risk)" color="text-red-700" />
-          <Card label="New Items per Learner" value={s?.totalPatrons ? (s.newItemsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 21001 §8.3 — new acquisitions / learners — ${s?.year}`} color="text-blue-700" />
-          <Card label="Active Borrower Growth" value={s?.totalPatrons ? pct(s.activePatronsLast30Days, s.totalPatrons) : '—'} sub="ISO 21001 §9.1 — patrons active last 30 days / total (recent engagement)" color="text-violet-700" />
-        </Section>
-
-        <Section title="Fines & Revenue" icon="💰">
-          <Card label="Outstanding Fines"         value={fmt(s?.activeFines)}              sub="open fine records" color="text-red-700" />
-          <Card label="Total Fines Balance"        value={money(s?.totalFinesBalance)}      sub="total amount owed" color="text-red-700" />
-          <Card label="Total Fines Ever Collected" value={money(s?.totalFinesEverCollected)} sub="all-time AmountPaid" color="text-green-700" />
-          <Card label="Avg Balance per Fine"       value={s?.activeFines && s.totalFinesBalance ? money(s.totalFinesBalance / s.activeFines) : '—'} sub="average open fine amount" />
-        </Section>
+          <Section title="ISO 21001:2018 Educational Support Indicators" icon="🎓">
+            <Card label="Learning Resource Availability" value={pct(s?.available ?? 0, s?.totalItems ?? 0)} sub="ISO 21001 §8.3 — shelf-ready items / total collection" color="text-emerald-700" />
+            <Card label="Learner Support Rate" value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="ISO 21001 §8.3 — learners currently borrowing / registered" color="text-emerald-700" />
+            <Card label="Titles per Learner" value={s?.totalPatrons ? (s.uniqueTitles / s.totalPatrons).toFixed(2) : '—'} sub="ISO 21001 §8.3 — unique titles / registered users (breadth)" color="text-teal-700" />
+            <Card label="Severe Overdue Ratio" value={s?.overdue ? pct(s.overdueOver30Days, s.overdue) : '—'} sub="ISO 21001 §8.3 — items overdue &gt;30 days / all overdue (non-return risk)" color="text-red-700" />
+            <Card label="New Items per Learner" value={s?.totalPatrons ? (s.newItemsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 21001 §8.3 — new acquisitions / learners — ${s?.year}`} color="text-blue-700" />
+            <Card label="Active Borrower Growth" value={s?.totalPatrons ? pct(s.activePatronsLast30Days, s.totalPatrons) : '—'} sub="ISO 21001 §9.1 — patrons active last 30 days / total (recent engagement)" color="text-violet-700" />
+          </Section>
+        </div>
       </main>
     </div>
   );
