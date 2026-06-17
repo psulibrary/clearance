@@ -1,83 +1,41 @@
 import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
-import { getPool } from '@/lib/db';
-import { getSchema, pick, col } from '@/lib/schema';
+import { getPool, sql } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams.get('search') || '';
 
   try {
     const pool = await getPool();
-    const schema = await getSchema();
-    const { tables } = schema;
+    const req = pool.request();
 
-    const titleTable = pick(tables, 'BibTitle', 'Title', 'Titles', 'Bib');
-    const copyTable  = pick(tables, 'BibCopy', 'Copy', 'Item', 'Items', 'Holdings');
-    const checkTable = pick(tables, 'Checkout', 'CircCheckout', 'Circ', 'Loan', 'Loans', 'CircLoan');
-
-    if (!titleTable) {
-      return NextResponse.json({ items: [], message: `No title/bib table found. Tables: ${tables.join(', ')}` });
-    }
-
-    const c = (table: string, ...candidates: string[]) => col(schema, table, ...candidates);
-
-    const titId      = c(titleTable, 'TitleID', 'title_id', 'BibID', 'RecordID');
-    const titTitle   = c(titleTable, 'Title', 'title', 'BibTitle', 'Name');
-    const titAuthor  = c(titleTable, 'Author', 'author', 'AuthorName', 'Creator');
-    const titISBN    = c(titleTable, 'ISBN', 'isbn', 'ISBN13', 'ISBN10');
-    const titCall    = c(titleTable, 'CallNumber', 'call_number', 'CallNo', 'ShelfMark');
-
-    const selectCols: string[] = [];
-    if (titId)     selectCols.push(`t.[${titId}] as TitleID`);
-    if (titTitle)  selectCols.push(`t.[${titTitle}] as Title`);
-    if (titAuthor) selectCols.push(`t.[${titAuthor}] as Author`);
-    if (titISBN)   selectCols.push(`t.[${titISBN}] as ISBN`);
-    if (titCall)   selectCols.push(`t.[${titCall}] as CallNumber`);
-
-    const joins: string[] = [];
-    let copiesExpr = `0 as TotalCopies, 0 as CheckedOut`;
-
-    if (copyTable && titId) {
-      const cpId      = c(copyTable, 'CopyID', 'copy_id', 'ItemID', 'HoldingID');
-      const cpTitleId = c(copyTable, 'TitleID', 'title_id', 'BibID', 'RecordID');
-
-      if (cpId && cpTitleId) {
-        joins.push(`LEFT JOIN [${copyTable}] cp ON t.[${titId}] = cp.[${cpTitleId}]`);
-
-        if (checkTable) {
-          const chkCopyId = c(checkTable, 'CopyID', 'copy_id', 'ItemID', 'HoldingID');
-          const retCol    = c(checkTable, 'ReturnDate', 'return_date', 'CheckinDate', 'DateReturned');
-          if (chkCopyId && retCol) {
-            joins.push(`LEFT JOIN [${checkTable}] ch ON cp.[${cpId}] = ch.[${chkCopyId}] AND ch.[${retCol}] IS NULL`);
-            copiesExpr = `COUNT(DISTINCT cp.[${cpId}]) as TotalCopies, COUNT(ch.[${chkCopyId}]) as CheckedOut`;
-          } else {
-            copiesExpr = `COUNT(DISTINCT cp.[${cpId}]) as TotalCopies, 0 as CheckedOut`;
-          }
-        } else {
-          copiesExpr = `COUNT(DISTINCT cp.[${cpId}]) as TotalCopies, 0 as CheckedOut`;
-        }
-      }
-    }
-
-    const safe = (s: string) => s.replace(/'/g, "''");
-    const whereClause = (search && titTitle)
-      ? `WHERE t.[${titTitle}] LIKE '%${safe(search)}%'${titAuthor ? ` OR t.[${titAuthor}] LIKE '%${safe(search)}%'` : ''}`
+    const whereClause = search
+      ? `WHERE (bm.Title LIKE @search OR bm.Author LIKE @search OR bm.DisplayableISBNOrISSN LIKE @search)`
       : '';
 
-    const groupCols = selectCols.map(c => c.split(' as ')[0]);
-    const groupBy = groupCols.length ? `GROUP BY ${groupCols.join(', ')}` : '';
-    const orderBy = titTitle ? `ORDER BY t.[${titTitle}]` : '';
+    if (search) {
+      req.input('search', sql.NVarChar, `%${search}%`);
+    }
 
-    const query = `
-      SELECT TOP 100 ${selectCols.join(', ')}, ${copiesExpr}
-      FROM [${titleTable}] t
-      ${joins.join('\n')}
+    const result = await req.query(`
+      SELECT TOP 100
+        bm.BibID,
+        bm.Title,
+        bm.Author,
+        bm.PublicationYear,
+        bm.Publisher,
+        bm.DisplayableISBNOrISSN        AS ISBN,
+        bm.DefaultCallNumber            AS CallNumber,
+        COUNT(DISTINCT c.CopyID)        AS TotalCopies,
+        SUM(CASE WHEN c.PatronID IS NOT NULL AND c.DateReturned IS NULL THEN 1 ELSE 0 END) AS CheckedOut
+      FROM BibMaster bm
+      LEFT JOIN Copy c ON bm.BibID = c.BibID AND c.DateWithdrawn IS NULL
       ${whereClause}
-      ${groupBy}
-      ${orderBy}
-    `;
+      GROUP BY bm.BibID, bm.Title, bm.Author, bm.PublicationYear, bm.Publisher,
+               bm.DisplayableISBNOrISSN, bm.DefaultCallNumber
+      ORDER BY bm.Title
+    `);
 
-    const result = await pool.request().query(query);
     return NextResponse.json({ items: result.recordset });
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });

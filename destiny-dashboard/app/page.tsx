@@ -6,8 +6,9 @@ import CirculationTable from '@/components/CirculationTable';
 import OverdueTable from '@/components/OverdueTable';
 import ItemsTable from '@/components/ItemsTable';
 import SchemaExplorer from '@/components/SchemaExplorer';
+import FinesTable from '@/components/FinesTable';
 
-type Tab = 'circulation' | 'overdue' | 'items' | 'schema';
+type Tab = 'circulation' | 'overdue' | 'items' | 'fines' | 'schema';
 
 interface Stats {
   totalItems: number;
@@ -71,6 +72,7 @@ export default function Dashboard() {
               { id: 'circulation', label: 'Active Checkouts', icon: '📤' },
               { id: 'overdue', label: 'Overdue', icon: '⚠️' },
               { id: 'items', label: 'Catalog', icon: '📚' },
+              { id: 'fines', label: 'Fines', icon: '💰' },
               { id: 'schema', label: 'Schema Explorer', icon: '🔍' },
             ] as { id: Tab; label: string; icon: string }[]).map(t => (
               <button
@@ -91,6 +93,7 @@ export default function Dashboard() {
         {activeTab === 'circulation' && <CirculationTable />}
         {activeTab === 'overdue' && <OverdueTable />}
         {activeTab === 'items' && <ItemsTable />}
+        {activeTab === 'fines' && <FinesTable />}
         {activeTab === 'schema' && <SchemaExplorer />}
       </main>
     </div>
