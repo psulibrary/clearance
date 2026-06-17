@@ -36,7 +36,7 @@ interface Stats {
   activeFines: number;
   totalFinesBalance: number;
   finesCollectedThisYear: number;
-  finesCollectedLast30Days: number;
+  finesCollectedThisMonth: number;
   error?: string;
 }
 
@@ -214,7 +214,7 @@ export default function Dashboard() {
           <Card label="Outstanding Fines"          value={fmt(s?.activeFines)}               sub="open fine records" color="text-red-700" />
           <Card label="Total Fines Balance"         value={money(s?.totalFinesBalance)}       sub="total amount owed" color="text-red-700" />
           <Card label="Collected This Year"         value={money(s?.finesCollectedThisYear)}  sub="fines paid in" color="text-green-700" />
-          <Card label="Collected (Last 30 Days)"    value={money(s?.finesCollectedLast30Days)} sub="recent collections" color="text-green-700" />
+          <Card label="Collected This Month"          value={money(s?.finesCollectedThisMonth)}  sub="fines paid this month" color="text-green-700" />
           <Card label="Avg Balance per Fine"        value={s?.activeFines && s.totalFinesBalance ? money(s.totalFinesBalance / s.activeFines) : '—'} sub="average open fine amount" />
         </Section>
       </main>

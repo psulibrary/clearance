@@ -75,8 +75,8 @@ export async function GET() {
           AS totalFinesBalance,
         (SELECT ISNULL(SUM(AmountPaid), 0) / 100.0 FROM ${t(p,'Fine')} WHERE YEAR(Created) = YEAR(GETDATE()))
           AS finesCollectedThisYear,
-        (SELECT ISNULL(SUM(AmountPaid), 0) / 100.0 FROM ${t(p,'Fine')} WHERE DatePaid >= DATEADD(day,-30,GETDATE()))
-          AS finesCollectedLast30Days
+        (SELECT ISNULL(SUM(AmountPaid), 0) / 100.0 FROM ${t(p,'Fine')} WHERE MONTH(Created) = MONTH(GETDATE()) AND YEAR(Created) = YEAR(GETDATE()))
+          AS finesCollectedThisMonth
     `);
 
     return NextResponse.json(result.recordset[0]);
