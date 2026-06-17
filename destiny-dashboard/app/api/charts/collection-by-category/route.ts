@@ -2,22 +2,46 @@ import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 
+// Maps Dewey hundreds to class name
+const DEWEY: Record<number, string> = {
+  0:   '000–099 General Works',
+  100: '100–199 Philosophy & Psychology',
+  200: '200–299 Religion',
+  300: '300–399 Social Sciences',
+  400: '400–499 Language',
+  500: '500–599 Natural Sciences',
+  600: '600–699 Technology',
+  700: '700–799 Arts & Recreation',
+  800: '800–899 Literature',
+  900: '900–999 History & Geography',
+};
+
 export async function GET() {
   try {
     const pool = await getPool();
     const p = await getSchemaPrefix();
-    // CopyCategory in Destiny is a text field like "500-599 Science"
+    // Group by Dewey hundreds using Copy.DeweyNumber (decimal)
     const result = await pool.request().query(`
-      SELECT TOP 15
-        ISNULL(NULLIF(CopyCategory,''), 'Uncategorized') AS name,
+      SELECT
+        CASE
+          WHEN DeweyNumber IS NULL THEN -1
+          ELSE CAST(FLOOR(DeweyNumber / 100) * 100 AS INT)
+        END AS deweyClass,
         COUNT(*) AS total,
         SUM(CASE WHEN PatronID IS NOT NULL AND DateReturned IS NULL AND DateWithdrawn IS NULL THEN 1 ELSE 0 END) AS checkedOut
       FROM ${t(p,'Copy')}
       WHERE DateWithdrawn IS NULL
-      GROUP BY CopyCategory
+      GROUP BY CASE WHEN DeweyNumber IS NULL THEN -1 ELSE CAST(FLOOR(DeweyNumber / 100) * 100 AS INT) END
       ORDER BY total DESC
     `);
-    return NextResponse.json({ data: result.recordset });
+
+    const data = result.recordset.map((r: { deweyClass: number; total: number; checkedOut: number }) => ({
+      name: r.deweyClass === -1 ? 'No Dewey / Other' : (DEWEY[r.deweyClass] ?? `${r.deweyClass}–${r.deweyClass + 99}`),
+      total: r.total,
+      checkedOut: r.checkedOut,
+    }));
+
+    return NextResponse.json({ data });
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }

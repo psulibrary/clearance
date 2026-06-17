@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const pool = await getPool();
     const p = await getSchemaPrefix();
-    const schema = p.replace(/\.$/, '');
+    const schema = p.replace(/^\[|\]\.?$|\.$/g, '');
     const result = await pool.request().query(`
       SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE
       FROM INFORMATION_SCHEMA.COLUMNS

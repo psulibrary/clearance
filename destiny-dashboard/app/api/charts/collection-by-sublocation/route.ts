@@ -6,15 +6,16 @@ export async function GET() {
   try {
     const pool = await getPool();
     const p = await getSchemaPrefix();
+    // CopyLibraryView joins Copy + CopyLibrary and exposes Sublocation as nvarchar
     const result = await pool.request().query(`
       SELECT TOP 20
-        ISNULL(NULLIF(SubLocation,''), 'Unassigned') AS name,
+        ISNULL(NULLIF(Sublocation,''), 'Unassigned') AS name,
         COUNT(*) AS total,
         SUM(CASE WHEN PatronID IS NOT NULL AND DateReturned IS NULL AND DateWithdrawn IS NULL THEN 1 ELSE 0 END) AS checkedOut,
         SUM(CASE WHEN DateWithdrawn IS NULL AND PatronID IS NULL AND DateReturned IS NULL THEN 1 ELSE 0 END) AS available
-      FROM ${t(p,'Copy')}
+      FROM ${t(p,'CopyLibraryView')}
       WHERE DateWithdrawn IS NULL
-      GROUP BY SubLocation
+      GROUP BY Sublocation
       ORDER BY total DESC
     `);
     return NextResponse.json({ data: result.recordset });
