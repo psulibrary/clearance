@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: psu-library-clearance-api
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt && python manage.py migrate && python manage.py seed_data
+    startCommand: gunicorn clearance_project.wsgi --log-file -
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://psu-library-clearance.pages.dev"
+      - key: EMAIL_BACKEND
+        value: "django.core.mail.backends.console.EmailBackend"
+      - key: PYTHON_VERSION
+        value: "3.11.0"

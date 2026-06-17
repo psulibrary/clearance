@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client Detail – PSU Library Clearance System</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; }
+    .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="dashboard.html">
+      <i class="bi bi-book-half me-2"></i>PSU Library Clearance System
+    </a>
+    <div class="ms-auto d-flex align-items-center gap-2">
+      <span class="navbar-text text-white me-2">
+        <i class="bi bi-person-circle me-1"></i><span id="nav-name"></span>
+        <span id="nav-role-badge" class="badge bg-warning text-dark ms-1"></span>
+      </span>
+      <button class="btn btn-outline-light btn-sm" onclick="logout()">
+        <i class="bi bi-box-arrow-right me-1"></i>Logout
+      </button>
+    </div>
+  </div>
+</nav>
+
+<div class="container mb-5">
+  <div id="toast-container" class="position-fixed top-0 end-0 p-3" style="z-index:9999"></div>
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="dashboard.html" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+    <h4 class="fw-bold mb-0">Client Detail</h4>
+  </div>
+
+  <div id="loading" class="text-center py-5">
+    <span class="spinner-border text-primary"></span>
+    <p class="mt-2 text-muted">Loading client data…</p>
+  </div>
+
+  <div id="content" class="d-none">
+    <div class="row g-4">
+      <!-- Info & Decision -->
+      <div class="col-lg-4">
+        <div class="card">
+          <div class="card-header bg-white fw-semibold">
+            <i class="bi bi-person-badge me-2 text-primary"></i>Client Information
+          </div>
+          <div class="card-body small">
+            <dl class="row mb-0">
+              <dt class="col-5 text-muted">Student ID</dt>
+              <dd class="col-7"><code id="c-id"></code></dd>
+              <dt class="col-5 text-muted">Full Name</dt>
+              <dd class="col-7 fw-semibold" id="c-name"></dd>
+              <dt class="col-5 text-muted">Email</dt>
+              <dd class="col-7" id="c-email"></dd>
+              <dt class="col-5 text-muted">Course</dt>
+              <dd class="col-7" id="c-course"></dd>
+              <dt class="col-5 text-muted">Year Level</dt>
+              <dd class="col-7" id="c-year"></dd>
+              <dt class="col-5 text-muted">Branch</dt>
+              <dd class="col-7" id="c-branch"></dd>
+              <dt class="col-5 text-muted">Status</dt>
+              <dd class="col-7" id="c-status"></dd>
+              <dt class="col-5 text-muted d-none" id="c-remarks-label">Remarks</dt>
+              <dd class="col-7" id="c-remarks"></dd>
+            </dl>
+          </div>
+        </div>
+
+        <!-- Clearance Decision (main library, pending only) -->
+        <div id="decide-card" class="card mt-3 d-none">
+          <div class="card-header bg-white fw-semibold">
+            <i class="bi bi-pen me-2 text-success"></i>Clearance Decision
+          </div>
+          <div class="card-body">
+            <div id="overdue-warning" class="alert alert-warning py-2 small mb-3 d-none">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              This client still has <strong>unresolved accountabilities</strong>.
+            </div>
+            <div id="decide-error" class="alert alert-danger d-none small"></div>
+            <form id="decide-form">
+              <div class="mb-3">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="radio" name="decision" id="r-approve" value="approve" required>
+                  <label class="form-check-label text-success fw-semibold" for="r-approve">
+                    <i class="bi bi-check-circle me-1"></i>Approve & Sign Clearance
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="decision" id="r-reject" value="reject">
+                  <label class="form-check-label text-danger fw-semibold" for="r-reject">
+                    <i class="bi bi-x-circle me-1"></i>Reject Clearance
+                  </label>
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label small">Remarks (optional)</label>
+                <textarea name="remarks" id="decide-remarks" class="form-control form-control-sm" rows="3" placeholder="Notes or reason…"></textarea>
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm w-100">
+                <i class="bi bi-send me-1"></i>Submit Decision
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accountabilities -->
+      <div class="col-lg-8">
+        <div class="card">
+          <div class="card-header bg-white d-flex justify-content-between align-items-center fw-semibold">
+            <span><i class="bi bi-exclamation-circle me-2 text-danger"></i>Accountabilities</span>
+            <span class="badge bg-danger" id="unresolv-count">0 unresolved</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle small">
+              <thead class="table-light">
+                <tr>
+                  <th>Book Title</th>
+                  <th>ISBN</th>
+                  <th>Due Date</th>
+                  <th>Details</th>
+                  <th class="text-center">Status</th>
+                  <th class="text-center" id="acc-action-header">Action</th>
+                </tr>
+              </thead>
+              <tbody id="acc-tbody">
+                <tr><td colspan="6" class="text-center text-muted py-3">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Add Accountability (branch only) -->
+        <div id="add-acc-card" class="card mt-3 d-none">
+          <div class="card-header bg-white fw-semibold">
+            <i class="bi bi-plus-circle me-2 text-primary"></i>Add Accountability
+          </div>
+          <div class="card-body">
+            <div id="add-acc-error" class="alert alert-danger d-none small"></div>
+            <form id="add-acc-form">
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label small fw-semibold">Book Title *</label>
+                  <input type="text" name="book_title" class="form-control form-control-sm" placeholder="Full book title" required>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small fw-semibold">ISBN</label>
+                  <input type="text" name="isbn" class="form-control form-control-sm" placeholder="Optional">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small fw-semibold">Due Date</label>
+                  <input type="date" name="due_date" class="form-control form-control-sm">
+                </div>
+                <div class="col-12">
+                  <label class="form-label small fw-semibold">Details / Notes</label>
+                  <textarea name="details" class="form-control form-control-sm" rows="2" placeholder="Additional notes…"></textarea>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm mt-3">
+                <i class="bi bi-plus me-1"></i>Add Accountability
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const user = getUser();
+  const clientId = new URLSearchParams(location.search).get('id');
+
+  document.getElementById('nav-name').textContent = user?.full_name || user?.username || '';
+  document.getElementById('nav-role-badge').textContent = user?.role === 'main_library' ? 'Main Library' : 'Library In Charge';
+
+  if (!clientId) window.location.href = 'dashboard.html';
+
+  let clientData = null;
+  const today = new Date().toISOString().split('T')[0];
+
+  async function loadClient() {
+    try {
+      clientData = await api.client(clientId);
+      renderClient();
+    } catch (e) {
+      document.getElementById('loading').innerHTML =
+        `<div class="alert alert-danger">Failed to load client: ${escHtml(e.error || String(e))}</div>`;
+    }
+  }
+
+  function renderClient() {
+    const c = clientData;
+    document.title = `${c.first_name} ${c.last_name} – PSU Library Clearance`;
+    document.getElementById('loading').classList.add('d-none');
+    document.getElementById('content').classList.remove('d-none');
+
+    document.getElementById('c-id').textContent = c.student_id;
+    document.getElementById('c-name').textContent = `${c.first_name} ${c.last_name}`;
+    document.getElementById('c-email').textContent = c.email;
+    document.getElementById('c-course').textContent = c.course || '—';
+    document.getElementById('c-year').textContent = c.year_level || '—';
+    document.getElementById('c-branch').textContent = c.branch_name || '—';
+    document.getElementById('c-status').innerHTML = statusBadge(c.status) +
+      (c.clearance_signed ? ' <span class="badge bg-success ms-1"><i class="bi bi-pen"></i> Signed</span>' : '');
+
+    if (c.remarks) {
+      document.getElementById('c-remarks-label').classList.remove('d-none');
+      document.getElementById('c-remarks').textContent = c.remarks;
+    }
+
+    // Decide card (main library + pending)
+    if (user?.role === 'main_library' && c.status === 'pending') {
+      document.getElementById('decide-card').classList.remove('d-none');
+      if (c.unresolved_count > 0) {
+        document.getElementById('overdue-warning').classList.remove('d-none');
+      }
+    }
+
+    // Add accountability (branch)
+    if (user?.role === 'library_in_charge') {
+      document.getElementById('add-acc-card').classList.remove('d-none');
+    }
+
+    renderAccountabilities();
+  }
+
+  function renderAccountabilities() {
+    const accs = clientData.accountabilities || [];
+    const unresolved = accs.filter(a => !a.resolved).length;
+    document.getElementById('unresolv-count').textContent = `${unresolved} unresolved`;
+
+    const canAction = user?.role === 'library_in_charge' || user?.role === 'main_library';
+    if (!canAction) document.getElementById('acc-action-header').remove();
+
+    const tbody = document.getElementById('acc-tbody');
+    if (!accs.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No accountabilities recorded.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = accs.map(a => {
+      const overdue = !a.resolved && a.due_date && a.due_date < today;
+      const dueDateHtml = a.due_date
+        ? `<span class="${overdue ? 'text-danger fw-semibold' : ''}">${escHtml(a.due_date)}</span>`
+        : '—';
+      const statusHtml = a.resolved
+        ? `<span class="badge bg-success">Resolved</span><div class="text-muted" style="font-size:.7rem">${escHtml(a.resolved_at?.split('T')[0] || '')}</div>`
+        : `<span class="badge bg-danger">Pending</span>`;
+      const actionHtml = canAction
+        ? (a.resolved ? '<span class="text-muted">—</span>'
+          : `<button class="btn btn-sm btn-outline-success" onclick="resolveAcc(${a.id})"><i class="bi bi-check2"></i> Resolve</button>`)
+        : '';
+      return `<tr class="${a.resolved ? 'table-light text-muted' : ''}">
+        <td><i class="bi bi-book me-1 text-primary"></i><strong>${escHtml(a.book_title)}</strong></td>
+        <td>${escHtml(a.isbn) || '—'}</td>
+        <td>${dueDateHtml}</td>
+        <td>${escHtml(a.details) ? escHtml(a.details).substring(0,60) + (a.details.length>60?'…':'') : '—'}</td>
+        <td class="text-center">${statusHtml}</td>
+        ${canAction ? `<td class="text-center">${actionHtml}</td>` : ''}
+      </tr>`;
+    }).join('');
+  }
+
+  async function resolveAcc(accId) {
+    if (!confirm('Mark this book as returned/resolved?')) return;
+    try {
+      const updated = await api.resolve(accId);
+      // Update in place
+      const idx = clientData.accountabilities.findIndex(a => a.id === accId);
+      if (idx !== -1) clientData.accountabilities[idx] = updated;
+      clientData.unresolved_count = clientData.accountabilities.filter(a => !a.resolved).length;
+      renderAccountabilities();
+      showToast('Accountability resolved.', 'success');
+    } catch (e) {
+      showToast(e.error || 'Failed to resolve.', 'danger');
+    }
+  }
+
+  document.getElementById('decide-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errDiv = document.getElementById('decide-error');
+    errDiv.classList.add('d-none');
+    const decision = document.querySelector('input[name="decision"]:checked')?.value;
+    const remarks = document.getElementById('decide-remarks').value;
+    if (!decision) { errDiv.textContent = 'Please select a decision.'; errDiv.classList.remove('d-none'); return; }
+    try {
+      clientData = await api.decide(clientId, decision, remarks);
+      document.getElementById('decide-card').classList.add('d-none');
+      renderClient();
+      showToast(decision === 'approve' ? 'Clearance approved and signed!' : 'Clearance rejected.', decision === 'approve' ? 'success' : 'warning');
+    } catch (err) {
+      errDiv.textContent = err.error || 'Failed to submit decision.';
+      errDiv.classList.remove('d-none');
+    }
+  });
+
+  document.getElementById('add-acc-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errDiv = document.getElementById('add-acc-error');
+    errDiv.classList.add('d-none');
+    const form = e.target;
+    const data = {
+      book_title: form.book_title.value,
+      isbn: form.isbn.value,
+      due_date: form.due_date.value || null,
+      details: form.details.value,
+    };
+    try {
+      const acc = await api.addAccountability(clientId, data);
+      clientData.accountabilities.push(acc);
+      clientData.unresolved_count = (clientData.unresolved_count || 0) + 1;
+      renderAccountabilities();
+      form.reset();
+      showToast(`"${acc.book_title}" added.`, 'success');
+    } catch (err) {
+      errDiv.textContent = err.error || JSON.stringify(err);
+      errDiv.classList.remove('d-none');
+    }
+  });
+
+  function logout() { localStorage.clear(); window.location.href = 'index.html'; }
+
+  function showToast(msg, type = 'success') {
+    const id = 'toast-' + Date.now();
+    document.getElementById('toast-container').insertAdjacentHTML('beforeend',
+      `<div id="${id}" class="toast align-items-center text-bg-${type} border-0 mb-2" role="alert">
+        <div class="d-flex"><div class="toast-body">${escHtml(msg)}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>
+      </div>`);
+    const el = document.getElementById(id);
+    new bootstrap.Toast(el, { delay: 4000 }).show();
+    el.addEventListener('hidden.bs.toast', () => el.remove());
+  }
+
+  loadClient();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
