@@ -1,1 +1,1 @@
-web: gunicorn clearance_project.wsgi --log-file -
+web: gunicorn clearance_project.wsgi:application --log-file -
