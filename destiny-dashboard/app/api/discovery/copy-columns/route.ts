@@ -11,7 +11,7 @@ export async function GET() {
       SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE
       FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA = '${schema}'
-        AND TABLE_NAME IN ('BibMaster','CircType','CrossDistrictLoan','BibLibrary','BibAllView','Copy')
+        AND TABLE_NAME IN ('BibMaster','BibLibrary','BibAllView','BibHeadings','MediaHeadings','CircType')
       ORDER BY TABLE_NAME, ORDINAL_POSITION
     `);
     return NextResponse.json({ schema, columns: result.recordset });
