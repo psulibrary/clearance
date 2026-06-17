@@ -72,8 +72,6 @@ export async function GET(request: NextRequest) {
           AS patronsWithCheckouts,
         (SELECT COUNT(DISTINCT PatronID) FROM ${t(p,'Copy')} WHERE PatronID IS NOT NULL AND DateReturned IS NULL AND DateWithdrawn IS NULL AND DateDue < GETDATE())
           AS patronsWithOverdue,
-        (SELECT COUNT(*) FROM ${t(p,'Patron')} WHERE YEAR(EnrollDate) = @year)
-          AS newPatronsThisYear,
         (SELECT COUNT(DISTINCT PatronID) FROM ${t(p,'Copy')} WHERE ${monthFilter})
           AS activePatronsThisYear,
         (SELECT COUNT(DISTINCT PatronID) FROM ${t(p,'Copy')} WHERE DateOut >= DATEADD(day,-30,GETDATE()))
@@ -89,7 +87,8 @@ export async function GET(request: NextRequest) {
           AS totalFinesEverCollected
     `);
 
-    return NextResponse.json({ ...result.recordset[0], year, month });
+    const row = result.recordset[0];
+    return NextResponse.json({ ...row, newPatronsThisYear: undefined, year, month });
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }

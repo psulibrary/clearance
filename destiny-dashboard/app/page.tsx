@@ -25,7 +25,6 @@ interface Stats {
   totalPatrons: number;
   patronsWithCheckouts: number;
   patronsWithOverdue: number;
-  newPatronsThisYear: number;
   activePatronsThisYear: number;
   activePatronsLast30Days: number;
   activeFines: number;
@@ -122,7 +121,6 @@ function exportCsv(s: Stats, yearLabel: string, monthLabel: string) {
     ['Active Borrowers Now', String(s.patronsWithCheckouts)],
     ['Active Patrons Last 30 Days', String(s.activePatronsLast30Days)],
     ['Active Patrons (Filtered Period)', String(s.activePatronsThisYear)],
-    ['New Patrons (Filtered Period)', String(s.newPatronsThisYear)],
     ['Patron Reach Rate', pct(s.activePatronsThisYear, s.totalPatrons)],
     ['Patrons with Overdue', String(s.patronsWithOverdue)],
     ['', ''],
@@ -280,7 +278,7 @@ export default function Dashboard() {
           <div className="bg-green-600 text-white rounded-xl p-5 flex flex-col gap-1">
             <div className="text-4xl font-bold">{fmt(s?.totalPatrons)}</div>
             <div className="text-sm font-medium text-green-100">Total Patrons</div>
-            <div className="text-xs text-green-200">{fmt(s?.newPatronsThisYear)} new in {year}</div>
+            <div className="text-xs text-green-200">{fmt(s?.activePatronsThisYear)} active in {year}</div>
           </div>
         </div>
 
@@ -315,7 +313,6 @@ export default function Dashboard() {
           <Card label="Active Borrowers Now"          value={fmt(s?.patronsWithCheckouts)}    sub="currently have items out" color="text-blue-700" />
           <Card label="Active Patrons (Last 30 Days)" value={fmt(s?.activePatronsLast30Days)} sub="borrowed in last 30 days" color="text-blue-700" />
           <Card label={`Active Patrons — ${periodLabel}`} value={fmt(s?.activePatronsThisYear)} sub="borrowed at least once" color="text-green-700" />
-          <Card label={`New Patrons — ${periodLabel}`} value={fmt(s?.newPatronsThisYear)}    color="text-green-700" />
           <Card label="Patron Reach Rate"           value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`% of patrons who borrowed (${periodLabel})`} color="text-indigo-700" />
           <Card label="Patron Activation Rate"      value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="% currently borrowing" color="text-amber-700" />
           <Card label="Patrons with Overdue"        value={fmt(s?.patronsWithOverdue)}       sub="need follow-up" color="text-red-700" />
