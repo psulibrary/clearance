@@ -853,22 +853,22 @@ export default function Dashboard() {
                     <div className="overflow-x-auto mt-4">
                       <table className="w-full text-xs border-collapse">
                         <thead>
-                          <tr className="bg-gray-50 text-gray-500 uppercase tracking-wide">
-                            <th className="text-left p-2 border border-gray-100">Material Type</th>
-                            <th className="text-right p-2 border border-gray-100">Total Items</th>
-                            <th className="text-right p-2 border border-gray-100">Checked Out</th>
-                            <th className="text-right p-2 border border-gray-100">Available</th>
-                            <th className="text-right p-2 border border-gray-100">Utilization %</th>
+                          <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                            <th className="text-left p-2 border border-gray-200">Material Type</th>
+                            <th className="text-right p-2 border border-gray-200">Total Items</th>
+                            <th className="text-right p-2 border border-gray-200">Checked Out</th>
+                            <th className="text-right p-2 border border-gray-200">Available</th>
+                            <th className="text-right p-2 border border-gray-200">Utilization %</th>
                           </tr>
                         </thead>
                         <tbody>
                           {[...materialTypeData].sort((a,b) => b.utilRate - a.utilRate).map((r,i) => (
                             <tr key={i} className={i%2===0?'bg-white':'bg-gray-50'}>
-                              <td className="p-2 border border-gray-100 font-medium">{r.name}</td>
-                              <td className="p-2 border border-gray-100 text-right">{r.items.toLocaleString()}</td>
-                              <td className="p-2 border border-gray-100 text-right text-amber-700 font-semibold">{r.checkedOut.toLocaleString()}</td>
-                              <td className="p-2 border border-gray-100 text-right text-green-700">{r.available.toLocaleString()}</td>
-                              <td className="p-2 border border-gray-100 text-right">
+                              <td className="p-2 border border-gray-200 font-semibold text-gray-900">{r.name}</td>
+                              <td className="p-2 border border-gray-200 text-right text-gray-800">{r.items.toLocaleString()}</td>
+                              <td className="p-2 border border-gray-200 text-right text-amber-700 font-semibold">{r.checkedOut.toLocaleString()}</td>
+                              <td className="p-2 border border-gray-200 text-right text-green-700">{r.available.toLocaleString()}</td>
+                              <td className="p-2 border border-gray-200 text-right">
                                 <span className={`font-bold ${r.utilRate > 50 ? 'text-red-600' : r.utilRate > 20 ? 'text-amber-600' : 'text-green-600'}`}>{r.utilRate}%</span>
                               </td>
                             </tr>
@@ -1119,26 +1119,26 @@ export default function Dashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs border-collapse">
                     <thead>
-                      <tr className="bg-gray-50 text-gray-500 uppercase tracking-wide">
-                        <th className="text-left p-2 border border-gray-100">Gender</th>
-                        <th className="text-right p-2 border border-gray-100">Registered</th>
-                        <th className="text-right p-2 border border-gray-100">Active Borrowers</th>
-                        <th className="text-right p-2 border border-gray-100">Active Rate</th>
-                        <th className="text-right p-2 border border-gray-100">Total Checkouts</th>
-                        <th className="text-right p-2 border border-gray-100">Checkouts / Patron</th>
-                        <th className="text-right p-2 border border-gray-100">Overdue Items</th>
+                      <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                        <th className="text-left p-2 border border-gray-200">Gender</th>
+                        <th className="text-right p-2 border border-gray-200">Registered</th>
+                        <th className="text-right p-2 border border-gray-200">Active Borrowers</th>
+                        <th className="text-right p-2 border border-gray-200">Active Rate</th>
+                        <th className="text-right p-2 border border-gray-200">Total Checkouts</th>
+                        <th className="text-right p-2 border border-gray-200">Checkouts / Patron</th>
+                        <th className="text-right p-2 border border-gray-200">Overdue Items</th>
                       </tr>
                     </thead>
                     <tbody>
                       {genderActivity.map((r, i) => (
-                        <tr key={i} className="hover:bg-gray-50">
-                          <td className="p-2 border border-gray-100 font-medium">{r.name}</td>
-                          <td className="p-2 border border-gray-100 text-right">{r.totalPatrons.toLocaleString()}</td>
-                          <td className="p-2 border border-gray-100 text-right text-green-700 font-semibold">{r.activePatrons.toLocaleString()}</td>
-                          <td className="p-2 border border-gray-100 text-right">{r.activeRate}%</td>
-                          <td className="p-2 border border-gray-100 text-right text-blue-700">{r.totalCheckouts.toLocaleString()}</td>
-                          <td className="p-2 border border-gray-100 text-right text-indigo-700 font-semibold">{r.checkoutsPerPatron}</td>
-                          <td className="p-2 border border-gray-100 text-right text-red-600">{r.overdueItems.toLocaleString()}</td>
+                        <tr key={i} className="hover:bg-blue-50">
+                          <td className="p-2 border border-gray-200 font-semibold text-gray-900">{r.name}</td>
+                          <td className="p-2 border border-gray-200 text-right text-gray-800">{r.totalPatrons.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-green-700 font-semibold">{r.activePatrons.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-gray-800">{r.activeRate}%</td>
+                          <td className="p-2 border border-gray-200 text-right text-blue-700">{r.totalCheckouts.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-indigo-700 font-semibold">{r.checkoutsPerPatron}</td>
+                          <td className="p-2 border border-gray-200 text-right text-red-600">{r.overdueItems.toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1165,26 +1165,26 @@ export default function Dashboard() {
                 <div className="overflow-x-auto mt-4">
                   <table className="w-full text-xs border-collapse">
                     <thead>
-                      <tr className="bg-gray-50 text-gray-500 uppercase tracking-wide">
-                        <th className="text-left p-2 border border-gray-100">Patron Type</th>
-                        <th className="text-right p-2 border border-gray-100">Registered</th>
-                        <th className="text-right p-2 border border-gray-100">Active</th>
-                        <th className="text-right p-2 border border-gray-100">Active Rate</th>
-                        <th className="text-right p-2 border border-gray-100">Total Checkouts</th>
-                        <th className="text-right p-2 border border-gray-100">Per Patron</th>
-                        <th className="text-right p-2 border border-gray-100">Overdue</th>
+                      <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                        <th className="text-left p-2 border border-gray-200">Patron Type</th>
+                        <th className="text-right p-2 border border-gray-200">Registered</th>
+                        <th className="text-right p-2 border border-gray-200">Active</th>
+                        <th className="text-right p-2 border border-gray-200">Active Rate</th>
+                        <th className="text-right p-2 border border-gray-200">Total Checkouts</th>
+                        <th className="text-right p-2 border border-gray-200">Per Patron</th>
+                        <th className="text-right p-2 border border-gray-200">Overdue</th>
                       </tr>
                     </thead>
                     <tbody>
                       {patronTypeActivity.map((r, i) => (
                         <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="p-2 border border-gray-100 font-medium">{r.name}</td>
-                          <td className="p-2 border border-gray-100 text-right">{r.totalPatrons.toLocaleString()}</td>
-                          <td className="p-2 border border-gray-100 text-right text-green-700 font-semibold">{r.activePatrons.toLocaleString()}</td>
-                          <td className="p-2 border border-gray-100 text-right">{r.activeRate}%</td>
-                          <td className="p-2 border border-gray-100 text-right text-blue-700">{r.totalCheckouts.toLocaleString()}</td>
-                          <td className="p-2 border border-gray-100 text-right text-indigo-700 font-semibold">{r.checkoutsPerPatron}</td>
-                          <td className="p-2 border border-gray-100 text-right text-red-600">{r.overdueItems.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 font-semibold text-gray-900">{r.name}</td>
+                          <td className="p-2 border border-gray-200 text-right text-gray-800">{r.totalPatrons.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-green-700 font-semibold">{r.activePatrons.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-gray-800">{r.activeRate}%</td>
+                          <td className="p-2 border border-gray-200 text-right text-blue-700">{r.totalCheckouts.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-indigo-700 font-semibold">{r.checkoutsPerPatron}</td>
+                          <td className="p-2 border border-gray-200 text-right text-red-600">{r.overdueItems.toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
