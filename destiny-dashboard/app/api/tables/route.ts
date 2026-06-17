@@ -1,18 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getPool } from '@/lib/db';
+import { getSchema } from '@/lib/schema';
 
 export async function GET() {
   try {
-    const pool = await getPool();
-    const result = await pool.request().query(`
-      SELECT TABLE_NAME
-      FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_TYPE = 'BASE TABLE'
-      ORDER BY TABLE_NAME
-    `);
-    return NextResponse.json({ tables: result.recordset });
+    const schema = await getSchema();
+    return NextResponse.json(schema);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }
