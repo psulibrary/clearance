@@ -308,7 +308,7 @@ export default function Dashboard() {
   const [catData, setCatData] = useState<{name:string;total:number;checkedOut:number}[]>([]);
   const [fundingData, setFundingData] = useState<{name:string;total:number;checkedOut:number;totalValue:number}[]>([]);
   const [circTypeData, setCircTypeData] = useState<{name:string;total:number;checkedOut:number;available:number}[]>([]);
-  const [materialTypeData, setMaterialTypeData] = useState<{name:string;titles:number;items:number}[]>([]);
+  const [materialTypeData, setMaterialTypeData] = useState<{name:string;titles:number;items:number;checkedOut:number;available:number;utilRate:number}[]>([]);
   const [acqYearData, setAcqYearData] = useState<{year:number;items:number;titles:number}[]>([]);
   const [pubYearData, setPubYearData] = useState<{name:string;titles:number;items:number}[]>([]);
   const [publisherData, setPublisherData] = useState<{name:string;titles:number;items:number}[]>([]);
@@ -819,6 +819,129 @@ export default function Dashboard() {
 
             </div>
           </div>
+
+          {/* ── Section 5: Collection Activity Cross-Analysis ── */}
+          {(materialTypeData.length > 0 || sublocData.length > 0 || catData.length > 0 || circTypeData.length > 0) && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>🔥</span>Collection Activity — Utilization by Category
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">What is actually being used — checked-out items as a % of total per category. Higher % = higher demand.</p>
+              <div className="grid grid-cols-1 gap-6">
+
+                {/* Utilization rate by Material Type */}
+                {materialTypeData.filter(r => r.items > 0).length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm p-5">
+                    <p className="text-sm font-semibold text-gray-700 mb-1">Utilization Rate by Material Type</p>
+                    <p className="text-xs text-gray-400 mb-3">Which material formats are in highest demand right now</p>
+                    <ResponsiveContainer width="100%" height={Math.max(200, materialTypeData.length * 40)}>
+                      <BarChart
+                        data={[...materialTypeData].sort((a,b) => b.utilRate - a.utilRate)}
+                        layout="vertical"
+                        margin={{left:160,right:60,top:4,bottom:4}}
+                      >
+                        <XAxis type="number" tick={{fontSize:11}} unit="%" domain={[0,100]} />
+                        <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
+                        <Tooltip formatter={(v:unknown) => Number(v).toFixed(1) + '%'} />
+                        <Bar dataKey="utilRate" name="Utilization %" fill="#f59e0b" radius={[0,4,4,0]}>
+                          {materialTypeData.map((_, i) => (
+                            <Cell key={i} fill={Number(materialTypeData.sort((a,b)=>b.utilRate-a.utilRate)[i]?.utilRate) > 50 ? '#ef4444' : Number(materialTypeData.sort((a,b)=>b.utilRate-a.utilRate)[i]?.utilRate) > 20 ? '#f59e0b' : '#10b981'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="overflow-x-auto mt-4">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-500 uppercase tracking-wide">
+                            <th className="text-left p-2 border border-gray-100">Material Type</th>
+                            <th className="text-right p-2 border border-gray-100">Total Items</th>
+                            <th className="text-right p-2 border border-gray-100">Checked Out</th>
+                            <th className="text-right p-2 border border-gray-100">Available</th>
+                            <th className="text-right p-2 border border-gray-100">Utilization %</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...materialTypeData].sort((a,b) => b.utilRate - a.utilRate).map((r,i) => (
+                            <tr key={i} className={i%2===0?'bg-white':'bg-gray-50'}>
+                              <td className="p-2 border border-gray-100 font-medium">{r.name}</td>
+                              <td className="p-2 border border-gray-100 text-right">{r.items.toLocaleString()}</td>
+                              <td className="p-2 border border-gray-100 text-right text-amber-700 font-semibold">{r.checkedOut.toLocaleString()}</td>
+                              <td className="p-2 border border-gray-100 text-right text-green-700">{r.available.toLocaleString()}</td>
+                              <td className="p-2 border border-gray-100 text-right">
+                                <span className={`font-bold ${r.utilRate > 50 ? 'text-red-600' : r.utilRate > 20 ? 'text-amber-600' : 'text-green-600'}`}>{r.utilRate}%</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Utilization rate by Sublocation */}
+                {sublocData.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm p-5">
+                    <p className="text-sm font-semibold text-gray-700 mb-1">Utilization Rate by Sublocation</p>
+                    <p className="text-xs text-gray-400 mb-3">Which library sections have highest demand — guides shelving, staffing, and signage decisions</p>
+                    <ResponsiveContainer width="100%" height={Math.max(200, sublocData.length * 36)}>
+                      <BarChart
+                        data={[...sublocData].map(r => ({ ...r, utilRate: r.total ? parseFloat((r.checkedOut/r.total*100).toFixed(1)) : 0 })).sort((a,b) => b.utilRate - a.utilRate)}
+                        layout="vertical"
+                        margin={{left:140,right:60,top:4,bottom:4}}
+                      >
+                        <XAxis type="number" tick={{fontSize:11}} unit="%" domain={[0,100]} />
+                        <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={135} />
+                        <Tooltip formatter={(v:unknown) => Number(v).toFixed(1)+'%'} />
+                        <Bar dataKey="utilRate" name="Utilization %" fill="#3b82f6" radius={[0,4,4,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Utilization rate by Dewey category */}
+                {catData.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm p-5">
+                    <p className="text-sm font-semibold text-gray-700 mb-1">Utilization Rate by Dewey Category</p>
+                    <p className="text-xs text-gray-400 mb-3">Which subjects are most in demand — informs targeted acquisition spending</p>
+                    <ResponsiveContainer width="100%" height={Math.max(200, catData.length * 36)}>
+                      <BarChart
+                        data={[...catData].map(r => ({ ...r, utilRate: r.total ? parseFloat((r.checkedOut/r.total*100).toFixed(1)) : 0 })).sort((a,b) => b.utilRate - a.utilRate)}
+                        layout="vertical"
+                        margin={{left:160,right:60,top:4,bottom:4}}
+                      >
+                        <XAxis type="number" tick={{fontSize:11}} unit="%" domain={[0,100]} />
+                        <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
+                        <Tooltip formatter={(v:unknown) => Number(v).toFixed(1)+'%'} />
+                        <Bar dataKey="utilRate" name="Utilization %" fill="#8b5cf6" radius={[0,4,4,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Utilization rate by Circulation Type */}
+                {circTypeData.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm p-5">
+                    <p className="text-sm font-semibold text-gray-700 mb-1">Utilization Rate by Circulation Policy</p>
+                    <p className="text-xs text-gray-400 mb-3">Loan policy types that are most actively borrowed — supports review of loan period rules</p>
+                    <ResponsiveContainer width="100%" height={Math.max(200, circTypeData.length * 36)}>
+                      <BarChart
+                        data={[...circTypeData].map(r => ({ ...r, utilRate: r.total ? parseFloat((r.checkedOut/r.total*100).toFixed(1)) : 0 })).sort((a,b) => b.utilRate - a.utilRate)}
+                        layout="vertical"
+                        margin={{left:160,right:60,top:4,bottom:4}}
+                      >
+                        <XAxis type="number" tick={{fontSize:11}} unit="%" domain={[0,100]} />
+                        <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
+                        <Tooltip formatter={(v:unknown) => Number(v).toFixed(1)+'%'} />
+                        <Bar dataKey="utilRate" name="Utilization %" fill="#6366f1" radius={[0,4,4,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+              </div>
+            </div>
+          )}
 
         </div>
 
