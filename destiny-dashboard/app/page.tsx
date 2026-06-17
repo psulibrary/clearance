@@ -167,8 +167,11 @@ export default function Dashboard() {
   const [gender, setGender]           = useState('');
   const [patronTypeID, setPatronTypeID] = useState(0);
 
-  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'>('overview');
   const [chartsLoaded, setChartsLoaded] = useState({ patrons: false, collection: false });
+  const [chedStats, setChedStats] = useState<Record<string,number> | null>(null);
+  const [acqData, setAcqData] = useState<{year:number;items:number;titles:number;spend:number}[]>([]);
+  const [chedLoaded, setChedLoaded] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -206,7 +209,12 @@ export default function Dashboard() {
       fetch('/api/charts/collection-by-category').then(r=>r.json()).then(d=>{ if(d.data) setCatData(d.data); }).catch(() => {});
       setChartsLoaded(p => ({ ...p, collection: true }));
     }
-  }, [activeTab, chartsLoaded]);
+    if (activeTab === 'ched' && !chedLoaded) {
+      setChedLoaded(true);
+      fetch('/api/ched/stats').then(r=>r.json()).then(d=>{ if(!d.error) setChedStats(d); }).catch(() => {});
+      fetch('/api/ched/acquisition-by-year').then(r=>r.json()).then(d=>{ if(d.data) setAcqData(d.data); }).catch(() => {});
+    }
+  }, [activeTab, chartsLoaded, chedLoaded]);
 
   const s = stats;
   const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
@@ -338,17 +346,17 @@ export default function Dashboard() {
 
         {/* Tab bar */}
         <div className="flex gap-2 mb-6 border-b border-gray-200 print:hidden">
-          {(['overview','patrons','collection','iso'] as const).map(tab => (
+          {(['overview','patrons','collection','iso','ched'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium capitalize border-b-2 transition-colors ${
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab === 'iso' ? 'ISO Standards' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
