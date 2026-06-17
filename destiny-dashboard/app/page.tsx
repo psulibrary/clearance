@@ -164,6 +164,8 @@ export default function Dashboard() {
   const [fundingData, setFundingData] = useState<{name:string;total:number;checkedOut:number;totalValue:number}[]>([]);
   const [circTypeData, setCircTypeData] = useState<{name:string;total:number;checkedOut:number;available:number}[]>([]);
   const [acqYearData, setAcqYearData] = useState<{year:number;items:number;titles:number}[]>([]);
+  const [pubYearData, setPubYearData] = useState<{name:string;titles:number;items:number}[]>([]);
+  const [publisherData, setPublisherData] = useState<{name:string;titles:number;items:number}[]>([]);
 
   const [year, setYear]               = useState(currentYear);
   const [month, setMonth]             = useState(0);
@@ -213,6 +215,8 @@ export default function Dashboard() {
       fetch('/api/charts/collection-by-funding').then(r=>r.json()).then(d=>{ if(d.data) setFundingData(d.data); }).catch(() => {});
       fetch('/api/charts/collection-by-circtype').then(r=>r.json()).then(d=>{ if(d.data) setCircTypeData(d.data); }).catch(() => {});
       fetch('/api/charts/collection-by-year').then(r=>r.json()).then(d=>{ if(d.data) setAcqYearData(d.data); }).catch(() => {});
+      fetch('/api/charts/collection-by-pubYear').then(r=>r.json()).then(d=>{ if(d.data) setPubYearData(d.data); }).catch(() => {});
+      fetch('/api/charts/collection-by-publisher').then(r=>r.json()).then(d=>{ if(d.data) setPublisherData(d.data); }).catch(() => {});
       setChartsLoaded(p => ({ ...p, collection: true }));
     }
     if (activeTab === 'ched' && !chedLoaded) {
@@ -555,6 +559,40 @@ export default function Dashboard() {
                     <Legend />
                     <Bar dataKey="items" name="Items Added" fill="#3b82f6" />
                     <Bar dataKey="titles" name="Titles Added" fill="#10b981" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Publication Year (by decade) */}
+            {pubYearData.length > 0 && (
+              <div className="col-span-full mt-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">By Publication Year (Decade)</p>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={pubYearData} margin={{left:10,right:20,top:4,bottom:4}}>
+                    <XAxis dataKey="name" tick={{fontSize:11}} />
+                    <YAxis tick={{fontSize:11}} />
+                    <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                    <Legend />
+                    <Bar dataKey="items" name="Items" fill="#8b5cf6" />
+                    <Bar dataKey="titles" name="Titles" fill="#f59e0b" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Publisher */}
+            {publisherData.length > 0 && (
+              <div className="col-span-full mt-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">By Publisher (Top 20 by Titles)</p>
+                <ResponsiveContainer width="100%" height={Math.max(300, publisherData.length * 28)}>
+                  <BarChart data={publisherData} layout="vertical" margin={{left:160,right:60,top:4,bottom:4}}>
+                    <XAxis type="number" tick={{fontSize:11}} />
+                    <YAxis type="category" dataKey="name" tick={{fontSize:10}} width={155} />
+                    <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                    <Legend />
+                    <Bar dataKey="titles" name="Titles" fill="#06b6d4" />
+                    <Bar dataKey="items" name="Items" fill="#84cc16" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
