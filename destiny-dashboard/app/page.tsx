@@ -830,54 +830,54 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 gap-6">
 
                 {/* Utilization rate by Material Type */}
-                {materialTypeData.filter(r => r.items > 0).length > 0 && (
-                  <div className="bg-white rounded-xl shadow-sm p-5">
-                    <p className="text-sm font-semibold text-gray-700 mb-1">Utilization Rate by Material Type</p>
-                    <p className="text-xs text-gray-400 mb-3">Which material formats are in highest demand right now</p>
-                    <ResponsiveContainer width="100%" height={Math.max(200, materialTypeData.length * 40)}>
-                      <BarChart
-                        data={[...materialTypeData].sort((a,b) => b.utilRate - a.utilRate)}
-                        layout="vertical"
-                        margin={{left:160,right:60,top:4,bottom:4}}
-                      >
-                        <XAxis type="number" tick={{fontSize:11}} unit="%" domain={[0,100]} />
-                        <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
-                        <Tooltip formatter={(v:unknown) => Number(v).toFixed(1) + '%'} />
-                        <Bar dataKey="utilRate" name="Utilization %" fill="#f59e0b" radius={[0,4,4,0]}>
-                          {materialTypeData.map((_, i) => (
-                            <Cell key={i} fill={Number(materialTypeData.sort((a,b)=>b.utilRate-a.utilRate)[i]?.utilRate) > 50 ? '#ef4444' : Number(materialTypeData.sort((a,b)=>b.utilRate-a.utilRate)[i]?.utilRate) > 20 ? '#f59e0b' : '#10b981'} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                    <div className="overflow-x-auto mt-4">
-                      <table className="w-full text-xs border-collapse">
-                        <thead>
-                          <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
-                            <th className="text-left p-2 border border-gray-200">Material Type</th>
-                            <th className="text-right p-2 border border-gray-200">Total Items</th>
-                            <th className="text-right p-2 border border-gray-200">Checked Out</th>
-                            <th className="text-right p-2 border border-gray-200">Available</th>
-                            <th className="text-right p-2 border border-gray-200">Utilization %</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {[...materialTypeData].sort((a,b) => b.utilRate - a.utilRate).map((r,i) => (
-                            <tr key={i} className={i%2===0?'bg-white':'bg-gray-50'}>
-                              <td className="p-2 border border-gray-200 font-semibold text-gray-900">{r.name}</td>
-                              <td className="p-2 border border-gray-200 text-right text-gray-800">{r.items.toLocaleString()}</td>
-                              <td className="p-2 border border-gray-200 text-right text-amber-700 font-semibold">{r.checkedOut.toLocaleString()}</td>
-                              <td className="p-2 border border-gray-200 text-right text-green-700">{r.available.toLocaleString()}</td>
-                              <td className="p-2 border border-gray-200 text-right">
-                                <span className={`font-bold ${r.utilRate > 50 ? 'text-red-600' : r.utilRate > 20 ? 'text-amber-600' : 'text-green-600'}`}>{r.utilRate}%</span>
-                              </td>
+                {(() => {
+                  const sorted = [...materialTypeData].filter(r => r.items > 0).sort((a,b) => b.utilRate - a.utilRate);
+                  if (sorted.length === 0) return null;
+                  return (
+                    <div className="bg-white rounded-xl shadow-sm p-5">
+                      <p className="text-sm font-semibold text-gray-700 mb-1">Utilization Rate by Material Type</p>
+                      <p className="text-xs text-gray-400 mb-3">Which material formats are in highest demand right now</p>
+                      <ResponsiveContainer width="100%" height={Math.max(200, sorted.length * 40)}>
+                        <BarChart data={sorted} layout="vertical" margin={{left:160,right:60,top:4,bottom:4}}>
+                          <XAxis type="number" tick={{fontSize:11}} unit="%" domain={[0,100]} />
+                          <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
+                          <Tooltip formatter={(v:unknown) => Number(v).toFixed(1) + '%'} />
+                          <Bar dataKey="utilRate" name="Utilization %" radius={[0,4,4,0]}>
+                            {sorted.map((r, i) => (
+                              <Cell key={i} fill={r.utilRate > 50 ? '#ef4444' : r.utilRate > 20 ? '#f59e0b' : '#10b981'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <div className="overflow-x-auto mt-4">
+                        <table className="w-full text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                              <th className="text-left p-2 border border-gray-200">Material Type</th>
+                              <th className="text-right p-2 border border-gray-200">Total Items</th>
+                              <th className="text-right p-2 border border-gray-200">Checked Out</th>
+                              <th className="text-right p-2 border border-gray-200">Available</th>
+                              <th className="text-right p-2 border border-gray-200">Utilization %</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {sorted.map((r, i) => (
+                              <tr key={i} className={i%2===0?'bg-white':'bg-gray-50'}>
+                                <td className="p-2 border border-gray-200 font-semibold text-gray-900">{r.name}</td>
+                                <td className="p-2 border border-gray-200 text-right text-gray-800">{r.items.toLocaleString()}</td>
+                                <td className="p-2 border border-gray-200 text-right text-amber-700 font-semibold">{r.checkedOut.toLocaleString()}</td>
+                                <td className="p-2 border border-gray-200 text-right text-green-700">{r.available.toLocaleString()}</td>
+                                <td className="p-2 border border-gray-200 text-right">
+                                  <span className={`font-bold ${r.utilRate > 50 ? 'text-red-600' : r.utilRate > 20 ? 'text-amber-600' : 'text-green-600'}`}>{r.utilRate}%</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Utilization rate by Sublocation */}
                 {sublocData.length > 0 && (
