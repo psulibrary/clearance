@@ -544,6 +544,86 @@ export default function Dashboard() {
             <Card label="Active Borrower Growth" value={s?.totalPatrons ? pct(s.activePatronsLast30Days, s.totalPatrons) : '—'} sub="ISO 21001 §9.1 — patrons active last 30 days / total (recent engagement)" color="text-violet-700" />
           </Section>
         </div>
+
+        {/* Tab: CHED CMO 22 */}
+        <div className={activeTab === 'ched' ? 'block' : 'hidden print:block'}>
+          {activeTab === 'ched' && !chedStats && (
+            <div className="text-center py-12 text-gray-400 text-sm">Loading CHED metrics…</div>
+          )}
+          {chedStats && (
+            <>
+              <Section title="§4.b.1 — Minimum Title Requirement" icon="📖">
+                <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 print:shadow-none print:border print:border-gray-200">
+                  <div className={`text-3xl font-bold ${(chedStats.totalTitles ?? 0) >= 5000 ? 'text-green-700' : 'text-red-600'}`}>
+                    {Number(chedStats.totalTitles ?? 0).toLocaleString()}
+                  </div>
+                  <div className="text-sm font-medium text-gray-600">Total Book Titles</div>
+                  <div className={`text-xs mt-0.5 font-semibold ${(chedStats.totalTitles ?? 0) >= 5000 ? 'text-green-600' : 'text-red-500'}`}>
+                    {(chedStats.totalTitles ?? 0) >= 5000 ? '✓ Meets' : '✗ Below'} CHED minimum of 5,000 titles
+                  </div>
+                </div>
+                <Card label="Total Volumes (Items)" value={Number(chedStats.totalItems ?? 0).toLocaleString()} sub="§4.b — total physical copies in active collection" />
+                <Card label="Items Acquired ≤ 5 Years" value={Number(chedStats.itemsLast5Years ?? 0).toLocaleString()} sub={`§4.b.4 — ${pct(chedStats.itemsLast5Years, chedStats.totalItems)} of collection current`} color="text-indigo-700" />
+                <Card label="Items Acquired ≤ 10 Years" value={Number(chedStats.itemsLast10Years ?? 0).toLocaleString()} sub={`§4.b — ${pct(chedStats.itemsLast10Years, chedStats.totalItems)} of collection within 10 years`} color="text-indigo-700" />
+              </Section>
+
+              <Section title="§4.b.2 — Filipiniana Collection (≥ 10%)" icon="🇵🇭">
+                <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 print:shadow-none print:border print:border-gray-200">
+                  <div className={`text-3xl font-bold ${parseFloat(pct(chedStats.filipianianaItems, chedStats.totalItems)) >= 10 ? 'text-green-700' : 'text-amber-600'}`}>
+                    {pct(chedStats.filipianianaItems ?? 0, chedStats.totalItems ?? 0)}
+                  </div>
+                  <div className="text-sm font-medium text-gray-600">Filipiniana Share</div>
+                  <div className={`text-xs mt-0.5 font-semibold ${parseFloat(pct(chedStats.filipianianaItems, chedStats.totalItems)) >= 10 ? 'text-green-600' : 'text-amber-600'}`}>
+                    {parseFloat(pct(chedStats.filipianianaItems ?? 0, chedStats.totalItems ?? 0)) >= 10 ? '✓ Meets' : '✗ Below'} 10% requirement
+                  </div>
+                </div>
+                <Card label="Filipiniana Titles" value={Number(chedStats.filipianaTitles ?? 0).toLocaleString()} sub="§4.b.2 — distinct Filipiniana titles" color="text-blue-700" />
+                <Card label="Filipiniana Items" value={Number(chedStats.filipianianaItems ?? 0).toLocaleString()} sub="§4.b.2 — Filipiniana sublocation copies" color="text-blue-700" />
+              </Section>
+
+              <Section title="§4.a.6 — Weeding Program" icon="✂️">
+                <Card label="Total Withdrawn Items" value={Number(chedStats.withdrawnItems ?? 0).toLocaleString()} sub="§4.a.6 — cumulative weeded items" color="text-gray-600" />
+                <Card label="Withdrawn This Year" value={Number(chedStats.withdrawnThisYear ?? 0).toLocaleString()} sub={`§4.a.6 — weeded in ${currentYear}`} color="text-gray-600" />
+              </Section>
+
+              <Section title="§5.a.iii — Interlibrary Loans" icon="🔄">
+                <Card label="Total ILL Transactions" value={Number(chedStats.totalILL ?? 0).toLocaleString()} sub="§5.a.iii — all-time interlibrary loan records" color="text-purple-700" />
+                <Card label="ILL This Year" value={Number(chedStats.illThisYear ?? 0).toLocaleString()} sub={`§5.a.iii — interlibrary loans in ${currentYear}`} color="text-purple-700" />
+              </Section>
+
+              <Section title="§8 — Financial Resources & Acquisition" icon="💰">
+                <Card label="Total Collection Value" value={money(chedStats.totalCollectionValue)} sub="§8 — sum of acquisition prices (active items)" color="text-green-700" />
+                <Card label={`Acquisition Spend ${currentYear}`} value={money(chedStats.acquisitionSpendThisYear)} sub="§8 — amount spent on new items this year" color="text-blue-700" />
+                <Card label={`Acquisition Spend ${currentYear - 1}`} value={money(chedStats.acquisitionSpendLastYear)} sub="§8 — previous year acquisition spend" color="text-blue-600" />
+                <Card label={`Acquisition Spend ${currentYear - 2}`} value={money(chedStats.acquisitionSpendYear2)} sub="§8 — two years prior acquisition spend" color="text-blue-500" />
+              </Section>
+
+              {acqData.length > 0 && (
+                <div className="mb-8 print:hidden">
+                  <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <span>📈</span>Annual Acquisitions Trend (2015–{currentYear})
+                  </h2>
+                  <div className="bg-white rounded-xl shadow-sm p-5">
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={acqData} margin={{left:20,right:20,top:8,bottom:8}}>
+                        <XAxis dataKey="year" tick={{fontSize:11}} />
+                        <YAxis tick={{fontSize:11}} />
+                        <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                        <Legend />
+                        <Bar dataKey="items" name="Items Added" fill="#3b82f6" />
+                        <Bar dataKey="titles" name="Titles Added" fill="#10b981" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+                <strong>Requires manual documentation (not in library system):</strong> VMGO (§1), Administration qualifications &amp; org structure (§2), Staff ratios &amp; HR data (§3), Collection development policy documents (§4.a, §4.c, §4.d), Physical facilities (§6), IT infrastructure (§7), and Linkages &amp; networking (§9).
+              </div>
+            </>
+          )}
+        </div>
       </main>
     </div>
   );
