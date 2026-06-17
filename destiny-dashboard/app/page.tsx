@@ -21,7 +21,6 @@ interface Stats {
   avgLoanDays: number;
   pendingHolds: number;
   readyHolds: number;
-  holdsPlacedThisYear: number;
   totalPatrons: number;
   patronsWithCheckouts: number;
   patronsWithOverdue: number;
@@ -116,7 +115,6 @@ function exportCsv(s: Stats, yearLabel: string, monthLabel: string) {
     ['HOLDS', ''],
     ['Pending Holds', String(s.pendingHolds)],
     ['Ready for Pickup', String(s.readyHolds)],
-    ['Holds Placed (Filtered Period)', String(s.holdsPlacedThisYear)],
     ['', ''],
     ['PATRONS', ''],
     ['Total Patrons', String(s.totalPatrons)],
@@ -331,7 +329,6 @@ export default function Dashboard() {
         <Section title="Holds & Reservations" icon="🔖">
           <Card label="Pending Holds"                value={fmt(s?.pendingHolds)}        sub="waiting for a copy" />
           <Card label="Ready for Pickup"             value={fmt(s?.readyHolds)}          sub="holds ready now" color="text-green-700" />
-          <Card label={`Holds Placed — ${periodLabel}`} value={fmt(s?.holdsPlacedThisYear)} sub="total reservations made" color="text-blue-700" />
           <Card label="Hold Fill Rate"               value={holdFillRate}                 sub="ready vs total active holds" color="text-indigo-700" />
         </Section>
 

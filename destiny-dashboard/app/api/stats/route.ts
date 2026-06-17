@@ -71,8 +71,7 @@ export async function GET(request: NextRequest) {
           AS pendingHolds,
         (SELECT COUNT(*) FROM ${t(p,'Hold')} WHERE IsReady = 1 AND ExpireDate > GETDATE())
           AS readyHolds,
-        (SELECT COUNT(*) FROM ${t(p,'Hold')} WHERE YEAR(Created) = @year)
-          AS holdsPlacedThisYear,
+
 
         /* ── Patrons (gradeLevel filter applied) ── */
         (SELECT COUNT(*) FROM ${t(p,'Patron')}
