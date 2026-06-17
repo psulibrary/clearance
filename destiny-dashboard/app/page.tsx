@@ -33,7 +33,6 @@ interface Stats {
   totalFinesEverCollected: number;
   year: number;
   month: number;
-  patronType: string;
   error?: string;
 }
 
@@ -86,11 +85,10 @@ function Section({ title, icon, children }: { title: string; icon: string; child
   );
 }
 
-function exportCsv(s: Stats, yearLabel: string, monthLabel: string, patronType: string) {
+function exportCsv(s: Stats, yearLabel: string, monthLabel: string) {
   const rows: [string, string][] = [
     ['Filter: Year', yearLabel],
     ['Filter: Month', monthLabel],
-    ['Filter: Patron Type', patronType || 'All'],
     ['', ''],
     ['COLLECTION', ''],
     ['Total Items', String(s.totalItems)],
@@ -151,39 +149,29 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
-  const [patronTypes, setPatronTypes] = useState<string[]>([]);
 
-  const [year, setYear]             = useState(currentYear);
-  const [month, setMonth]           = useState(0);
-  const [patronType, setPatronType] = useState('');
+  const [year, setYear]   = useState(currentYear);
+  const [month, setMonth] = useState(0);
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams({ year: String(year), month: String(month), patronType });
+    const params = new URLSearchParams({ year: String(year), month: String(month) });
     fetch(`/api/stats?${params}`)
       .then(r => r.json())
       .then(d => { setStats(d); setLastUpdated(new Date()); })
       .catch(() => setStats({ error: 'Connection failed' } as Stats))
       .finally(() => setLoading(false));
-  }, [year, month, patronType]);
+  }, [year, month]);
 
   useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    fetch('/api/patron-types')
-      .then(r => r.json())
-      .then(d => { if (d.types) setPatronTypes(d.types); })
-      .catch(() => {});
-  }, []);
-
   const s = stats;
-  const turnoverRate  = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
-  const holdFillRate  = s ? pct(s.readyHolds, (s.pendingHolds + s.readyHolds) || 0) : '—';
-  const deadStockPct  = s?.neverCheckedOut && s?.totalItems ? pct(s.neverCheckedOut, s.totalItems) : '—';
-  const yearLabel     = String(year);
-  const monthLabel    = MONTHS[month];
-
-  const periodLabel = month ? `${MONTHS[month]} ${year}` : `Year ${year}`;
+  const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
+  const holdFillRate = s ? pct(s.readyHolds, (s.pendingHolds + s.readyHolds) || 0) : '—';
+  const deadStockPct = s?.neverCheckedOut && s?.totalItems ? pct(s.neverCheckedOut, s.totalItems) : '—';
+  const yearLabel    = String(year);
+  const monthLabel   = MONTHS[month];
+  const periodLabel  = month ? `${MONTHS[month]} ${year}` : `Year ${year}`;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -217,7 +205,7 @@ export default function Dashboard() {
       {/* Print header — only visible when printing */}
       <div className="hidden print:block px-6 py-4 border-b border-gray-300 mb-4">
         <h1 className="text-2xl font-bold">PSU Library — Stats Report</h1>
-        <p className="text-sm text-gray-500">Period: {periodLabel} · Patron Type: {patronType || 'All'} · Printed {new Date().toLocaleString('en-PH')}</p>
+        <p className="text-sm text-gray-500">Period: {periodLabel} · Printed {new Date().toLocaleString('en-PH')}</p>
       </div>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
@@ -249,22 +237,10 @@ export default function Dashboard() {
               {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
             </select>
           </div>
-          {patronTypes.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Patron Type</label>
-              <select
-                value={patronType}
-                onChange={e => setPatronType(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Types</option>
-                {patronTypes.map(pt => <option key={pt} value={pt}>{pt}</option>)}
-              </select>
-            </div>
-          )}
+
           <div className="ml-auto flex gap-2">
             <button
-              onClick={() => s && exportCsv(s, yearLabel, monthLabel, patronType)}
+              onClick={() => s && exportCsv(s, yearLabel, monthLabel)}
               disabled={!s || !!s.error}
               className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
             >
@@ -282,8 +258,7 @@ export default function Dashboard() {
         {/* Period context banner */}
         <div className="text-xs text-gray-400 mb-4 print:hidden">
           Showing period-based stats for: <strong className="text-gray-600">{periodLabel}</strong>
-          {patronType && <> · Patron type: <strong className="text-gray-600">{patronType}</strong></>}
-        </div>
+          </div>
 
         {/* Hero row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -340,11 +315,11 @@ export default function Dashboard() {
           <Card label="Active Borrowers Now"          value={fmt(s?.patronsWithCheckouts)}    sub="currently have items out" color="text-blue-700" />
           <Card label="Active Patrons (Last 30 Days)" value={fmt(s?.activePatronsLast30Days)} sub="borrowed in last 30 days" color="text-blue-700" />
           <Card label={`Active Patrons — ${periodLabel}`} value={fmt(s?.activePatronsThisYear)} sub="borrowed at least once" color="text-green-700" />
-          <Card label={`New Patrons — ${periodLabel}`}    value={fmt(s?.newPatronsThisYear)}    color="text-green-700" />
-          <Card label="Patron Reach Rate"             value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`% of patrons who borrowed (${periodLabel})`} color="text-indigo-700" />
-          <Card label="Patron Activation Rate"        value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="% currently borrowing" color="text-amber-700" />
-          <Card label="Patrons with Overdue"          value={fmt(s?.patronsWithOverdue)}       sub="need follow-up" color="text-red-700" />
-          <Card label="Overdue Rate"                  value={pct(s?.overdue ?? 0, s?.checkedOut ?? 0)} sub="% of checkouts overdue" color="text-red-600" />
+          <Card label={`New Patrons — ${periodLabel}`} value={fmt(s?.newPatronsThisYear)}    color="text-green-700" />
+          <Card label="Patron Reach Rate"           value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`% of patrons who borrowed (${periodLabel})`} color="text-indigo-700" />
+          <Card label="Patron Activation Rate"      value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="% currently borrowing" color="text-amber-700" />
+          <Card label="Patrons with Overdue"        value={fmt(s?.patronsWithOverdue)}       sub="need follow-up" color="text-red-700" />
+          <Card label="Overdue Rate"                value={pct(s?.overdue ?? 0, s?.checkedOut ?? 0)} sub="% of checkouts overdue" color="text-red-600" />
         </Section>
 
         <Section title="Fines & Revenue" icon="💰">
