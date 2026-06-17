@@ -1,0 +1,66 @@
+{% extends 'library/base.html' %}
+{% block title %}Branch Dashboard - PSU Library Clearance{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-building me-2 text-primary"></i>Branch Dashboard</h4>
+    <a href="{% url 'client_create' %}" class="btn btn-success">
+        <i class="bi bi-person-plus me-1"></i>Add New Client
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-people me-2 text-primary"></i>Your Clients
+        <span class="badge bg-secondary ms-2">{{ clients|length }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Student ID</th>
+                    <th>Name</th>
+                    <th>Course</th>
+                    <th>Year Level</th>
+                    <th class="text-center">Accountabilities</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for client in clients %}
+            <tr>
+                <td><code>{{ client.student_id }}</code></td>
+                <td>{{ client.full_name }}</td>
+                <td>{{ client.course|default:"-" }}</td>
+                <td>{{ client.year_level|default:"-" }}</td>
+                <td class="text-center">
+                    {% with unresolved=client.unresolved_accountabilities.count total_acc=client.accountabilities.count %}
+                    <span class="badge {% if unresolved > 0 %}bg-danger{% else %}bg-success{% endif %}">
+                        {{ unresolved }} unresolved / {{ total_acc }} total
+                    </span>
+                    {% endwith %}
+                </td>
+                <td class="text-center">
+                    {% if client.status == 'pending' %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                    {% elif client.status == 'cleared' %}
+                        <span class="badge bg-success">Cleared</span>
+                    {% else %}
+                        <span class="badge bg-danger">Rejected</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    <a href="{% url 'client_detail' client.pk %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye me-1"></i>View
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center text-muted py-4">No clients added yet. Click "Add New Client" to get started.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

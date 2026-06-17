@@ -1,0 +1,133 @@
+{% extends 'library/base.html' %}
+{% block title %}Main Dashboard - PSU Library Clearance{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-speedometer2 me-2 text-primary"></i>Main Library Dashboard</h4>
+    <form method="post" action="{% url 'send_reminders' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-warning" onclick="return confirm('Send email reminders to all clients with unresolved accountabilities?')">
+            <i class="bi bi-envelope-exclamation me-1"></i>Send Email Reminders
+        </button>
+    </form>
+</div>
+
+<!-- Stat Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card stat-card text-center p-3 border-start border-4 border-primary">
+            <div class="fs-2 fw-bold text-primary">{{ total }}</div>
+            <div class="text-muted small">Total Clients</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card stat-card text-center p-3 border-start border-4 border-warning">
+            <div class="fs-2 fw-bold text-warning">{{ pending }}</div>
+            <div class="text-muted small">Pending</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card stat-card text-center p-3 border-start border-4 border-success">
+            <div class="fs-2 fw-bold text-success">{{ cleared }}</div>
+            <div class="text-muted small">Cleared</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card stat-card text-center p-3 border-start border-4 border-danger">
+            <div class="fs-2 fw-bold text-danger">{{ rejected }}</div>
+            <div class="text-muted small">Rejected</div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold">Search</label>
+                <input type="text" name="search" value="{{ search }}" class="form-control form-control-sm" placeholder="Name or Student ID...">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Status</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">All Statuses</option>
+                    <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="cleared" {% if status_filter == 'cleared' %}selected{% endif %}>Cleared</option>
+                    <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Rejected</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Branch</label>
+                <select name="branch" class="form-select form-select-sm">
+                    <option value="">All Branches</option>
+                    {% for b in branches %}
+                    <option value="{{ b.id }}" {% if branch_filter == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100">
+                    <i class="bi bi-funnel me-1"></i>Filter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Clients Table -->
+<div class="card">
+    <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-people me-2 text-primary"></i>All Clients
+        <span class="badge bg-secondary ms-2">{{ clients|length }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Student ID</th>
+                    <th>Name</th>
+                    <th>Branch</th>
+                    <th>Course</th>
+                    <th class="text-center">Accountabilities</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for client in clients %}
+            <tr>
+                <td><code>{{ client.student_id }}</code></td>
+                <td>{{ client.full_name }}</td>
+                <td>{{ client.branch.name|default:"-" }}</td>
+                <td>{{ client.course|default:"-" }}</td>
+                <td class="text-center">
+                    {% with total_acc=client.accountabilities.count unresolved=client.unresolved_accountabilities.count %}
+                    <span class="badge {% if unresolved > 0 %}bg-danger{% else %}bg-success{% endif %}">
+                        {{ unresolved }} unresolved / {{ total_acc }} total
+                    </span>
+                    {% endwith %}
+                </td>
+                <td class="text-center">
+                    {% if client.status == 'pending' %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                    {% elif client.status == 'cleared' %}
+                        <span class="badge bg-success">Cleared</span>
+                    {% else %}
+                        <span class="badge bg-danger">Rejected</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    <a href="{% url 'client_detail' client.pk %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye me-1"></i>View
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center text-muted py-4">No clients found.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
