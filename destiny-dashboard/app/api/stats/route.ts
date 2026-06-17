@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
           AS patronsWithCheckouts,
         (SELECT COUNT(DISTINCT PatronID) FROM ${t(p,'Copy')} WHERE PatronID IS NOT NULL AND DateReturned IS NULL AND DateWithdrawn IS NULL AND DateDue < GETDATE())
           AS patronsWithOverdue,
-        (SELECT COUNT(*) FROM ${t(p,'Patron')} WHERE YEAR(Created) = @year)
+        (SELECT COUNT(*) FROM ${t(p,'Patron')} WHERE YEAR(EnrollDate) = @year)
           AS newPatronsThisYear,
         (SELECT COUNT(DISTINCT PatronID) FROM ${t(p,'Copy')} WHERE ${monthFilter})
           AS activePatronsThisYear,
