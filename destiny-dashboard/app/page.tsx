@@ -163,6 +163,7 @@ export default function Dashboard() {
   const [catData, setCatData] = useState<{name:string;total:number;checkedOut:number}[]>([]);
   const [fundingData, setFundingData] = useState<{name:string;total:number;checkedOut:number;totalValue:number}[]>([]);
   const [circTypeData, setCircTypeData] = useState<{name:string;total:number;checkedOut:number;available:number}[]>([]);
+  const [materialTypeData, setMaterialTypeData] = useState<{name:string;titles:number;items:number}[]>([]);
   const [acqYearData, setAcqYearData] = useState<{year:number;items:number;titles:number}[]>([]);
   const [pubYearData, setPubYearData] = useState<{name:string;titles:number;items:number}[]>([]);
   const [publisherData, setPublisherData] = useState<{name:string;titles:number;items:number}[]>([]);
@@ -214,6 +215,7 @@ export default function Dashboard() {
       fetch('/api/charts/collection-by-category').then(r=>r.json()).then(d=>{ if(d.data) setCatData(d.data); }).catch(() => {});
       fetch('/api/charts/collection-by-funding').then(r=>r.json()).then(d=>{ if(d.data) setFundingData(d.data); }).catch(() => {});
       fetch('/api/charts/collection-by-circtype').then(r=>r.json()).then(d=>{ if(d.data) setCircTypeData(d.data); }).catch(() => {});
+      fetch('/api/charts/collection-by-materialtype').then(r=>r.json()).then(d=>{ if(d.data) setMaterialTypeData(d.data); }).catch(() => {});
       fetch('/api/charts/collection-by-year').then(r=>r.json()).then(d=>{ if(d.data) setAcqYearData(d.data); }).catch(() => {});
       fetch('/api/charts/collection-by-pubYear').then(r=>r.json()).then(d=>{ if(d.data) setPubYearData(d.data); }).catch(() => {});
       fetch('/api/charts/collection-by-publisher').then(r=>r.json()).then(d=>{ if(d.data) setPublisherData(d.data); }).catch(() => {});
@@ -529,10 +531,29 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Material / Circulation Type */}
+            {/* Material Type (BibType — Book, AV, e-Resource, etc.) */}
+            {materialTypeData.length > 0 && (
+              <div className="col-span-full mt-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">By Material Type</p>
+                <p className="text-xs text-gray-400 mb-2">Format of the bibliographic record — Book, Periodical, AV, e-Resource, etc.</p>
+                <ResponsiveContainer width="100%" height={Math.max(200, materialTypeData.length * 36)}>
+                  <BarChart data={materialTypeData} layout="vertical" margin={{left:160,right:60,top:4,bottom:4}}>
+                    <XAxis type="number" tick={{fontSize:11}} />
+                    <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
+                    <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                    <Legend />
+                    <Bar dataKey="items" name="Items" fill="#7c3aed" />
+                    <Bar dataKey="titles" name="Titles" fill="#a78bfa" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Circulation Type (Reserve Room, Regular Loan, etc.) */}
             {circTypeData.length > 0 && (
               <div className="col-span-full mt-4">
-                <p className="text-sm font-semibold text-gray-700 mb-2">By Material / Circulation Type</p>
+                <p className="text-sm font-semibold text-gray-700 mb-2">By Circulation Type</p>
+                <p className="text-xs text-gray-400 mb-2">Loan policy — Reserve Room, Regular, Non-circulating, etc.</p>
                 <ResponsiveContainer width="100%" height={Math.max(200, circTypeData.length * 36)}>
                   <BarChart data={circTypeData} layout="vertical" margin={{left:160,right:40,top:4,bottom:4}}>
                     <XAxis type="number" tick={{fontSize:11}} />
