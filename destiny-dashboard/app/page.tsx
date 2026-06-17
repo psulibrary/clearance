@@ -211,7 +211,7 @@ export default function Dashboard() {
     }
     if (activeTab === 'ched' && !chedLoaded) {
       setChedLoaded(true);
-      fetch('/api/ched/stats').then(r=>r.json()).then(d=>{ if(!d.error) setChedStats(d); }).catch(() => {});
+      fetch('/api/ched/stats').then(r=>r.json()).then(d=>{ setChedStats(d); }).catch(() => {});
       fetch('/api/ched/acquisition-by-year').then(r=>r.json()).then(d=>{ if(d.data) setAcqData(d.data); }).catch(() => {});
     }
   }, [activeTab, chartsLoaded, chedLoaded]);
@@ -550,7 +550,12 @@ export default function Dashboard() {
           {activeTab === 'ched' && !chedStats && (
             <div className="text-center py-12 text-gray-400 text-sm">Loading CHED metrics…</div>
           )}
-          {chedStats && (
+          {chedStats?.error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <strong>Error:</strong> {String(chedStats.error)}
+            </div>
+          )}
+          {chedStats && !chedStats.error && (
             <>
               <Section title="§4.b.1 — Minimum Title Requirement" icon="📖">
                 <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 print:shadow-none print:border print:border-gray-200">

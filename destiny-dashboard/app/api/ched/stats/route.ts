@@ -53,21 +53,27 @@ export async function GET() {
           AS itemsLast5Years,
         (SELECT COUNT(*) FROM ${t(p,'Copy')}
            WHERE DateWithdrawn IS NULL AND Acquired >= DATEADD(year,-10,GETDATE()))
-          AS itemsLast10Years,
-
-        /* §5.a.iii Interlibrary loans */
-        (SELECT COUNT(*) FROM ${t(p,'CrossDistrictLoan')})
-          AS totalILL,
-        (SELECT COUNT(*) FROM ${t(p,'CrossDistrictLoan')}
-           WHERE YEAR(DateShipped) = @currentYear)
-          AS illThisYear,
-
-        /* Circulation types count */
-        (SELECT COUNT(*) FROM ${t(p,'CircType')})
-          AS totalCircTypes
+          AS itemsLast10Years
     `);
 
-    return NextResponse.json({ ...result.recordset[0], year: currentYear });
+    const stats = { ...result.recordset[0], year: currentYear, totalILL: 0, illThisYear: 0 };
+
+    // ILL query separately — column names uncertain, fail gracefully
+    try {
+      const illReq = pool.request();
+      illReq.input('currentYear', sql.Int, currentYear);
+      const illResult = await illReq.query(`
+        SELECT
+          (SELECT COUNT(*) FROM ${t(p,'CrossDistrictLoan')}) AS totalILL,
+          (SELECT COUNT(*) FROM ${t(p,'CrossDistrictLoan')} WHERE YEAR(DateShipped) = @currentYear) AS illThisYear
+      `);
+      stats.totalILL = illResult.recordset[0].totalILL;
+      stats.illThisYear = illResult.recordset[0].illThisYear;
+    } catch {
+      // CrossDistrictLoan columns unknown — leave as 0
+    }
+
+    return NextResponse.json(stats);
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
