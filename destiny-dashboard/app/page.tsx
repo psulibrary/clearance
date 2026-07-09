@@ -2752,6 +2752,58 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* ── Borrowing Behavior Metrics ── */}
+          {s && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>🔍</span>Borrowing Behavior Metrics
+              </h2>
+              <p className="text-xs text-gray-600 mb-4">Decision metrics for outreach, fine collection policy, and demand planning.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${s.activePatronsThisYear > 0 && s.checkoutsThisYear / s.activePatronsThisYear >= 5 ? 'border-green-400' : 'border-amber-400'}`}>
+                  <div className="text-3xl font-bold text-indigo-700">{s.activePatronsThisYear > 0 ? (s.checkoutsThisYear / s.activePatronsThisYear).toFixed(1) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Avg Loans per Active Borrower</div>
+                  <div className="text-xs text-gray-500">{periodLabel} · {s.activePatronsThisYear > 0 && s.checkoutsThisYear / s.activePatronsThisYear >= 5 ? '✓ High engagement' : '⚠ Low — consider outreach programs'}</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
+                  <div className="text-3xl font-bold text-purple-700">{s.totalPatrons > 0 ? pct(s.holdsPlacedThisYear, s.totalPatrons) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Hold Propensity Rate</div>
+                  <div className="text-xs text-gray-500">% of patrons who placed a hold · {fmt(s.holdsPlacedThisYear)} holds total</div>
+                </div>
+                <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${s.patronsWithOverdue > 0 && s.totalFinesBalance / s.patronsWithOverdue > 500 ? 'border-red-400' : 'border-gray-200'}`}>
+                  <div className="text-3xl font-bold text-red-600">{s.patronsWithOverdue > 0 ? '₱' + (s.totalFinesBalance / s.patronsWithOverdue).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Avg Fine per Debtor</div>
+                  <div className="text-xs text-gray-500">Outstanding balance ÷ patrons with overdue · {fmt(s.patronsWithOverdue)} debtors</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
+                  <div className="text-3xl font-bold text-emerald-700">{money(s.totalFinesEverCollected)}</div>
+                  <div className="text-sm font-medium text-gray-600">Fines Ever Collected</div>
+                  <div className="text-xs text-gray-500">Cumulative recovered fine revenue · outstanding: {money(s.totalFinesBalance)}</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
+                  <div className="text-3xl font-bold text-blue-700">{s.totalPatrons > 0 ? pct(s.newPatronsThisYear, s.totalPatrons) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Patron Base Growth Rate</div>
+                  <div className="text-xs text-gray-500">New registrations ÷ total patrons · {fmt(s.newPatronsThisYear)} new this period</div>
+                </div>
+                <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${s.checkedOut > 0 && s.overdue / s.checkedOut < 0.1 ? 'border-green-400' : s.checkedOut > 0 && s.overdue / s.checkedOut < 0.2 ? 'border-amber-400' : 'border-red-400'}`}>
+                  <div className="text-3xl font-bold text-amber-700">{s.checkedOut > 0 ? pct(s.overdue, s.checkedOut) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Overdue Return Rate</div>
+                  <div className="text-xs text-gray-500">{fmt(s.overdue)} overdue of {fmt(s.checkedOut)} out · {s.checkedOut > 0 && s.overdue/s.checkedOut < 0.1 ? '✓ Good' : s.checkedOut > 0 && s.overdue/s.checkedOut < 0.2 ? '⚠ Watch' : '✗ High — enforce reminders'}</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
+                  <div className="text-3xl font-bold text-cyan-700">{fmt(s.checkoutsLast7Days)}</div>
+                  <div className="text-sm font-medium text-gray-600">Checkouts Last 7 Days</div>
+                  <div className="text-xs text-gray-500">vs {fmt(s.checkoutsLast30Days)} last 30 days · weekly demand pulse</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
+                  <div className="text-3xl font-bold text-rose-700">{fmt(s.overdueOver30Days)}</div>
+                  <div className="text-sm font-medium text-gray-600">Items Overdue &gt; 30 Days</div>
+                  <div className="text-xs text-gray-500">Non-return risk · {s.overdue > 0 ? pct(s.overdueOver30Days, s.overdue) : '—'} of all overdue</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── Patron Retention ── */}
           {retention && (
             <div className="mb-8">
@@ -3025,6 +3077,71 @@ export default function Dashboard() {
             <Card label="Severe Overdue Ratio"      value={s?.overdue ? pct(s.overdueOver30Days, s.overdue) : '—'} sub=">30 days overdue ÷ all overdue — non-return risk"      color="text-red-700" />
             <Card label="Hold Fill Rate"            value={((s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) > 0 ? pct(s?.readyHolds ?? 0, (s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) : '—'} sub="ready holds ÷ total active holds" color="text-teal-700" />
           </Section>
+
+          {/* ── Collection Decision Metrics ── */}
+          {s && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>🎯</span>Collection Decision Metrics
+              </h2>
+              <p className="text-xs text-gray-600 mb-4">Ratios that guide budget allocation, weeding, and acquisition priorities.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {/* Duplicate Ratio */}
+                <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${s.uniqueTitles > 0 && s.totalItems / s.uniqueTitles <= 2 ? 'border-green-400' : s.uniqueTitles > 0 && s.totalItems / s.uniqueTitles <= 3.5 ? 'border-amber-400' : 'border-red-400'}`}>
+                  <div className="text-3xl font-bold text-orange-700">{s.uniqueTitles > 0 ? (s.totalItems / s.uniqueTitles).toFixed(2) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Avg Copies per Title</div>
+                  <div className="text-xs text-gray-500">{fmt(s.totalItems)} items ÷ {fmt(s.uniqueTitles)} titles · {s.uniqueTitles > 0 && s.totalItems / s.uniqueTitles <= 2 ? '✓ Good breadth' : s.uniqueTitles > 0 && s.totalItems / s.uniqueTitles <= 3.5 ? 'moderate — check demand' : '⚠ High — budget going to duplicates'}</div>
+                </div>
+                {/* Collection Breadth */}
+                <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${s.totalPatrons > 0 && s.uniqueTitles / s.totalPatrons >= 3 ? 'border-green-400' : 'border-amber-400'}`}>
+                  <div className="text-3xl font-bold text-teal-700">{s.totalPatrons > 0 ? (s.uniqueTitles / s.totalPatrons).toFixed(2) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Titles per Patron</div>
+                  <div className="text-xs text-gray-500">Collection breadth per user · ISO 11620 target ≥ 3 · {s.totalPatrons > 0 && s.uniqueTitles / s.totalPatrons >= 3 ? '✓ Meets standard' : '⚠ Below — widen collection'}</div>
+                </div>
+                {/* Acquisition per Patron */}
+                <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
+                  <div className="text-3xl font-bold text-blue-700">{s.totalPatrons > 0 ? (s.newItemsThisYear / s.totalPatrons).toFixed(2) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">New Items per Patron</div>
+                  <div className="text-xs text-gray-500">Acquisition pace — {fmt(s.newItemsThisYear)} new items for {fmt(s.totalPatrons)} patrons this year</div>
+                </div>
+                {/* Net Collection Growth */}
+                {(() => {
+                  const net = s.newItemsThisYear - s.withdrawnItems;
+                  return (
+                    <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${net > 0 ? 'border-green-400' : 'border-red-400'}`}>
+                      <div className={`text-3xl font-bold ${net >= 0 ? 'text-green-700' : 'text-red-600'}`}>{net >= 0 ? '+' : ''}{fmt(net)}</div>
+                      <div className="text-sm font-medium text-gray-600">Net Collection Growth</div>
+                      <div className="text-xs text-gray-500">New items ({fmt(s.newItemsThisYear)}) minus withdrawn ({fmt(s.withdrawnItems)}) · {net > 0 ? 'Growing' : 'Shrinking — check weeding balance'}</div>
+                    </div>
+                  );
+                })()}
+                {/* High-demand stock gap */}
+                <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${s.pendingHolds > 0 ? 'border-amber-400' : 'border-green-400'}`}>
+                  <div className="text-3xl font-bold text-amber-700">{fmt(s.pendingHolds)}</div>
+                  <div className="text-sm font-medium text-gray-600">Unfilled Holds (Demand Gap)</div>
+                  <div className="text-xs text-gray-500">Active holds waiting — signals titles needing more copies · {fmt(s.readyHolds)} already fulfilled</div>
+                </div>
+                {/* Checkout velocity */}
+                <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
+                  <div className="text-3xl font-bold text-indigo-700">{s.totalItems > 0 ? ((s.checkoutsLast30Days / s.totalItems) * 100).toFixed(1) + '%' : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Monthly Checkout Velocity</div>
+                  <div className="text-xs text-gray-500">% of collection borrowed in last 30 days · {fmt(s.checkoutsLast30Days)} loans from {fmt(s.totalItems)} items</div>
+                </div>
+                {/* Non-circulating ratio */}
+                <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
+                  <div className="text-3xl font-bold text-gray-600">{s.totalItems > 0 ? pct(s.neverCheckedOut, s.totalItems) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Idle Stock Rate</div>
+                  <div className="text-xs text-gray-500">{fmt(s.neverCheckedOut)} items never borrowed — primary weeding target list</div>
+                </div>
+                {/* Return speed proxy */}
+                <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${s.avgLoanDays !== undefined && s.avgLoanDays <= 14 ? 'border-green-400' : s.avgLoanDays !== undefined && s.avgLoanDays <= 21 ? 'border-amber-400' : 'border-red-400'}`}>
+                  <div className="text-3xl font-bold text-cyan-700">{s.avgLoanDays !== undefined ? s.avgLoanDays.toFixed(1) + 'd' : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Avg Loan Duration</div>
+                  <div className="text-xs text-gray-500">How long items are out · {s.avgLoanDays !== undefined && s.avgLoanDays <= 14 ? '✓ Fast turnover' : s.avgLoanDays !== undefined && s.avgLoanDays <= 21 ? 'normal' : '⚠ Slow — review loan period policy'}</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── Section 2: Composition Charts ── */}
           <div className="mb-8">
@@ -3731,6 +3848,77 @@ export default function Dashboard() {
             <Card label="Severe Overdue Ratio" value={s?.overdue ? pct(s.overdueOver30Days, s.overdue) : '—'} sub="ISO 21001 §8.3 — items overdue >30 days ÷ all overdue" color="text-red-700" />
             <Card label="Recent Engagement (30d)" value={s?.totalPatrons ? pct(s.activePatronsLast30Days, s.totalPatrons) : '—'} sub="ISO 21001 §9.1 — patrons active last 30 days ÷ total" color="text-violet-700" />
           </Section>
+
+          {/* ── Derived Decision Metrics (ISO cross-standard) ── */}
+          {s && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>⚡</span>Derived Decision Metrics — Cross-Standard
+              </h2>
+              <p className="text-xs text-gray-600 mb-4">Key ratios combining ISO 2789, 11620, 16439, ALA ACRL — each includes an interpretation benchmark.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  {
+                    label: 'Collection Adequacy (Items per Patron)',
+                    value: s.totalPatrons > 0 ? (s.totalItems / s.totalPatrons).toFixed(2) : '—',
+                    benchmark: '≥ 3 items/patron (ISO 11620 B.3.2.1 academic target)',
+                    pass: s.totalPatrons > 0 ? s.totalItems / s.totalPatrons >= 3 : null,
+                    action: s.totalPatrons > 0 && s.totalItems / s.totalPatrons < 3 ? `Deficit: ~${Math.ceil(3 * s.totalPatrons - s.totalItems).toLocaleString()} items needed to reach standard` : 'Meets standard — maintain acquisition pace',
+                  },
+                  {
+                    label: 'Collection Breadth (Titles per Patron)',
+                    value: s.totalPatrons > 0 ? (s.uniqueTitles / s.totalPatrons).toFixed(2) : '—',
+                    benchmark: 'Higher is better — variety serves diverse learner needs',
+                    pass: s.totalPatrons > 0 ? s.uniqueTitles / s.totalPatrons >= 2 : null,
+                    action: s.totalPatrons > 0 && s.uniqueTitles / s.totalPatrons < 2 ? 'Low breadth — prioritize acquiring new titles over duplicate copies' : 'Adequate breadth — monitor by subject area',
+                  },
+                  {
+                    label: 'Loan Intensity (Loans per Active Borrower)',
+                    value: s.activePatronsThisYear > 0 ? (s.checkoutsThisYear / s.activePatronsThisYear).toFixed(1) : '—',
+                    benchmark: '≥ 5 loans/active patron = high engagement',
+                    pass: s.activePatronsThisYear > 0 ? s.checkoutsThisYear / s.activePatronsThisYear >= 5 : null,
+                    action: s.activePatronsThisYear > 0 && s.checkoutsThisYear / s.activePatronsThisYear < 5 ? 'Low — run borrowing campaigns, reading challenges, or book displays to increase per-patron loans' : 'High engagement — sustain with new acquisitions and holds system',
+                  },
+                  {
+                    label: 'Patron Activation Gap (Dormant / Never-Borrowed %)',
+                    value: s.totalPatrons > 0 ? pct(s.totalPatrons - s.activePatronsThisYear, s.totalPatrons) : '—',
+                    benchmark: '< 30% non-active = healthy utilization (ISO 16439)',
+                    pass: s.totalPatrons > 0 ? (s.totalPatrons - s.activePatronsThisYear) / s.totalPatrons < 0.30 : null,
+                    action: s.totalPatrons > 0 && (s.totalPatrons - s.activePatronsThisYear) / s.totalPatrons >= 0.30 ? `${fmt(s.totalPatrons - s.activePatronsThisYear)} non-active patrons — target with re-engagement outreach, email lists, or library orientation` : 'Most patrons are active — focus on deepening borrowing frequency',
+                  },
+                  {
+                    label: 'Idle Stock Rate (Never-Borrowed Items %)',
+                    value: s.totalItems > 0 ? pct(s.neverCheckedOut, s.totalItems) : '—',
+                    benchmark: '< 20% idle stock = healthy circulation (ISO 11620 B.2.1.3)',
+                    pass: s.totalItems > 0 ? s.neverCheckedOut / s.totalItems < 0.20 : null,
+                    action: s.totalItems > 0 && s.neverCheckedOut / s.totalItems >= 0.20 ? `${fmt(s.neverCheckedOut)} idle items — review by subject for weeding or relocation to visible displays` : 'Good circulation spread — items are being discovered',
+                  },
+                  {
+                    label: 'Collection Refresh Rate',
+                    value: s.totalItems > 0 ? pct(s.newItemsThisYear, s.totalItems) : '—',
+                    benchmark: '≥ 5% annual refresh = collection stays current',
+                    pass: s.totalItems > 0 ? s.newItemsThisYear / s.totalItems >= 0.05 : null,
+                    action: s.totalItems > 0 && s.newItemsThisYear / s.totalItems < 0.05 ? `Only ${fmt(s.newItemsThisYear)} new items — budget increase or grant needed to maintain currency` : `${fmt(s.newItemsThisYear)} items added — adequate pace`,
+                  },
+                ].map((m, i) => (
+                  <div key={i} className={`bg-white rounded-xl shadow-sm p-4 border-l-4 ${m.pass === true ? 'border-green-500' : m.pass === false ? 'border-red-500' : 'border-gray-300'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className={`text-lg font-bold ${m.pass === true ? 'text-green-600' : m.pass === false ? 'text-red-600' : 'text-gray-500'}`}>{m.value}</span>
+                          <span className="text-sm font-semibold text-gray-800">{m.label}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 mb-1">{m.benchmark}</div>
+                        <div className={`text-xs font-medium ${m.pass === true ? 'text-green-700' : m.pass === false ? 'text-red-600' : 'text-gray-500'}`}>
+                          {m.pass === true ? '✓' : m.pass === false ? '✗' : '—'} {m.action}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── IFLA / ISO 11620 — Financial (requires budget records) ── */}
           <div className="mb-8">
