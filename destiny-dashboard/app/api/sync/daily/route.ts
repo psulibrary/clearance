@@ -40,7 +40,8 @@ export async function POST() {
           WHERE DateWithdrawn IS NULL
             AND (DateReturned >= @ago30 OR (DateReturned IS NULL AND PatronID IS NOT NULL AND DateOut >= @ago30))) AS checkouts30d,
         -- fines
-        (SELECT ISNULL(SUM(Balance), 0) FROM ${t(p,'Fine')} WHERE Balance > 0)                                  AS totalFinesBalance,
+        (SELECT ISNULL(SUM(Amount - AmountPaid - AmountWaived), 0)
+          FROM ${t(p,'Fine')} WHERE Active = 1 AND (Amount - AmountPaid - AmountWaived) > 0) AS totalFinesBalance,
         -- holds
         (SELECT COUNT(*) FROM ${t(p,'Hold')} WHERE IsReady = 0 AND ExpireDate > GETDATE())                      AS pendingHolds,
         -- never checked out
