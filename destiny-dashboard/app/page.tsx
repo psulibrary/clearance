@@ -1,7 +1,29 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Component } from 'react';
+import type { ReactNode } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error: error.message };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-6 bg-red-50 border border-red-300 rounded-xl text-red-800 text-sm">
+          <strong>⚠️ Tab crashed:</strong> {this.state.error}
+          <br /><span className="text-xs mt-1 block">Please copy this error and report it.</span>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface Stats {
   totalItems: number;
@@ -1827,10 +1849,18 @@ export default function Dashboard() {
           </div>
 
           {/* ── Green Library Tab ── */}
-          {activeTab === 'green' && <GreenLibraryTab reuseRate={s && s.totalItems ? parseFloat((s.checkoutsThisYear / s.totalItems).toFixed(2)) : null} />}
+          {activeTab === 'green' && (
+            <ErrorBoundary>
+              <GreenLibraryTab reuseRate={s && s.totalItems ? parseFloat((s.checkoutsThisYear / s.totalItems).toFixed(2)) : null} />
+            </ErrorBoundary>
+          )}
 
           {/* ── Strategic Planning Tab ── */}
-          {activeTab === 'strategic' && <StrategicTab stats={strategicStats} mainStats={s} year={year} />}
+          {activeTab === 'strategic' && (
+            <ErrorBoundary>
+              <StrategicTab stats={strategicStats} mainStats={s} year={year} />
+            </ErrorBoundary>
+          )}
 
           {/* ── Recommended Actions ── */}
           {s && !s.error && <RecommendedActions stats={s} chedStats={chedStats} year={year} />}
