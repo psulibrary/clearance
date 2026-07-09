@@ -322,10 +322,12 @@ function StrategicTab({
   stats,
   mainStats,
   year,
+  unlocked,
 }: {
   stats: Record<string, number> | null;
   mainStats: Stats | null;
   year: number;
+  unlocked: boolean;
 }) {
   const [stored, setStored]           = useState<StrategicStored>({ enrolledStudents: null, annualBudget: null });
   const [sbLoading, setSbLoading]     = useState(false);
@@ -565,21 +567,23 @@ function StrategicTab({
         </p>
       </div>
 
-      {/* Manual inputs */}
-      <div className="mb-6">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">📝 Manual Inputs (stored in Supabase)</h3>
-        {sbError && (
-          <div className="mb-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-xs text-amber-800">
-            ⚠️ Could not load saved values from Supabase ({sbError}). You can still enter values below — create the <code>green_metrics</code> table in Supabase first to enable saving.
-          </div>
-        )}
-        {sbLoading ? null : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <ManualInput fieldKey="enrolledStudents" label="Total Enrolled Students" placeholder="e.g. 3500" />
-            <ManualInput fieldKey="annualBudget" label="Annual Library Budget (₱)" placeholder="e.g. 500000" prefix="₱" />
-          </div>
-        )}
-      </div>
+      {/* Manual inputs — gated behind password */}
+      {unlocked && (
+        <div className="mb-6">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">📝 Manual Inputs (stored in Supabase)</h3>
+          {sbError && (
+            <div className="mb-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-xs text-amber-800">
+              ⚠️ Could not load saved values from Supabase ({sbError}). You can still enter values below — create the <code>green_metrics</code> table in Supabase first to enable saving.
+            </div>
+          )}
+          {sbLoading ? null : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <ManualInput fieldKey="enrolledStudents" label="Total Enrolled Students" placeholder="e.g. 3500" />
+              <ManualInput fieldKey="annualBudget" label="Annual Library Budget (₱)" placeholder="e.g. 500000" prefix="₱" />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">📈 KPI Metrics ({year})</h3>
@@ -714,7 +718,7 @@ const COLOR = {
 
 type StoredValues = Record<string, { value: number; notes: string; date: string }>;
 
-function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
+function GreenLibraryTab({ reuseRate, unlocked }: { reuseRate: number | null; unlocked: boolean }) {
   const [stored, setStored]       = useState<StoredValues>({});
   const [loading, setLoading]     = useState(false);
   const [supabaseError, setSupabaseError] = useState<string | null>(null);
@@ -890,8 +894,8 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
                       )}
                     </div>
 
-                    {/* Edit form (manual metrics only) */}
-                    {!isAuto && (
+                    {/* Edit form (manual metrics only, unlocked) */}
+                    {!isAuto && unlocked && (
                       isEdit ? (
                         <div className="border-t border-gray-200 pt-3 mt-1 flex flex-wrap gap-2 items-end">
                           <div>
@@ -974,6 +978,9 @@ export default function Dashboard() {
   const [gender, setGender]           = useState('');
   const [patronTypeID, setPatronTypeID] = useState(0);
   const [showExtraFilters, setShowExtraFilters] = useState(false);
+  const [insightsUnlocked, setInsightsUnlocked] = useState(false);
+  const [pwDraft, setPwDraft] = useState('');
+  const [pwError, setPwError] = useState(false);
 
   type ActivityRow = { name:string; totalPatrons:number; activePatrons:number; totalCheckouts:number; overdueItems:number; activeRate:number; checkoutsPerPatron:number };
   const [genderActivity, setGenderActivity]       = useState<ActivityRow[]>([]);
@@ -1473,17 +1480,17 @@ export default function Dashboard() {
                 <div className="bg-white rounded-xl shadow-sm p-5 text-center">
                   <div className="text-3xl font-bold text-indigo-700">{retention.retained.toLocaleString()}</div>
                   <div className="text-sm font-medium text-gray-600">Returned This Year</div>
-                  <div className="text-xs text-gray-400">Retention Rate</div>
+                  <div className="text-xs text-gray-600">Retention Rate</div>
                 </div>
                 <div className="bg-white rounded-xl shadow-sm p-5 text-center">
                   <div className="text-3xl font-bold text-emerald-600">{retention.newBorrowers.toLocaleString()}</div>
                   <div className="text-sm font-medium text-gray-600">First-Time Borrowers</div>
-                  <div className="text-xs text-gray-400">{retention.year}</div>
+                  <div className="text-xs text-gray-600">{retention.year}</div>
                 </div>
                 <div className={`rounded-xl shadow-sm p-5 text-center ${retention.retentionRate >= 60 ? 'bg-emerald-50 border border-emerald-200' : retention.retentionRate >= 40 ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}>
                   <div className={`text-3xl font-bold ${retention.retentionRate >= 60 ? 'text-emerald-700' : retention.retentionRate >= 40 ? 'text-amber-700' : 'text-red-700'}`}>{retention.retentionRate}%</div>
                   <div className="text-sm font-medium text-gray-600">Retention Rate</div>
-                  <div className="text-xs text-gray-400">{retention.retentionRate >= 60 ? '✓ Healthy' : retention.retentionRate >= 40 ? '⚠ Moderate' : '✗ Low — improve outreach'}</div>
+                  <div className="text-xs text-gray-600">{retention.retentionRate >= 60 ? '✓ Healthy' : retention.retentionRate >= 40 ? '⚠ Moderate' : '✗ Low — improve outreach'}</div>
                 </div>
               </div>
               <div className="bg-white rounded-xl shadow-sm p-4">
@@ -1520,16 +1527,16 @@ export default function Dashboard() {
                   <tbody>
                     {activePatrons.map((ap, i) => (
                       <tr key={ap.PatronBarcode} className={i % 2 === 0 ? 'bg-white hover:bg-indigo-50' : 'bg-gray-50 hover:bg-indigo-50'}>
-                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-500">{i + 1}</td>
+                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-700">{i + 1}</td>
                         <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{ap.PatronBarcode}</td>
                         <td className="p-2 border-b border-gray-100 font-medium text-gray-900">{ap.LastName}, {ap.FirstName}</td>
-                        <td className="p-2 border-b border-gray-100 text-gray-500">{ap.PatronType}</td>
+                        <td className="p-2 border-b border-gray-100 text-gray-700">{ap.PatronType}</td>
                         <td className="p-2 border-b border-gray-100 text-right font-bold text-indigo-700">{ap.totalCheckouts.toLocaleString()}</td>
                         <td className="p-2 border-b border-gray-100 text-right text-blue-700">{ap.checkoutsThisYear.toLocaleString()}</td>
                         <td className="p-2 border-b border-gray-100 text-right">
                           {ap.overdueCount > 0
                             ? <span className="font-semibold text-red-600">{ap.overdueCount}</span>
-                            : <span className="text-gray-400">—</span>}
+                            : <span className="text-gray-500">—</span>}
                         </td>
                       </tr>
                     ))}
@@ -2099,7 +2106,7 @@ export default function Dashboard() {
                         <td className="p-2 border-b border-gray-100 font-medium text-gray-900 max-w-[200px]"><div className="line-clamp-2">{item.Title}</div></td>
                         <td className="p-2 border-b border-gray-100 text-gray-600">{item.Author}</td>
                         <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{item.PatronBarcode}</td>
-                        <td className="p-2 border-b border-gray-100 text-gray-500">{item.PatronType}</td>
+                        <td className="p-2 border-b border-gray-100 text-gray-700">{item.PatronType}</td>
                         <td className="p-2 border-b border-gray-100 text-right text-gray-700">{item.DateDue}</td>
                         <td className="p-2 border-b border-gray-100 text-right">
                           <span className={`font-bold ${item.DaysOverdue > 90 ? 'text-red-700' : item.DaysOverdue > 30 ? 'text-amber-600' : 'text-yellow-600'}`}>
@@ -2187,7 +2194,7 @@ export default function Dashboard() {
                   <tbody>
                     {topTitles.map((t, i) => (
                       <tr key={t.BibID} className={i % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'}>
-                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-500">{i + 1}</td>
+                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-700">{i + 1}</td>
                         <td className="p-2 border-b border-gray-100 font-medium text-gray-900 max-w-xs">
                           <div className="line-clamp-2">{t.Title}</div>
                         </td>
@@ -2198,7 +2205,7 @@ export default function Dashboard() {
                         <td className="p-2 border-b border-gray-100 text-right">
                           {t.currentlyOut > 0
                             ? <span className="font-semibold text-amber-600">{t.currentlyOut}</span>
-                            : <span className="text-gray-400">—</span>
+                            : <span className="text-gray-500">—</span>
                           }
                         </td>
                       </tr>
@@ -2279,12 +2286,12 @@ export default function Dashboard() {
                   <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
                     <div className="text-3xl font-bold text-red-600">{neverBorrowed.totals.neverBorrowedItems.toLocaleString()}</div>
                     <div className="text-sm text-red-500 mt-1">Items Never Borrowed</div>
-                    <div className="text-xs text-gray-400">{pct(neverBorrowed.totals.neverBorrowedItems, neverBorrowed.totals.totalItems)} of collection</div>
+                    <div className="text-xs text-gray-600">{pct(neverBorrowed.totals.neverBorrowedItems, neverBorrowed.totals.totalItems)} of collection</div>
                   </div>
                   <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
                     <div className="text-3xl font-bold text-orange-600">{neverBorrowed.totals.neverBorrowedTitles.toLocaleString()}</div>
                     <div className="text-sm text-orange-500 mt-1">Titles Never Borrowed</div>
-                    <div className="text-xs text-gray-400">{pct(neverBorrowed.totals.neverBorrowedTitles, neverBorrowed.totals.totalTitles)} of titles</div>
+                    <div className="text-xs text-gray-600">{pct(neverBorrowed.totals.neverBorrowedTitles, neverBorrowed.totals.totalTitles)} of titles</div>
                   </div>
                 </div>
                 {neverBorrowed.byDewey.length > 0 && (
@@ -2347,7 +2354,7 @@ export default function Dashboard() {
                       {weedData.items.map((w, i) => (
                         <tr key={w.CopyBarcode} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                           <td className="p-2 border-b border-gray-100 font-medium max-w-xs truncate">{w.Title}</td>
-                          <td className="p-2 border-b border-gray-100 text-gray-500">{w.Author}</td>
+                          <td className="p-2 border-b border-gray-100 text-gray-700">{w.Author}</td>
                           <td className="p-2 border-b border-gray-100 font-mono text-xs text-gray-700">{w.CallNumber}</td>
                           <td className="p-2 border-b border-gray-100 text-right text-gray-600">{w.Acquired}</td>
                           <td className="p-2 border-b border-gray-100 text-right text-gray-600">{w.LastBorrowed ?? '—'}</td>
@@ -2831,17 +2838,57 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* ── Editor unlock widget ── */}
+          <div className="mb-6 flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl print:hidden">
+            {insightsUnlocked ? (
+              <>
+                <span className="text-emerald-600 text-sm font-semibold">🔓 Edit mode active</span>
+                <button
+                  onClick={() => { setInsightsUnlocked(false); setPwDraft(''); setPwError(false); }}
+                  className="text-xs text-gray-500 hover:text-red-500 border border-gray-200 px-3 py-1 rounded-lg transition-colors"
+                >Lock</button>
+              </>
+            ) : (
+              <>
+                <span className="text-sm text-gray-600 font-medium">🔒 Enter editor password to update manual metrics</span>
+                <form
+                  onSubmit={e => {
+                    e.preventDefault();
+                    if (pwDraft === 'palstateu') {
+                      setInsightsUnlocked(true);
+                      setPwError(false);
+                      setPwDraft('');
+                    } else {
+                      setPwError(true);
+                    }
+                  }}
+                  className="flex items-center gap-2 ml-auto"
+                >
+                  <input
+                    type="password"
+                    value={pwDraft}
+                    onChange={e => { setPwDraft(e.target.value); setPwError(false); }}
+                    placeholder="Password"
+                    className={`border rounded-lg px-3 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 ${pwError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-blue-400'}`}
+                  />
+                  <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">Unlock</button>
+                  {pwError && <span className="text-xs text-red-500">Incorrect password</span>}
+                </form>
+              </>
+            )}
+          </div>
+
           {/* ── Strategic Planning KPIs ── */}
           <div className="mb-8">
             <ErrorBoundary>
-              <StrategicTab stats={strategicStats} mainStats={s} year={year} />
+              <StrategicTab stats={strategicStats} mainStats={s} year={year} unlocked={insightsUnlocked} />
             </ErrorBoundary>
           </div>
 
           {/* ── Green Library KPIs ── */}
           <div className="mb-8">
             <ErrorBoundary>
-              <GreenLibraryTab reuseRate={strategicStats && !strategicStats.error && strategicStats.totalItems > 0 ? parseFloat((strategicStats.checkoutsThisYear / strategicStats.totalItems).toFixed(2)) : null} />
+              <GreenLibraryTab reuseRate={strategicStats && !strategicStats.error && strategicStats.totalItems > 0 ? parseFloat((strategicStats.checkoutsThisYear / strategicStats.totalItems).toFixed(2)) : null} unlocked={insightsUnlocked} />
             </ErrorBoundary>
           </div>
 
