@@ -978,6 +978,14 @@ export default function Dashboard() {
   const [acqData, setAcqData] = useState<{year:number;items:number;titles:number;spend:number}[]>([]);
   const [chedLoaded, setChedLoaded] = useState(false);
 
+  type TopTitle = { Title: string; Author: string; BibID: number; checkoutCount: number; currentlyOut: number };
+  type CollAgeRow = { acqYear: number; items: number; titles: number; everBorrowed: number };
+  type PatronGrowthRow = { label: string; yr: number; mo: number; newPatrons: number };
+  const [topTitles, setTopTitles]       = useState<TopTitle[]>([]);
+  const [collAge, setCollAge]           = useState<CollAgeRow[]>([]);
+  const [patronGrowth, setPatronGrowth] = useState<PatronGrowthRow[]>([]);
+  const [extraLoaded, setExtraLoaded]   = useState({ collection: false, patrons: false });
+
   const load = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams({ year: String(year), month: String(month), gender, patronTypeID: String(patronTypeID) });
@@ -1014,6 +1022,15 @@ export default function Dashboard() {
       fetch('/api/charts/activity-by-patrontype').then(r=>r.json()).then(d=>{ if(d.data) setPatronTypeActivity(d.data); }).catch(() => {});
       setChartsLoaded(p => ({ ...p, insights: true }));
     }
+    if (activeTab === 'collection' && !extraLoaded.collection) {
+      setExtraLoaded(p => ({ ...p, collection: true }));
+      fetch('/api/charts/top-titles').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setTopTitles(d); }).catch(() => {});
+      fetch('/api/charts/collection-age').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setCollAge(d); }).catch(() => {});
+    }
+    if (activeTab === 'patrons' && !extraLoaded.patrons) {
+      setExtraLoaded(p => ({ ...p, patrons: true }));
+      fetch('/api/charts/patron-growth?years=3').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setPatronGrowth(d); }).catch(() => {});
+    }
     if (activeTab === 'collection' && !chartsLoaded.collection) {
       fetch('/api/charts/collection-by-sublocation').then(r=>r.json()).then(d=>{ if(d.data) setSublocData(d.data); }).catch(() => {});
       fetch('/api/charts/collection-by-category').then(r=>r.json()).then(d=>{ if(d.data) setCatData(d.data); }).catch(() => {});
@@ -1034,7 +1051,7 @@ export default function Dashboard() {
       fetch('/api/ched/stats').then(r=>r.json()).then(d=>{ setChedStats(d); }).catch(() => {});
       fetch('/api/ched/acquisition-by-year').then(r=>r.json()).then(d=>{ if(d.data) setAcqData(d.data); }).catch(() => {});
     }
-  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded]);
+  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded]);
 
   const s = stats;
   const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
@@ -1289,6 +1306,40 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* ── Patron Growth Trend ── */}
+          {patronGrowth.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>📈</span>New Patron Registrations — Last 3 Years
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Monthly new patron registrations. Spikes typically align with enrollment periods.</p>
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={patronGrowth} margin={{ left: 10, right: 20, top: 4, bottom: 40 }}>
+                    <XAxis dataKey="label" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" interval={0} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v: unknown) => [Number(v).toLocaleString(), 'New Patrons']} />
+                    <Bar dataKey="newPatrons" name="New Patrons" fill="#3b82f6" radius={[3,3,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {Object.entries(
+                    patronGrowth.reduce((acc, r) => {
+                      acc[r.yr] = (acc[r.yr] ?? 0) + r.newPatrons;
+                      return acc;
+                    }, {} as Record<number, number>)
+                  ).map(([yr, total]) => (
+                    <div key={yr} className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-blue-700">{Number(total).toLocaleString()}</div>
+                      <div className="text-xs text-gray-500">New Patrons {yr}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* Tab: Collection */}
@@ -1593,6 +1644,98 @@ export default function Dashboard() {
                   </div>
                 )}
 
+              </div>
+            </div>
+          )}
+
+          {/* ── Collection Age Distribution ── */}
+          {collAge.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>📅</span>Collection Age Distribution
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Number of active items and titles acquired each year since 1980. Bars in grey = older; teal = recent 10 years.</p>
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={collAge.map(r => ({ ...r, name: String(r.acqYear) }))} margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={4} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
+                    <Legend />
+                    <Bar dataKey="items" name="Items" fill="#0ea5e9" radius={[2,2,0,0]} />
+                    <Bar dataKey="titles" name="Titles" fill="#10b981" radius={[2,2,0,0]} />
+                    <Bar dataKey="everBorrowed" name="Ever Borrowed" fill="#f59e0b" radius={[2,2,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                        <th className="text-left p-2 border border-gray-200">Year</th>
+                        <th className="text-right p-2 border border-gray-200">Items</th>
+                        <th className="text-right p-2 border border-gray-200">Titles</th>
+                        <th className="text-right p-2 border border-gray-200">Ever Borrowed</th>
+                        <th className="text-right p-2 border border-gray-200">Usage %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...collAge].reverse().map((r, i) => (
+                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="p-2 border border-gray-200 font-semibold text-gray-900">{r.acqYear}</td>
+                          <td className="p-2 border border-gray-200 text-right">{r.items.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right">{r.titles.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-amber-700">{r.everBorrowed.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right font-semibold text-emerald-700">
+                            {r.items > 0 ? (r.everBorrowed / r.items * 100).toFixed(1) + '%' : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Top 20 Most Borrowed Titles ── */}
+          {topTitles.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>🏆</span>Top {topTitles.length} Most Borrowed Titles
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Titles with the highest total checkout count. Use this to identify high-demand materials that may need additional copies.</p>
+              <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-blue-700 text-white">
+                      <th className="text-center p-2 w-8">#</th>
+                      <th className="text-left p-2">Title</th>
+                      <th className="text-left p-2">Author</th>
+                      <th className="text-right p-2">Total Checkouts</th>
+                      <th className="text-right p-2">Currently Out</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topTitles.map((t, i) => (
+                      <tr key={t.BibID} className={i % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'}>
+                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-400">{i + 1}</td>
+                        <td className="p-2 border-b border-gray-100 font-medium text-gray-900 max-w-xs">
+                          <div className="line-clamp-2">{t.Title}</div>
+                        </td>
+                        <td className="p-2 border-b border-gray-100 text-gray-600">{t.Author}</td>
+                        <td className="p-2 border-b border-gray-100 text-right">
+                          <span className="font-bold text-blue-700">{t.checkoutCount.toLocaleString()}</span>
+                        </td>
+                        <td className="p-2 border-b border-gray-100 text-right">
+                          {t.currentlyOut > 0
+                            ? <span className="font-semibold text-amber-600">{t.currentlyOut}</span>
+                            : <span className="text-gray-400">—</span>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
