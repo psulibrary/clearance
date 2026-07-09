@@ -18,7 +18,7 @@ export async function GET(request: Request) {
       SELECT TOP (@limit)
         bm.Title,
         ISNULL(bm.Author, 'Unknown') AS Author,
-        bm.CallNumber,
+        c.CallNumber,
         c.CopyBarcode,
         CONVERT(varchar(10), c.Acquired, 23)        AS Acquired,
         CONVERT(varchar(10), c.DateReturned, 23)    AS LastBorrowed,

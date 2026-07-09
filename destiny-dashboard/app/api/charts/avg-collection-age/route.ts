@@ -22,7 +22,7 @@ export async function GET() {
 
     const result = await pool.request().query(`
       SELECT
-        LEFT(LTRIM(bm.CallNumber), 1)                           AS firstDigit,
+        LEFT(LTRIM(c.CallNumber), 1)                           AS firstDigit,
         AVG(CAST(YEAR(GETDATE()) - YEAR(c.Acquired) AS float)) AS avgAgeYears,
         COUNT(c.CopyID)                                         AS itemCount,
         MIN(YEAR(c.Acquired))                                   AS oldestYear,
@@ -32,9 +32,9 @@ export async function GET() {
       WHERE c.DateWithdrawn IS NULL
         AND c.Acquired IS NOT NULL
         AND YEAR(c.Acquired) > 1900
-        AND bm.CallNumber IS NOT NULL AND bm.CallNumber != ''
-        AND LEFT(LTRIM(bm.CallNumber), 1) BETWEEN '0' AND '9'
-      GROUP BY LEFT(LTRIM(bm.CallNumber), 1)
+        AND c.CallNumber IS NOT NULL AND c.CallNumber != ''
+        AND LEFT(LTRIM(c.CallNumber), 1) BETWEEN '0' AND '9'
+      GROUP BY LEFT(LTRIM(c.CallNumber), 1)
       ORDER BY firstDigit
     `);
 

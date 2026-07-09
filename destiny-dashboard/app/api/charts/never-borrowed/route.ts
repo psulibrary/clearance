@@ -10,7 +10,7 @@ export async function GET() {
     // Count never-borrowed by Dewey range
     const byDewey = await pool.request().query(`
       SELECT
-        LEFT(LTRIM(bm.CallNumber), 1)  AS firstDigit,
+        LEFT(LTRIM(c.CallNumber), 1)  AS firstDigit,
         COUNT(DISTINCT bm.BibID)       AS neverBorrowedTitles,
         COUNT(c.CopyID)                AS neverBorrowedItems
       FROM ${t(p,'Copy')} c
@@ -18,9 +18,9 @@ export async function GET() {
       WHERE c.DateWithdrawn IS NULL
         AND c.PatronID IS NULL
         AND c.DateReturned IS NULL
-        AND bm.CallNumber IS NOT NULL AND bm.CallNumber != ''
-        AND LEFT(LTRIM(bm.CallNumber), 1) BETWEEN '0' AND '9'
-      GROUP BY LEFT(LTRIM(bm.CallNumber), 1)
+        AND c.CallNumber IS NOT NULL AND c.CallNumber != ''
+        AND LEFT(LTRIM(c.CallNumber), 1) BETWEEN '0' AND '9'
+      GROUP BY LEFT(LTRIM(c.CallNumber), 1)
       ORDER BY neverBorrowedItems DESC
     `);
 

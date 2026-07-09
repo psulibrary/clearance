@@ -22,7 +22,7 @@ export async function GET() {
 
     const result = await pool.request().query(`
       SELECT
-        LEFT(LTRIM(bm.CallNumber), 1)                AS firstDigit,
+        LEFT(LTRIM(c.CallNumber), 1)                AS firstDigit,
         COUNT(c.CopyID)                              AS items,
         COUNT(DISTINCT c.BibID)                      AS titles,
         COUNT(CASE WHEN c.DateReturned IS NOT NULL
@@ -31,10 +31,10 @@ export async function GET() {
       FROM ${t(p,'Copy')} c
       JOIN ${t(p,'BibMaster')} bm ON bm.BibID = c.BibID
       WHERE c.DateWithdrawn IS NULL
-        AND bm.CallNumber IS NOT NULL
-        AND bm.CallNumber != ''
-        AND LEFT(LTRIM(bm.CallNumber), 1) BETWEEN '0' AND '9'
-      GROUP BY LEFT(LTRIM(bm.CallNumber), 1)
+        AND c.CallNumber IS NOT NULL
+        AND c.CallNumber != ''
+        AND LEFT(LTRIM(c.CallNumber), 1) BETWEEN '0' AND '9'
+      GROUP BY LEFT(LTRIM(c.CallNumber), 1)
       ORDER BY firstDigit
     `);
 
