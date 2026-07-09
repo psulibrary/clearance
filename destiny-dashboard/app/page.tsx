@@ -206,9 +206,9 @@ function buildRecommendations(
   // ── Collection Health ──
   const deadStockPct = s.neverCheckedOut / totalItems;
   if (deadStockPct > 0.4)
-    recs.push({ priority: 'high', category: 'Collection Development', title: 'Large dead stock — conduct weeding campaign', detail: `${(deadStockPct*100).toFixed(1)}% of items have never been borrowed. Run a systematic weeding review using MUSTIE criteria (Misleading, Ugly, Superseded, Trivial, Irrelevant, Elsewhere available). Remove or relocate items to free shelving space.`, metric: `${s.neverCheckedOut.toLocaleString()} of ${totalItems.toLocaleString()} items never borrowed` });
+    recs.push({ priority: 'high', category: 'Collection Development', title: 'Large dead stock — conduct weeding campaign', detail: `${(deadStockPct*100).toFixed(1)}% of items have never been checked out. Before withdrawing, cross-check in-library (room) use in the Weeding Candidates tab — items never borrowed but frequently read in-library should be retained. Apply MUSTIE criteria only to items with no use at all (checkout or room use).`, metric: `${s.neverCheckedOut.toLocaleString()} of ${totalItems.toLocaleString()} items never checked out` });
   else if (deadStockPct > 0.25)
-    recs.push({ priority: 'medium', category: 'Collection Development', title: 'High proportion of unused items', detail: 'Review items that have never circulated. Consider relocating low-use items to storage and promoting underused subjects via displays or bibliographies.', metric: `${(deadStockPct*100).toFixed(1)}% of collection never borrowed` });
+    recs.push({ priority: 'medium', category: 'Collection Development', title: 'High proportion of items never checked out', detail: 'Some of these may still be actively used as in-library (room use) reading. The Weeding Candidates list excludes items with recent room use — review it before making withdrawal decisions.', metric: `${(deadStockPct*100).toFixed(1)}% of collection never checked out` });
 
   const refreshRate = s.newItemsThisYear / totalItems;
   if (refreshRate < 0.03)
@@ -2642,7 +2642,7 @@ export default function Dashboard() {
             <Card label="New Items This Month" value={fmt(s?.newItemsThisMonth)} sub="added to catalog" />
             <Card label={`New Items in ${year}`} value={fmt(s?.newItemsThisYear)} sub="added to catalog" />
             <Card label="Withdrawn Items"      value={fmt(s?.withdrawnItems)}    sub="removed from collection" color="text-gray-500" />
-            <Card label="Never Checked Out"    value={fmt(s?.neverCheckedOut)}   sub={`${deadStockPct} of collection — weeding candidates`} color="text-orange-600" />
+            <Card label="Never Checked Out"    value={fmt(s?.neverCheckedOut)}   sub={`${deadStockPct} of collection — verify room use before weeding`} color="text-orange-600" />
           </Section>
 
           <Section title={`Circulation Activity — ${periodLabel}`} icon="📤">
@@ -2662,7 +2662,7 @@ export default function Dashboard() {
             <Card label="Holds Satisfaction Rate"   value={s ? pct(s.readyHolds, (s.pendingHolds + s.readyHolds) || 0) : '—'} sub="ready holds ÷ all active holds" color="text-green-700" />
             <Card label="Patron Reach Rate"         value={s && s.totalPatrons ? pct(s.activePatronsThisYear, s.totalPatrons) : '—'} sub={`active borrowers vs total (${periodLabel})`} color="text-teal-700" />
             <Card label="Hold-to-Checkout Rate"     value={s && s.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub={`holds placed ÷ checkouts — demand signal (${periodLabel})`} color="text-purple-700" />
-            <Card label="Dead Stock Rate"           value={s && s.totalItems ? pct(s.neverCheckedOut, s.totalItems) : '—'} sub="items never borrowed — weeding priority" color={s && s.neverCheckedOut/s.totalItems > 0.3 ? 'text-red-600' : 'text-amber-600'} />
+            <Card label="Never Checked Out Rate"     value={s && s.totalItems ? pct(s.neverCheckedOut, s.totalItems) : '—'} sub="checkout only — some may have room use" color={s && s.neverCheckedOut/s.totalItems > 0.3 ? 'text-red-600' : 'text-amber-600'} />
           </Section>
 
           <Section title="Holds & Reservations" icon="🔖">
@@ -3394,7 +3394,7 @@ export default function Dashboard() {
                 <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
                   <div className="text-3xl font-bold text-gray-600">{s.totalItems > 0 ? pct(s.neverCheckedOut, s.totalItems) : '—'}</div>
                   <div className="text-sm font-medium text-gray-600">Idle Stock Rate</div>
-                  <div className="text-xs text-gray-500">{fmt(s.neverCheckedOut)} items never borrowed — primary weeding target list</div>
+                  <div className="text-xs text-gray-500">{fmt(s.neverCheckedOut)} items never checked out — cross-check room use before weeding</div>
                 </div>
                 {/* Return speed proxy */}
                 <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${s.avgLoanDays !== undefined && s.avgLoanDays <= 14 ? 'border-green-400' : s.avgLoanDays !== undefined && s.avgLoanDays <= 21 ? 'border-amber-400' : 'border-red-400'}`}>
@@ -4020,19 +4020,28 @@ export default function Dashboard() {
           {/* ── Weeding Candidates ── */}
           <div className="mb-8">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-              <span>🌿</span>Weeding Candidates (Not Borrowed in 3+ Years)
+              <span>🌿</span>Weeding Candidates (No Use in 3+ Years)
             </h2>
-            <p className="text-xs text-gray-600 mb-4">Items inactive for 3+ years — candidates for withdrawal to free shelf space.</p>
+            <p className="text-xs text-gray-600 mb-4">
+              Items with no checkout <em>and</em> no in-library (room) use for 3+ years — safe candidates for withdrawal.
+              Books with recent room use are automatically excluded even if never checked out.
+            </p>
             {extra2Loading.weed ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.weed ? (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.weed}</div>
             ) : weedData ? (
               <>
+                {(weedData as unknown as { roomUseAware?: boolean }).roomUseAware === false && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700 mb-3">
+                    In-library use data not available — list is based on checkout activity only. Items read in-library without checkout may appear here incorrectly.
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
                     <div className="text-3xl font-bold text-yellow-700">{weedData.summary.candidateCount.toLocaleString()}</div>
-                    <div className="text-sm text-yellow-600 mt-1">Total Weeding Candidates</div>
+                    <div className="text-sm text-yellow-600 mt-1">Weeding Candidates</div>
+                    <div className="text-xs text-yellow-500 mt-0.5">no checkout or room use in 3+ years</div>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm p-4 text-center">
                     <div className="text-3xl font-bold text-gray-700">₱{weedData.summary.totalValue?.toFixed(2)}</div>
@@ -4047,7 +4056,8 @@ export default function Dashboard() {
                         <th className="text-left p-2">Author</th>
                         <th className="text-left p-2">Call #</th>
                         <th className="text-right p-2">Acquired</th>
-                        <th className="text-right p-2">Last Borrowed</th>
+                        <th className="text-right p-2">Last Checkout</th>
+                        <th className="text-right p-2">Last Room Use</th>
                         <th className="text-right p-2">Days Idle</th>
                       </tr>
                     </thead>
@@ -4059,6 +4069,9 @@ export default function Dashboard() {
                           <td className="p-2 border-b border-gray-100 font-mono text-xs text-gray-700">{w.CallNumber}</td>
                           <td className="p-2 border-b border-gray-100 text-right text-gray-600">{w.Acquired}</td>
                           <td className="p-2 border-b border-gray-100 text-right text-gray-600">{w.LastBorrowed ?? '—'}</td>
+                          <td className="p-2 border-b border-gray-100 text-right text-green-700 font-medium">
+                            {(w as unknown as { LastRoomUse?: string }).LastRoomUse ?? '—'}
+                          </td>
                           <td className="p-2 border-b border-gray-100 text-right font-semibold text-yellow-700">{w.daysSinceActivity.toLocaleString()}</td>
                         </tr>
                       ))}
