@@ -92,7 +92,7 @@ function Card({ label, value, sub, color = 'text-gray-800' }: CardProps) {
     <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 print:shadow-none print:border print:border-gray-200">
       <div className={`text-3xl font-bold ${color}`}>{value}</div>
       <div className="text-sm font-medium text-gray-600">{label}</div>
-      {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
+      {sub && <div className="text-xs text-gray-600 mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -273,7 +273,7 @@ function RecommendedActions({ stats, chedStats, year }: { stats: Stats; chedStat
       <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
         <span>🎯</span>Recommended Actions
       </h2>
-      <p className="text-xs text-gray-400 mb-4">Auto-generated from current stats. Prioritized by urgency.</p>
+      <p className="text-xs text-gray-600 mb-4">Auto-generated from current stats. Prioritized by urgency.</p>
 
       {recs.length === 0 && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center text-green-700">
@@ -305,7 +305,7 @@ function RecommendedActions({ stats, chedStats, year }: { stats: Stats; chedStat
                 </div>
               </div>
               <p className="text-sm text-gray-600 leading-relaxed mb-1">{r.detail}</p>
-              {r.metric && <p className="text-xs text-gray-400 font-mono">📌 {r.metric}</p>}
+              {r.metric && <p className="text-xs text-gray-600 font-mono">📌 {r.metric}</p>}
             </div>
           );
         })}
@@ -970,7 +970,7 @@ export default function Dashboard() {
   const [genderActivity, setGenderActivity]       = useState<ActivityRow[]>([]);
   const [patronTypeActivity, setPatronTypeActivity] = useState<ActivityRow[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'|'insights'|'green'|'strategic'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'|'insights'>('overview');
   const [chartsLoaded, setChartsLoaded] = useState({ patrons: false, collection: false, insights: false });
   const [chedStats, setChedStats] = useState<Record<string,number> | null>(null);
   const [strategicStats, setStrategicStats] = useState<Record<string,number> | null>(null);
@@ -1062,7 +1062,7 @@ export default function Dashboard() {
       fetch('/api/charts/patron-retention').then(r=>r.json()).then(d=>{ if(d && !d.error) setRetention(d); }).catch(() => {});
       fetch('/api/charts/top-active-patrons?limit=10').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setActivePatrons(d); }).catch(() => {});
     }
-    if (activeTab === 'collection' && !extraLoaded2.collection) {
+    if ((activeTab === 'collection' || activeTab === 'insights') && !extraLoaded2.collection) {
       setExtraLoaded2(p => ({ ...p, collection: true }));
       const mkLoad = (key: string) => setExtra2Loading(p => ({ ...p, [key]: true }));
       const mkDone = (key: string) => setExtra2Loading(p => ({ ...p, [key]: false }));
@@ -1074,7 +1074,7 @@ export default function Dashboard() {
       mkLoad('avgColAge');
       fetch('/api/charts/avg-collection-age').then(r=>r.json()).then(d=>{ if(Array.isArray(d) && d.length) { setAvgColAge(d); mkDone('avgColAge'); } else mkErr('avgColAge', d?.error ?? 'No data'); }).catch(e=>mkErr('avgColAge', String(e)));
     }
-    if (activeTab === 'patrons' && !extraLoaded2.patrons) {
+    if ((activeTab === 'patrons' || activeTab === 'insights') && !extraLoaded2.patrons) {
       setExtraLoaded2(p => ({ ...p, patrons: true }));
       const mkLoad = (key: string) => setExtra2Loading(p => ({ ...p, [key]: true }));
       const mkDone = (key: string) => setExtra2Loading(p => ({ ...p, [key]: false }));
@@ -1099,7 +1099,7 @@ export default function Dashboard() {
       fetch('/api/charts/collection-by-publisher').then(r=>r.json()).then(d=>{ if(d.data) setPublisherData(d.data); }).catch(() => {});
       setChartsLoaded(p => ({ ...p, collection: true }));
     }
-    if (activeTab === 'strategic' && !strategicLoaded) {
+    if (activeTab === 'insights' && !strategicLoaded) {
       setStrategicLoaded(true);
       fetch('/api/strategic/stats').then(r => r.json()).then(setStrategicStats).catch(() => {});
     }
@@ -1240,7 +1240,7 @@ export default function Dashboard() {
 
         {/* Tab bar */}
         <div className="flex gap-2 mb-6 border-b border-gray-200 print:hidden">
-          {(['overview','patrons','collection','iso','ched','insights','green','strategic'] as const).map(tab => (
+          {(['overview','patrons','collection','iso','ched','insights'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1250,7 +1250,7 @@ export default function Dashboard() {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'insights' ? '💡 Insights' : tab === 'green' ? '🌿 Green Library' : tab === 'strategic' ? '📊 Strategic' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'insights' ? '💡 Insights' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
@@ -1377,7 +1377,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>📈</span>New Patron Registrations — Last 3 Years
               </h2>
-              <p className="text-xs text-gray-400 mb-4">Monthly new patron registrations. Spikes typically align with enrollment periods.</p>
+              <p className="text-xs text-gray-600 mb-4">Monthly new patron registrations. Spikes typically align with enrollment periods.</p>
               <div className="bg-white rounded-xl shadow-sm p-5">
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={patronGrowth} margin={{ left: 10, right: 20, top: 4, bottom: 40 }}>
@@ -1410,7 +1410,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🔁</span>Patron Retention & New vs. Returning Borrowers ({retention.year})
               </h2>
-              <p className="text-xs text-gray-400 mb-4">Retention rate shows what % of last year&apos;s active borrowers borrowed again this year.</p>
+              <p className="text-xs text-gray-600 mb-4">Retention rate shows what % of last year&apos;s active borrowers borrowed again this year.</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
                 <div className="bg-white rounded-xl shadow-sm p-5 text-center">
                   <div className="text-3xl font-bold text-blue-700">{retention.activeLastYear.toLocaleString()}</div>
@@ -1449,7 +1449,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🥇</span>Top {activePatrons.length} Most Active Patrons (All-Time Checkouts)
               </h2>
-              <p className="text-xs text-gray-400 mb-4">Patrons with the highest lifetime borrowing. Useful for identifying power users and loyal readers.</p>
+              <p className="text-xs text-gray-600 mb-4">Patrons with the highest lifetime borrowing. Useful for identifying power users and loyal readers.</p>
               <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead>
@@ -1490,7 +1490,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>📅</span>Peak Checkout Days (All-Time)
             </h2>
-            <p className="text-xs text-gray-400 mb-4">Which days of the week see the most returns/checkouts — use this for staffing decisions.</p>
+            <p className="text-xs text-gray-600 mb-4">Which days of the week see the most returns/checkouts — use this for staffing decisions.</p>
             {extra2Loading.peakDays ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.peakDays ? (
@@ -1517,7 +1517,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>⏱</span>Average Loan Duration by Patron Type
             </h2>
-            <p className="text-xs text-gray-400 mb-4">How long current checkouts have been out vs. the scheduled loan period — based on items currently checked out.</p>
+            <p className="text-xs text-gray-600 mb-4">How long current checkouts have been out vs. the scheduled loan period — based on items currently checked out.</p>
             {extra2Loading.loanDur ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.loanDur ? (
@@ -1579,7 +1579,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>😴</span>Lapsed Patrons
             </h2>
-            <p className="text-xs text-gray-400 mb-4">Patrons who borrowed last year but not this year — prime targets for re-engagement outreach.</p>
+            <p className="text-xs text-gray-600 mb-4">Patrons who borrowed last year but not this year — prime targets for re-engagement outreach.</p>
             {extra2Loading.lapsed ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.lapsed ? (
@@ -1626,7 +1626,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>💰</span>Fine Revenue by Patron Type (This Year)
             </h2>
-            <p className="text-xs text-gray-400 mb-4">Which patron groups generate the most fines — useful for policy review and targeted reminders.</p>
+            <p className="text-xs text-gray-600 mb-4">Which patron groups generate the most fines — useful for policy review and targeted reminders.</p>
             {extra2Loading.fines ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.fines ? (
@@ -1689,7 +1689,7 @@ export default function Dashboard() {
               {materialTypeData.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-5">
                   <p className="text-sm font-semibold text-gray-700 mb-1">By Material Type</p>
-                  <p className="text-xs text-gray-400 mb-3">What the collection contains — Book, Periodical, Thesis, AV, e-Resource, etc.</p>
+                  <p className="text-xs text-gray-600 mb-3">What the collection contains — Book, Periodical, Thesis, AV, e-Resource, etc.</p>
                   <ResponsiveContainer width="100%" height={Math.max(200, materialTypeData.length * 40)}>
                     <BarChart data={materialTypeData} layout="vertical" margin={{left:160,right:60,top:4,bottom:4}}>
                       <XAxis type="number" tick={{fontSize:11}} />
@@ -1706,7 +1706,7 @@ export default function Dashboard() {
               {/* Dewey Category */}
               <div className="bg-white rounded-xl shadow-sm p-5">
                 <p className="text-sm font-semibold text-gray-700 mb-1">By Dewey Decimal Category</p>
-                <p className="text-xs text-gray-400 mb-3">Subject distribution of the collection</p>
+                <p className="text-xs text-gray-600 mb-3">Subject distribution of the collection</p>
                 <ResponsiveContainer width="100%" height={Math.max(200, catData.length * 36)}>
                   <BarChart data={catData} layout="vertical" margin={{left:160,right:40,top:4,bottom:4}}>
                     <XAxis type="number" tick={{fontSize:11}} />
@@ -1722,7 +1722,7 @@ export default function Dashboard() {
               {/* Sublocation */}
               <div className="bg-white rounded-xl shadow-sm p-5">
                 <p className="text-sm font-semibold text-gray-700 mb-1">By Sublocation / Section</p>
-                <p className="text-xs text-gray-400 mb-3">Physical placement within the library</p>
+                <p className="text-xs text-gray-600 mb-3">Physical placement within the library</p>
                 <ResponsiveContainer width="100%" height={Math.max(200, sublocData.length * 36)}>
                   <BarChart data={sublocData} layout="vertical" margin={{left:140,right:40,top:4,bottom:4}}>
                     <XAxis type="number" tick={{fontSize:11}} />
@@ -1740,7 +1740,7 @@ export default function Dashboard() {
               {circTypeData.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-5">
                   <p className="text-sm font-semibold text-gray-700 mb-1">By Circulation Policy Type</p>
-                  <p className="text-xs text-gray-400 mb-3">Loan rules — Reserve Room (short loan), Regular, Non-circulating, etc.</p>
+                  <p className="text-xs text-gray-600 mb-3">Loan rules — Reserve Room (short loan), Regular, Non-circulating, etc.</p>
                   <ResponsiveContainer width="100%" height={Math.max(200, circTypeData.length * 36)}>
                     <BarChart data={circTypeData} layout="vertical" margin={{left:160,right:40,top:4,bottom:4}}>
                       <XAxis type="number" tick={{fontSize:11}} />
@@ -1768,7 +1768,7 @@ export default function Dashboard() {
               {acqYearData.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-5">
                   <p className="text-sm font-semibold text-gray-700 mb-1">By Year of Acquisition</p>
-                  <p className="text-xs text-gray-400 mb-3">Annual additions to the collection since 2010</p>
+                  <p className="text-xs text-gray-600 mb-3">Annual additions to the collection since 2010</p>
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={acqYearData} margin={{left:10,right:20,top:4,bottom:4}}>
                       <XAxis dataKey="year" tick={{fontSize:11}} />
@@ -1785,7 +1785,7 @@ export default function Dashboard() {
               {pubYearData.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-5">
                   <p className="text-sm font-semibold text-gray-700 mb-1">By Publication Decade</p>
-                  <p className="text-xs text-gray-400 mb-3">Age profile of the collection — shows currency of holdings</p>
+                  <p className="text-xs text-gray-600 mb-3">Age profile of the collection — shows currency of holdings</p>
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={pubYearData} margin={{left:10,right:20,top:4,bottom:4}}>
                       <XAxis dataKey="name" tick={{fontSize:11}} />
@@ -1812,7 +1812,7 @@ export default function Dashboard() {
               {fundingData.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-5">
                   <p className="text-sm font-semibold text-gray-700 mb-1">By Funding Source</p>
-                  <p className="text-xs text-gray-400 mb-3">Where the collection came from — budget allocation, donations, grants, etc.</p>
+                  <p className="text-xs text-gray-600 mb-3">Where the collection came from — budget allocation, donations, grants, etc.</p>
                   <ResponsiveContainer width="100%" height={Math.max(200, fundingData.length * 36)}>
                     <BarChart data={fundingData} layout="vertical" margin={{left:140,right:40,top:4,bottom:4}}>
                       <XAxis type="number" tick={{fontSize:11}} />
@@ -1829,7 +1829,7 @@ export default function Dashboard() {
               {publisherData.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-5">
                   <p className="text-sm font-semibold text-gray-700 mb-1">Top 20 Publishers by Titles</p>
-                  <p className="text-xs text-gray-400 mb-3">Publisher diversity — important for accreditation collection variety requirements</p>
+                  <p className="text-xs text-gray-600 mb-3">Publisher diversity — important for accreditation collection variety requirements</p>
                   <ResponsiveContainer width="100%" height={Math.max(300, publisherData.length * 28)}>
                     <BarChart data={publisherData} layout="vertical" margin={{left:160,right:60,top:4,bottom:4}}>
                       <XAxis type="number" tick={{fontSize:11}} />
@@ -1852,7 +1852,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🔥</span>Collection Activity — Utilization by Category
               </h2>
-              <p className="text-xs text-gray-400 mb-4">What is actually being used — checked-out items as a % of total per category. Higher % = higher demand.</p>
+              <p className="text-xs text-gray-600 mb-4">What is actually being used — checked-out items as a % of total per category. Higher % = higher demand.</p>
               <div className="grid grid-cols-1 gap-6">
 
                 {/* Utilization rate by Material Type */}
@@ -1862,7 +1862,7 @@ export default function Dashboard() {
                   return (
                     <div className="bg-white rounded-xl shadow-sm p-5">
                       <p className="text-sm font-semibold text-gray-700 mb-1">Utilization Rate by Material Type</p>
-                      <p className="text-xs text-gray-400 mb-3">Which material formats are in highest demand right now</p>
+                      <p className="text-xs text-gray-600 mb-3">Which material formats are in highest demand right now</p>
                       <ResponsiveContainer width="100%" height={Math.max(200, sorted.length * 40)}>
                         <BarChart data={sorted} layout="vertical" margin={{left:160,right:60,top:4,bottom:4}}>
                           <XAxis type="number" tick={{fontSize:11}} unit="%" domain={[0,100]} />
@@ -1909,7 +1909,7 @@ export default function Dashboard() {
                 {sublocData.length > 0 && (
                   <div className="bg-white rounded-xl shadow-sm p-5">
                     <p className="text-sm font-semibold text-gray-700 mb-1">Utilization Rate by Sublocation</p>
-                    <p className="text-xs text-gray-400 mb-3">Which library sections have highest demand — guides shelving, staffing, and signage decisions</p>
+                    <p className="text-xs text-gray-600 mb-3">Which library sections have highest demand — guides shelving, staffing, and signage decisions</p>
                     <ResponsiveContainer width="100%" height={Math.max(200, sublocData.length * 36)}>
                       <BarChart
                         data={[...sublocData].map(r => ({ ...r, utilRate: r.total ? parseFloat((r.checkedOut/r.total*100).toFixed(1)) : 0 })).sort((a,b) => b.utilRate - a.utilRate)}
@@ -1929,7 +1929,7 @@ export default function Dashboard() {
                 {catData.length > 0 && (
                   <div className="bg-white rounded-xl shadow-sm p-5">
                     <p className="text-sm font-semibold text-gray-700 mb-1">Utilization Rate by Dewey Category</p>
-                    <p className="text-xs text-gray-400 mb-3">Which subjects are most in demand — informs targeted acquisition spending</p>
+                    <p className="text-xs text-gray-600 mb-3">Which subjects are most in demand — informs targeted acquisition spending</p>
                     <ResponsiveContainer width="100%" height={Math.max(200, catData.length * 36)}>
                       <BarChart
                         data={[...catData].map(r => ({ ...r, utilRate: r.total ? parseFloat((r.checkedOut/r.total*100).toFixed(1)) : 0 })).sort((a,b) => b.utilRate - a.utilRate)}
@@ -1949,7 +1949,7 @@ export default function Dashboard() {
                 {circTypeData.length > 0 && (
                   <div className="bg-white rounded-xl shadow-sm p-5">
                     <p className="text-sm font-semibold text-gray-700 mb-1">Utilization Rate by Circulation Policy</p>
-                    <p className="text-xs text-gray-400 mb-3">Loan policy types that are most actively borrowed — supports review of loan period rules</p>
+                    <p className="text-xs text-gray-600 mb-3">Loan policy types that are most actively borrowed — supports review of loan period rules</p>
                     <ResponsiveContainer width="100%" height={Math.max(200, circTypeData.length * 36)}>
                       <BarChart
                         data={[...circTypeData].map(r => ({ ...r, utilRate: r.total ? parseFloat((r.checkedOut/r.total*100).toFixed(1)) : 0 })).sort((a,b) => b.utilRate - a.utilRate)}
@@ -1975,7 +1975,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>📂</span>Collection Coverage by Dewey Subject Range
               </h2>
-              <p className="text-xs text-gray-400 mb-4">Items and checkout activity grouped by Dewey Decimal class. Identifies under-represented subjects relative to program needs.</p>
+              <p className="text-xs text-gray-600 mb-4">Items and checkout activity grouped by Dewey Decimal class. Identifies under-represented subjects relative to program needs.</p>
               <div className="bg-white rounded-xl shadow-sm p-5">
                 <ResponsiveContainer width="100%" height={Math.max(240, callNumData.length * 40)}>
                   <BarChart data={callNumData} layout="vertical" margin={{ left: 280, right: 80, top: 4, bottom: 4 }}>
@@ -2023,7 +2023,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>⏰</span>Top {longestOverdue.length} Longest-Overdue Items
               </h2>
-              <p className="text-xs text-gray-400 mb-4">Items overdue the longest. Consider escalating to replacement billing for items beyond 90 days.</p>
+              <p className="text-xs text-gray-600 mb-4">Items overdue the longest. Consider escalating to replacement billing for items beyond 90 days.</p>
               <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead>
@@ -2069,7 +2069,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>📅</span>Collection Age Distribution
               </h2>
-              <p className="text-xs text-gray-400 mb-4">Number of active items and titles acquired each year since 1980. Bars in grey = older; teal = recent 10 years.</p>
+              <p className="text-xs text-gray-600 mb-4">Number of active items and titles acquired each year since 1980. Bars in grey = older; teal = recent 10 years.</p>
               <div className="bg-white rounded-xl shadow-sm p-5">
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={collAge.map(r => ({ ...r, name: String(r.acqYear) }))} margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
@@ -2118,7 +2118,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🏆</span>Top {topTitles.length} Most Borrowed Titles
               </h2>
-              <p className="text-xs text-gray-400 mb-4">Titles with the highest total checkout count. Use this to identify high-demand materials that may need additional copies.</p>
+              <p className="text-xs text-gray-600 mb-4">Titles with the highest total checkout count. Use this to identify high-demand materials that may need additional copies.</p>
               <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead>
@@ -2161,7 +2161,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>🕰</span>Average Collection Age by Dewey Range
             </h2>
-            <p className="text-xs text-gray-400 mb-4">Which subject areas have the oldest collections — helps prioritize acquisition budgets for outdated sections.</p>
+            <p className="text-xs text-gray-600 mb-4">Which subject areas have the oldest collections — helps prioritize acquisition budgets for outdated sections.</p>
             {extra2Loading.avgColAge ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.avgColAge ? (
@@ -2214,7 +2214,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>📦</span>Items Never Borrowed
             </h2>
-            <p className="text-xs text-gray-400 mb-4">Titles/items acquired but never checked out — signals poor acquisitions or poor discoverability.</p>
+            <p className="text-xs text-gray-600 mb-4">Titles/items acquired but never checked out — signals poor acquisitions or poor discoverability.</p>
             {extra2Loading.neverBorrowed ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.neverBorrowed ? (
@@ -2260,7 +2260,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>🌿</span>Weeding Candidates (Not Borrowed in 3+ Years)
             </h2>
-            <p className="text-xs text-gray-400 mb-4">Items inactive for 3+ years — candidates for withdrawal to free shelf space.</p>
+            <p className="text-xs text-gray-600 mb-4">Items inactive for 3+ years — candidates for withdrawal to free shelf space.</p>
             {extra2Loading.weed ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.weed ? (
@@ -2445,14 +2445,14 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>📊</span>Who Uses the Library Most?
             </h2>
-            <p className="text-xs text-gray-400 mb-4">
+            <p className="text-xs text-gray-600 mb-4">
               Cross-tabulation of patron demographics vs. actual borrowing activity — not filtered by the selections above, shows the full population comparison.
             </p>
 
             {genderActivity.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
                 <p className="text-sm font-semibold text-gray-700 mb-1">Activity by Gender</p>
-                <p className="text-xs text-gray-400 mb-4">Compares registration count, active borrowers, total checkouts, and overdue items per gender group</p>
+                <p className="text-xs text-gray-600 mb-4">Compares registration count, active borrowers, total checkouts, and overdue items per gender group</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                   <div>
                     <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Patron Count &amp; Active Borrowers</p>
@@ -2516,7 +2516,7 @@ export default function Dashboard() {
             {patronTypeActivity.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
                 <p className="text-sm font-semibold text-gray-700 mb-1">Activity by Patron Type</p>
-                <p className="text-xs text-gray-400 mb-4">Which patron groups borrow the most — useful for collection development and service prioritization</p>
+                <p className="text-xs text-gray-600 mb-4">Which patron groups borrow the most — useful for collection development and service prioritization</p>
                 <ResponsiveContainer width="100%" height={Math.max(240, patronTypeActivity.length * 36)}>
                   <BarChart data={patronTypeActivity} layout="vertical" margin={{left:140,right:80,top:4,bottom:4}}>
                     <XAxis type="number" tick={{fontSize:11}} />
@@ -2560,29 +2560,236 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* ── Green Library Tab ── */}
-          {activeTab === 'green' && (
-            <div>
-              <div style={{background:'green',color:'white',padding:'12px',marginBottom:'12px',borderRadius:'8px',fontWeight:'bold'}}>
-                🌿 DEBUG: Green Library tab is rendering. activeTab={activeTab}
-              </div>
-              <ErrorBoundary>
-                <GreenLibraryTab reuseRate={s && s.totalItems ? parseFloat((s.checkoutsThisYear / s.totalItems).toFixed(2)) : null} />
-              </ErrorBoundary>
-            </div>
-          )}
+          {/* ── Metric Spotlights ── */}
+          <div className="mb-8 grid grid-cols-1 gap-6">
 
-          {/* ── Strategic Planning Tab ── */}
-          {activeTab === 'strategic' && (
-            <div>
-              <div style={{background:'navy',color:'white',padding:'12px',marginBottom:'12px',borderRadius:'8px',fontWeight:'bold'}}>
-                📊 DEBUG: Strategic tab is rendering. activeTab={activeTab}
-              </div>
-              <ErrorBoundary>
-                <StrategicTab stats={strategicStats} mainStats={s} year={year} />
-              </ErrorBoundary>
+            {/* Peak Checkout Days */}
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>📅</span>Peak Checkout Days
+              </h2>
+              <p className="text-xs text-gray-600 mb-3">All-time checkout volume by weekday — use to guide staffing and program scheduling.</p>
+              {extra2Loading.peakDays ? (
+                <div className="text-xs text-gray-500 py-4 text-center">Loading…</div>
+              ) : extra2Errors.peakDays ? (
+                <div className="text-xs text-red-600 bg-red-50 rounded-lg p-3">Error: {extra2Errors.peakDays}</div>
+              ) : peakDays.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={peakDays} margin={{left:10,right:10,top:4,bottom:4}}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="day" tick={{fontSize:11}} />
+                      <YAxis tick={{fontSize:11}} />
+                      <Tooltip formatter={(v:unknown) => [Number(v).toLocaleString(), 'Checkouts']} />
+                      <Bar dataKey="checkouts" fill="#3b82f6" radius={[3,3,0,0]}>
+                        {peakDays.map((_,i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                  {(() => {
+                    const peak = peakDays.reduce((a,b) => b.checkouts > a.checkouts ? b : a, peakDays[0]);
+                    const quiet = peakDays.reduce((a,b) => b.checkouts < a.checkouts ? b : a, peakDays[0]);
+                    return (
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                        <div className="bg-blue-50 rounded-lg p-3"><span className="text-gray-600">Busiest day:</span> <strong className="text-blue-700">{peak.day}</strong> <span className="text-gray-600">({peak.checkouts.toLocaleString()} checkouts)</span></div>
+                        <div className="bg-gray-50 rounded-lg p-3"><span className="text-gray-600">Quietest day:</span> <strong className="text-gray-700">{quiet.day}</strong> <span className="text-gray-600">({quiet.checkouts.toLocaleString()} checkouts)</span></div>
+                      </div>
+                    );
+                  })()}
+                </>
+              ) : <div className="text-xs text-gray-500 py-4 text-center">No data available</div>}
             </div>
-          )}
+
+            {/* Loan Duration */}
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>⏱</span>Current Loan Duration by Patron Type
+              </h2>
+              <p className="text-xs text-gray-600 mb-3">Based on currently checked-out items. Shows how long patrons actually keep materials vs. the loan period allowed.</p>
+              {extra2Loading.loanDur ? (
+                <div className="text-xs text-gray-500 py-4 text-center">Loading…</div>
+              ) : extra2Errors.loanDur ? (
+                <div className="text-xs text-red-600 bg-red-50 rounded-lg p-3">Error: {extra2Errors.loanDur}</div>
+              ) : loanDur ? (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    <div className="bg-indigo-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-indigo-700">{loanDur.overall.currentlyOut.toLocaleString()}</div>
+                      <div className="text-xs text-gray-600">Currently Out</div>
+                    </div>
+                    <div className="bg-amber-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-amber-700">{loanDur.overall.avgDaysOut?.toFixed(1) ?? '—'}</div>
+                      <div className="text-xs text-gray-600">Avg Days Kept</div>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-blue-700">{loanDur.overall.avgLoanPeriod?.toFixed(1) ?? '—'}</div>
+                      <div className="text-xs text-gray-600">Avg Loan Period</div>
+                    </div>
+                    <div className="bg-red-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-red-700">{loanDur.overall.overdueCount?.toLocaleString()}</div>
+                      <div className="text-xs text-gray-600">Overdue Now</div>
+                    </div>
+                  </div>
+                  {loanDur.byPatronType.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                            <th className="text-left p-2 border border-gray-200">Patron Type</th>
+                            <th className="text-right p-2 border border-gray-200">Out Now</th>
+                            <th className="text-right p-2 border border-gray-200">Avg Days Kept</th>
+                            <th className="text-right p-2 border border-gray-200">Avg Loan Period</th>
+                            <th className="text-right p-2 border border-gray-200">Overdue</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {loanDur.byPatronType.map((r,i) => (
+                            <tr key={i} className={i%2===0?'bg-white':'bg-gray-50'}>
+                              <td className="p-2 border border-gray-200 font-semibold text-gray-900">{r.patronType}</td>
+                              <td className="p-2 border border-gray-200 text-right text-gray-800">{r.currentlyOut.toLocaleString()}</td>
+                              <td className="p-2 border border-gray-200 text-right text-amber-700 font-semibold">{r.avgDaysOut?.toFixed(1) ?? '—'}</td>
+                              <td className="p-2 border border-gray-200 text-right text-blue-700">{r.avgLoanPeriod?.toFixed(1) ?? '—'}</td>
+                              <td className="p-2 border border-gray-200 text-right text-red-600">{r.overdueCount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              ) : <div className="text-xs text-gray-500 py-4 text-center">No data available</div>}
+            </div>
+
+            {/* Collection Health Summary */}
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>📦</span>Collection Health at a Glance
+              </h2>
+              <p className="text-xs text-gray-600 mb-3">Items that have never circulated and long-idle items are weeding candidates that free shelf space and improve accreditation scores.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Never Borrowed */}
+                {extra2Loading.neverBorrowed ? (
+                  <div className="bg-orange-50 rounded-lg p-4 text-xs text-gray-500 text-center">Loading never-borrowed data…</div>
+                ) : extra2Errors.neverBorrowed ? (
+                  <div className="bg-red-50 rounded-lg p-4 text-xs text-red-600">Never-borrowed error: {extra2Errors.neverBorrowed}</div>
+                ) : neverBorrowed ? (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <div className="text-xs font-semibold text-orange-800 uppercase tracking-wide mb-2">Items Never Borrowed</div>
+                    <div className="text-3xl font-bold text-orange-700 mb-1">{neverBorrowed.totals.neverBorrowedItems.toLocaleString()}</div>
+                    <div className="text-xs text-gray-700">of {neverBorrowed.totals.totalItems.toLocaleString()} total items ({neverBorrowed.totals.totalItems ? ((neverBorrowed.totals.neverBorrowedItems/neverBorrowed.totals.totalItems)*100).toFixed(1) : '—'}%)</div>
+                    <div className="text-xs text-gray-700 mt-1">{neverBorrowed.totals.neverBorrowedTitles.toLocaleString()} unique titles never borrowed</div>
+                  </div>
+                ) : null}
+                {/* Weeding Candidates */}
+                {extra2Loading.weed ? (
+                  <div className="bg-yellow-50 rounded-lg p-4 text-xs text-gray-500 text-center">Loading weeding data…</div>
+                ) : extra2Errors.weed ? (
+                  <div className="bg-red-50 rounded-lg p-4 text-xs text-red-600">Weeding error: {extra2Errors.weed}</div>
+                ) : weedData ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="text-xs font-semibold text-yellow-800 uppercase tracking-wide mb-2">Weeding Candidates (3+ Yrs Idle)</div>
+                    <div className="text-3xl font-bold text-yellow-700 mb-1">{weedData.summary.candidateCount.toLocaleString()}</div>
+                    <div className="text-xs text-gray-700">items not borrowed in 3+ years</div>
+                    <div className="text-xs text-gray-700 mt-1">Estimated replacement value: <span className="font-semibold">₱{weedData.summary.totalValue?.toLocaleString('en-PH',{minimumFractionDigits:2})}</span></div>
+                  </div>
+                ) : null}
+              </div>
+              {/* Avg Collection Age */}
+              {avgColAge.length > 0 && (
+                <div className="mt-4 overflow-x-auto">
+                  <div className="text-xs font-medium text-gray-700 mb-2">Average Collection Age by Dewey Range</div>
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                        <th className="text-left p-2 border border-gray-200">Range</th>
+                        <th className="text-right p-2 border border-gray-200">Avg Age (yrs)</th>
+                        <th className="text-right p-2 border border-gray-200">Items</th>
+                        <th className="text-right p-2 border border-gray-200">Oldest</th>
+                        <th className="text-right p-2 border border-gray-200">Newest</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {avgColAge.map((r,i) => (
+                        <tr key={i} className={i%2===0?'bg-white':'bg-gray-50'}>
+                          <td className="p-2 border border-gray-200 font-semibold text-gray-900">{r.range}</td>
+                          <td className={`p-2 border border-gray-200 text-right font-semibold ${r.avgAgeYears > 15 ? 'text-red-600' : r.avgAgeYears > 10 ? 'text-amber-600' : 'text-green-700'}`}>{r.avgAgeYears?.toFixed(1)}</td>
+                          <td className="p-2 border border-gray-200 text-right text-gray-800">{r.itemCount?.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-gray-700">{r.oldestYear}</td>
+                          <td className="p-2 border border-gray-200 text-right text-gray-700">{r.newestYear}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Patron Engagement Deep Dive */}
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>👋</span>Patron Engagement Deep Dive
+              </h2>
+              <p className="text-xs text-gray-600 mb-3">Lapsed patrons and fine distribution by patron type — key for outreach targeting and fine policy review.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Lapsed Patrons */}
+                {extra2Loading.lapsed ? (
+                  <div className="bg-purple-50 rounded-lg p-4 text-xs text-gray-500 text-center">Loading lapsed patron data…</div>
+                ) : extra2Errors.lapsed ? (
+                  <div className="bg-red-50 rounded-lg p-4 text-xs text-red-600">Lapsed error: {extra2Errors.lapsed}</div>
+                ) : lapsedData ? (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <div className="text-xs font-semibold text-purple-800 uppercase tracking-wide mb-2">Lapsed Patrons ({lapsedData.year})</div>
+                    <div className="text-3xl font-bold text-purple-700 mb-1">{lapsedData.lapsedCount.toLocaleString()}</div>
+                    <div className="text-xs text-gray-700">borrowed last year but not this year ({lapsedData.lapsedRate?.toFixed(1)}% of last year&apos;s borrowers)</div>
+                    {lapsedData.byType.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {lapsedData.byType.slice(0,4).map((r,i) => (
+                          <div key={i} className="flex justify-between text-xs text-gray-700">
+                            <span>{r.patronType}</span><span className="font-semibold">{r.lapsedCount.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+                {/* Fines by Patron Type */}
+                {extra2Loading.fines ? (
+                  <div className="bg-red-50 rounded-lg p-4 text-xs text-gray-500 text-center">Loading fines data…</div>
+                ) : extra2Errors.fines ? (
+                  <div className="bg-red-50 rounded-lg p-4 text-xs text-red-600">Fines error: {extra2Errors.fines}</div>
+                ) : finesByType.length > 0 ? (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="text-xs font-semibold text-red-800 uppercase tracking-wide mb-2">Active Fines by Patron Type</div>
+                    <div className="space-y-1.5">
+                      {finesByType.slice(0,5).map((r,i) => (
+                        <div key={i} className="flex justify-between text-xs">
+                          <span className="text-gray-800 font-medium">{r.patronType}</span>
+                          <span className="text-red-700 font-semibold">₱{r.totalFines?.toLocaleString('en-PH',{minimumFractionDigits:2})}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-red-200 text-xs text-gray-700">
+                      Total: <span className="font-bold text-red-700">₱{finesByType.reduce((a,r)=>a+(r.totalFines??0),0).toLocaleString('en-PH',{minimumFractionDigits:2})}</span>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Strategic Planning KPIs ── */}
+          <div className="mb-8">
+            <ErrorBoundary>
+              <StrategicTab stats={strategicStats} mainStats={s} year={year} />
+            </ErrorBoundary>
+          </div>
+
+          {/* ── Green Library KPIs ── */}
+          <div className="mb-8">
+            <ErrorBoundary>
+              <GreenLibraryTab reuseRate={s && s.totalItems ? parseFloat((s.checkoutsThisYear / s.totalItems).toFixed(2)) : null} />
+            </ErrorBoundary>
+          </div>
 
           {/* ── Recommended Actions ── */}
           {s && !s.error && <RecommendedActions stats={s} chedStats={chedStats} year={year} />}
