@@ -8,7 +8,11 @@ export async function GET() {
     const p = await getSchemaPrefix();
     const result = await pool.request().query(`
       SELECT
-        ISNULL(NULLIF(LTRIM(RTRIM(p.Gender)),''), 'Unspecified') AS gender,
+        CASE LTRIM(RTRIM(p.Gender))
+          WHEN 'M' THEN 'Male'
+          WHEN 'F' THEN 'Female'
+          ELSE 'Unspecified'
+        END AS gender,
         COUNT(DISTINCT p.PatronID)                                                                          AS totalPatrons,
         COUNT(DISTINCT CASE WHEN c.PatronID IS NOT NULL AND c.DateReturned IS NULL AND c.DateWithdrawn IS NULL THEN p.PatronID END) AS activePatrons,
         COUNT(CASE WHEN c.PatronID IS NOT NULL AND c.DateWithdrawn IS NULL THEN c.CopyID END)               AS totalCheckouts,

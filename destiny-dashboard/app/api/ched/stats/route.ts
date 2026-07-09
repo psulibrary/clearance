@@ -64,11 +64,11 @@ export async function GET() {
       illReq.input('currentYear', sql.Int, currentYear);
       const illResult = await illReq.query(`
         SELECT
-          (SELECT COUNT(*) FROM ${t(p,'CrossDistrictLoan')}) AS totalILL,
-          (SELECT COUNT(*) FROM ${t(p,'CrossDistrictLoan')} WHERE YEAR(DateShipped) = @currentYear) AS illThisYear
+          COUNT(*) AS totalILL
+        FROM ${t(p,'CrossDistrictLoan')}
       `);
       stats.totalILL = illResult.recordset[0].totalILL;
-      stats.illThisYear = illResult.recordset[0].illThisYear;
+      stats.illThisYear = 0; // CrossDistrictLoan has no date column for filtering by year
     } catch {
       // CrossDistrictLoan columns unknown — leave as 0
     }

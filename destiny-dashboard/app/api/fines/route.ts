@@ -24,7 +24,7 @@ export async function GET() {
       FROM ${t(p,'Fine')} f
       JOIN ${t(p,'Patron')} p     ON f.PatronID = p.PatronID
       LEFT JOIN ${t(p,'BibMaster')} bm ON f.BibID = bm.BibID
-      LEFT JOIN ${t(p,'SitePatron')} sp ON f.PatronID = sp.PatronID
+      LEFT JOIN ${t(p,'SitePatron')} sp ON f.PatronID = sp.PatronID AND f.SiteID = sp.SiteID
       LEFT JOIN ${t(p,'ConfigSite')} cs ON f.SiteID = cs.SiteID
       WHERE f.Active = 1
         AND (f.Amount - f.AmountPaid - f.AmountWaived) > 0

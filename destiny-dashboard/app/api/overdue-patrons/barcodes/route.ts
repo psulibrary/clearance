@@ -19,7 +19,7 @@ export async function GET(request: Request) {
       .query(`
         SELECT DISTINCT sp.PatronBarcode
         FROM ${t(p,'Copy')} c
-        JOIN ${t(p,'SitePatron')} sp ON sp.PatronID = c.PatronID
+        JOIN ${t(p,'SitePatron')} sp ON sp.PatronID = c.PatronID AND sp.SiteID = c.SiteID
         WHERE c.DateReturned IS NULL
           AND c.DateWithdrawn IS NULL
           AND c.PatronID IS NOT NULL

@@ -76,7 +76,7 @@ export async function GET(request: Request) {
         DATEDIFF(day, c.DateDue, GETDATE())                     AS DaysOverdue
       FROM ${t(p,'Copy')} c
       JOIN ${t(p,'Patron')} p       ON c.PatronID = p.PatronID
-      JOIN ${t(p,'SitePatron')} sp  ON sp.PatronID = p.PatronID
+      JOIN ${t(p,'SitePatron')} sp  ON sp.PatronID = p.PatronID AND sp.SiteID = c.SiteID
       LEFT JOIN ${t(p,'PatronType')} pt ON sp.PatronTypeID = pt.PatronTypeID
       LEFT JOIN ${t(p,'BibMaster')} bm  ON bm.BibID = c.BibID
       ${patronTypeJoin}
