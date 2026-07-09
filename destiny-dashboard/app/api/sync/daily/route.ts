@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 import { supabaseServer } from '@/lib/supabase-server';
+import { getRoomUseConfig } from '@/lib/audit-room-use';
 
 async function runSync() {
   const pool = await getPool();
   const p = await getSchemaPrefix();
+  const cfg = await getRoomUseConfig();
   const req = pool.request();
   const today = new Date();
   req.input('year', sql.Int, today.getFullYear());
@@ -48,6 +50,33 @@ async function runSync() {
         WHERE DateWithdrawn IS NULL AND PatronID IS NULL AND DateReturned IS NULL)                             AS neverCheckedOut
   `);
 
+  // Room use enrichment (best-effort)
+  let roomUseYtd = 0, roomUse7d = 0, roomUse30d = 0;
+  if (cfg) {
+    try {
+      const ruRes = await pool.request().query(`
+        DECLARE @today2 DATE = CAST(GETDATE() AS DATE);
+        DECLARE @ago7b  DATE = DATEADD(day, -7,  @today2);
+        DECLARE @ago30b DATE = DATEADD(day, -30, @today2);
+        DECLARE @ytd2   DATE = DATEFROMPARTS(YEAR(GETDATE()), 1, 1);
+        SELECT
+          (SELECT COUNT(*) FROM ${t(p,'Audit')}
+           WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+             AND Created >= @ytd2)   AS roomUseYtd,
+          (SELECT COUNT(*) FROM ${t(p,'Audit')}
+           WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+             AND Created >= @ago7b)  AS roomUse7d,
+          (SELECT COUNT(*) FROM ${t(p,'Audit')}
+           WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+             AND Created >= @ago30b) AS roomUse30d
+      `);
+      const ru = ruRes.recordset[0] as { roomUseYtd: number; roomUse7d: number; roomUse30d: number };
+      roomUseYtd = ru.roomUseYtd;
+      roomUse7d  = ru.roomUse7d;
+      roomUse30d = ru.roomUse30d;
+    } catch { /* skip */ }
+  }
+
   const row = result.recordset[0] as {
     totalItems: number; checkedOut: number; available: number; overdue: number;
     totalPatrons: number; activePatrons30d: number; newPatronsYtd: number;
@@ -72,6 +101,12 @@ async function runSync() {
     total_fines_balance:  row.totalFinesBalance,
     pending_holds:        row.pendingHolds,
     never_checked_out:    row.neverCheckedOut,
+    room_use_ytd:         roomUseYtd,
+    room_use_7d:          roomUse7d,
+    room_use_30d:         roomUse30d,
+    total_borrows_ytd:    row.checkoutsYtd + roomUseYtd,
+    total_borrows_7d:     row.checkouts7d  + roomUse7d,
+    total_borrows_30d:    row.checkouts30d + roomUse30d,
   }, { onConflict: 'snapshot_date' });
 
   if (error) throw new Error(error.message);

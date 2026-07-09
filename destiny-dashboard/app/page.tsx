@@ -2244,17 +2244,17 @@ export default function Dashboard() {
   const [acqData, setAcqData] = useState<{year:number;items:number;titles:number;spend:number}[]>([]);
   const [chedLoaded, setChedLoaded] = useState(false);
 
-  type TopTitle       = { Title: string; Author: string; BibID: number; checkoutCount: number; currentlyOut: number };
+  type TopTitle       = { Title: string; Author: string; BibID: number; checkoutCount: number; currentlyOut: number; roomUse?: number; totalUse?: number };
   type CollAgeRow     = { acqYear: number; items: number; titles: number; everBorrowed: number };
   type PatronGrowthRow = { label: string; yr: number; mo: number; newPatrons: number };
-  type RetentionStats = { activeLastYear: number; activeThisYear: number; retained: number; newBorrowers: number; retentionRate: number; year: number };
-  type ActivePatron   = { PatronBarcode: string; LastName: string; FirstName: string; PatronType: string; totalCheckouts: number; checkoutsThisYear: number; overdueCount: number };
+  type RetentionStats = { activeLastYear: number; activeThisYear: number; retained: number; newBorrowers: number; retentionRate: number; year: number; roomUseAware?: boolean };
+  type ActivePatron   = { PatronBarcode: string; LastName: string; FirstName: string; PatronType: string; totalCheckouts: number; checkoutsThisYear: number; overdueCount: number; totalRoomUse?: number; roomUseThisYear?: number; totalUse?: number; totalUseThisYear?: number };
   type OverdueItem    = { CopyBarcode: string; Title: string; Author: string; PatronBarcode: string; PatronType: string; DateDue: string; DaysOverdue: number; ReplacementCost: number };
-  type CallNumRow     = { range: string; firstDigit: string; items: number; titles: number; checkouts: number; utilRate: number };
-  type PeakDayRow    = { day: string; checkouts: number };
+  type CallNumRow     = { range: string; firstDigit: string; items: number; titles: number; checkouts: number; roomUse?: number; totalUse?: number; utilRate: number };
+  type PeakDayRow    = { day: string; checkouts: number; roomUse: number; totalUse: number };
   type LoanDurRow    = { patronType: string; currentlyOut: number; avgDaysOut: number; avgLoanPeriod: number; overdueCount: number };
   type WeedItem      = { Title: string; Author: string; CallNumber: string; CopyBarcode: string; Acquired: string; LastBorrowed: string; daysSinceActivity: number; Price: number };
-  type NeverBorrowedRow = { firstDigit: string; neverBorrowedTitles: number; neverBorrowedItems: number };
+  type NeverBorrowedRow = { firstDigit: string; neverUsedTitles: number; neverUsedItems: number };
   type LapsedRow     = { patronType: string; lapsedCount: number };
   type FineByTypeRow = { patronType: string; patronsWithFines: number; fineCount: number; totalFines: number; avgFine: number };
   type AvgAgeRow     = { range: string; firstDigit: string; avgAgeYears: number; itemCount: number; oldestYear: number; newestYear: number };
@@ -2271,7 +2271,7 @@ export default function Dashboard() {
   const [peakDays, setPeakDays]           = useState<PeakDayRow[]>([]);
   const [loanDur, setLoanDur]             = useState<{ byPatronType: LoanDurRow[]; overall: { avgDaysOut: number; avgLoanPeriod: number; currentlyOut: number; overdueCount: number }; note: string } | null>(null);
   const [weedData, setWeedData]           = useState<{ items: WeedItem[]; summary: { candidateCount: number; totalValue: number }; yearsThreshold: number } | null>(null);
-  const [neverBorrowed, setNeverBorrowed] = useState<{ byDewey: NeverBorrowedRow[]; totals: { totalTitles: number; totalItems: number; neverBorrowedItems: number; neverBorrowedTitles: number } } | null>(null);
+  const [neverBorrowed, setNeverBorrowed] = useState<{ byDewey: NeverBorrowedRow[]; totals: { totalTitles: number; totalItems: number; neverUsedItems: number; neverUsedTitles: number; roomUseOnlyItems: number }; roomUseAware: boolean } | null>(null);
   const [lapsedData, setLapsedData]       = useState<{ activeLastYear: number; activeThisYear: number; lapsedCount: number; lapsedRate: number; year: number; byType: LapsedRow[] } | null>(null);
   const [finesByType, setFinesByType]     = useState<FineByTypeRow[]>([]);
   const [avgColAge, setAvgColAge]         = useState<AvgAgeRow[]>([]);
@@ -2359,16 +2359,16 @@ export default function Dashboard() {
     }
     if (activeTab === 'collection' && !extraLoaded.collection) {
       setExtraLoaded(p => ({ ...p, collection: true }));
-      fetch('/api/charts/top-titles').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setTopTitles(d); }).catch(() => {});
+      fetch('/api/charts/top-titles').then(r=>r.json()).then(d=>{ const arr = d?.data ?? d; if(Array.isArray(arr)) setTopTitles(arr); }).catch(() => {});
       fetch('/api/charts/collection-age').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setCollAge(d); }).catch(() => {});
       fetch('/api/charts/longest-overdue?limit=10').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setLongestOverdue(d); }).catch(() => {});
-      fetch('/api/charts/by-callnumber').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setCallNumData(d); }).catch(() => {});
+      fetch('/api/charts/by-callnumber').then(r=>r.json()).then(d=>{ const arr = d?.rows ?? d; if(Array.isArray(arr)) setCallNumData(arr); }).catch(() => {});
     }
     if (activeTab === 'patrons' && !extraLoaded.patrons) {
       setExtraLoaded(p => ({ ...p, patrons: true }));
       fetch('/api/charts/patron-growth?years=3').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setPatronGrowth(d); }).catch(() => {});
       fetch('/api/charts/patron-retention').then(r=>r.json()).then(d=>{ if(d && !d.error) setRetention(d); }).catch(() => {});
-      fetch('/api/charts/top-active-patrons?limit=10').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setActivePatrons(d); }).catch(() => {});
+      fetch('/api/charts/top-active-patrons?limit=10').then(r=>r.json()).then(d=>{ const arr = d?.patrons ?? d; if(Array.isArray(arr)) setActivePatrons(arr); }).catch(() => {});
     }
     if ((activeTab === 'collection' || activeTab === 'insights') && !extraLoaded2.collection) {
       setExtraLoaded2(p => ({ ...p, collection: true }));
@@ -2388,7 +2388,7 @@ export default function Dashboard() {
       const mkDone = (key: string) => setExtra2Loading(p => ({ ...p, [key]: false }));
       const mkErr  = (key: string, msg: string) => { setExtra2Errors(p => ({ ...p, [key]: msg })); setExtra2Loading(p => ({ ...p, [key]: false })); };
       mkLoad('peakDays');
-      fetch('/api/charts/peak-checkout-days').then(r=>r.json()).then(d=>{ if(Array.isArray(d) && d.length) { setPeakDays(d); mkDone('peakDays'); } else mkErr('peakDays', d?.error ?? 'No data'); }).catch(e=>mkErr('peakDays', String(e)));
+      fetch('/api/charts/peak-checkout-days').then(r=>r.json()).then(d=>{ const arr = d?.rows ?? d; if(Array.isArray(arr) && arr.length) { setPeakDays(arr); mkDone('peakDays'); } else mkErr('peakDays', d?.error ?? 'No data'); }).catch(e=>mkErr('peakDays', String(e)));
       mkLoad('loanDur');
       fetch('/api/charts/avg-loan-duration').then(r=>r.json()).then(d=>{ if(d && !d.error) { setLoanDur(d); mkDone('loanDur'); } else mkErr('loanDur', d?.error ?? 'No data'); }).catch(e=>mkErr('loanDur', String(e)));
       mkLoad('lapsed');
@@ -3047,9 +3047,9 @@ export default function Dashboard() {
           {activePatrons.length > 0 && (
             <div className="mb-8">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span>🥇</span>Top {activePatrons.length} Most Active Patrons (All-Time Checkouts)
+                <span>🥇</span>Top {activePatrons.length} Most Active Patrons
               </h2>
-              <p className="text-xs text-gray-600 mb-4">Patrons with the highest lifetime borrowing. Useful for identifying power users and loyal readers.</p>
+              <p className="text-xs text-gray-600 mb-4">Patrons ranked by total use (checkouts + in-library room use). Useful for identifying power users and loyal readers.</p>
               <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead>
@@ -3058,27 +3058,38 @@ export default function Dashboard() {
                       <th className="text-left p-2">Barcode</th>
                       <th className="text-left p-2">Name</th>
                       <th className="text-left p-2">Type</th>
-                      <th className="text-right p-2">Total Checkouts</th>
+                      <th className="text-right p-2">Checkouts</th>
+                      {activePatrons.some(ap => (ap.totalRoomUse ?? 0) > 0) && (
+                        <th className="text-right p-2">Room Use</th>
+                      )}
+                      {activePatrons.some(ap => (ap.totalRoomUse ?? 0) > 0) && (
+                        <th className="text-right p-2">Total Use</th>
+                      )}
                       <th className="text-right p-2">This Year</th>
                       <th className="text-right p-2">Overdue Now</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {activePatrons.map((ap, i) => (
-                      <tr key={ap.PatronBarcode} className={i % 2 === 0 ? 'bg-white hover:bg-indigo-50' : 'bg-gray-50 hover:bg-indigo-50'}>
-                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-700">{i + 1}</td>
-                        <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{ap.PatronBarcode}</td>
-                        <td className="p-2 border-b border-gray-100 font-medium text-gray-900">{ap.LastName}, {ap.FirstName}</td>
-                        <td className="p-2 border-b border-gray-100 text-gray-700">{ap.PatronType}</td>
-                        <td className="p-2 border-b border-gray-100 text-right font-bold text-indigo-700">{ap.totalCheckouts.toLocaleString()}</td>
-                        <td className="p-2 border-b border-gray-100 text-right text-blue-700">{ap.checkoutsThisYear.toLocaleString()}</td>
-                        <td className="p-2 border-b border-gray-100 text-right">
-                          {ap.overdueCount > 0
-                            ? <span className="font-semibold text-red-600">{ap.overdueCount}</span>
-                            : <span className="text-gray-500">—</span>}
-                        </td>
-                      </tr>
-                    ))}
+                    {activePatrons.map((ap, i) => {
+                      const hasRU = activePatrons.some(x => (x.totalRoomUse ?? 0) > 0);
+                      return (
+                        <tr key={ap.PatronBarcode} className={i % 2 === 0 ? 'bg-white hover:bg-indigo-50' : 'bg-gray-50 hover:bg-indigo-50'}>
+                          <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-700">{i + 1}</td>
+                          <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{ap.PatronBarcode}</td>
+                          <td className="p-2 border-b border-gray-100 font-medium text-gray-900">{ap.LastName}, {ap.FirstName}</td>
+                          <td className="p-2 border-b border-gray-100 text-gray-700">{ap.PatronType}</td>
+                          <td className="p-2 border-b border-gray-100 text-right font-bold text-indigo-700">{ap.totalCheckouts.toLocaleString()}</td>
+                          {hasRU && <td className="p-2 border-b border-gray-100 text-right text-purple-600">{(ap.totalRoomUse ?? 0) > 0 ? (ap.totalRoomUse ?? 0).toLocaleString() : '—'}</td>}
+                          {hasRU && <td className="p-2 border-b border-gray-100 text-right font-bold text-emerald-700">{(ap.totalUse ?? ap.totalCheckouts).toLocaleString()}</td>}
+                          <td className="p-2 border-b border-gray-100 text-right text-blue-700">{(ap.totalUseThisYear ?? ap.checkoutsThisYear).toLocaleString()}</td>
+                          <td className="p-2 border-b border-gray-100 text-right">
+                            {ap.overdueCount > 0
+                              ? <span className="font-semibold text-red-600">{ap.overdueCount}</span>
+                              : <span className="text-gray-500">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -3088,9 +3099,9 @@ export default function Dashboard() {
           {/* ── Peak Checkout Days ── */}
           <div className="mb-8">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-              <span>📅</span>Peak Checkout Days (All-Time)
+              <span>📅</span>Peak Use Days (All-Time)
             </h2>
-            <p className="text-xs text-gray-600 mb-4">Which days of the week see the most returns/checkouts — use this for staffing decisions.</p>
+            <p className="text-xs text-gray-600 mb-4">Which days of the week see the most library use (checkouts + in-library visits) — use this for staffing decisions.</p>
             {extra2Loading.peakDays ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.peakDays ? (
@@ -3103,9 +3114,15 @@ export default function Dashboard() {
                     <XAxis dataKey="day" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={n => n.toLocaleString()} />
                     <Tooltip formatter={(v) => typeof v === "number" ? v.toLocaleString() : String(v)} />
-                    <Bar dataKey="checkouts" name="Checkouts" fill="#6366f1" radius={[4,4,0,0]} />
+                    <Bar dataKey="checkouts" name="Checkouts" fill="#6366f1" radius={[4,4,0,0]} stackId="a" />
+                    {peakDays.some(d => d.roomUse > 0) && (
+                      <Bar dataKey="roomUse" name="Room Use" fill="#a855f7" radius={[4,4,0,0]} stackId="a" />
+                    )}
                   </BarChart>
                 </ResponsiveContainer>
+                {peakDays.some(d => d.roomUse > 0) && (
+                  <p className="text-xs text-gray-500 mt-1 text-center">Stacked: checkouts + in-library room use</p>
+                )}
               </div>
             ) : extraLoaded2.patrons ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available</div>
@@ -3813,6 +3830,9 @@ export default function Dashboard() {
                     <Legend />
                     <Bar dataKey="items" name="Items" fill="#3b82f6" radius={[0,2,2,0]} />
                     <Bar dataKey="checkouts" name="Checkouts" fill="#10b981" radius={[0,2,2,0]} />
+                    {callNumData.some(r => (r.roomUse ?? 0) > 0) && (
+                      <Bar dataKey="roomUse" name="Room Use" fill="#a855f7" radius={[0,2,2,0]} />
+                    )}
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="mt-4 overflow-x-auto">
@@ -3823,21 +3843,32 @@ export default function Dashboard() {
                         <th className="text-right p-2 border border-gray-200">Items</th>
                         <th className="text-right p-2 border border-gray-200">Titles</th>
                         <th className="text-right p-2 border border-gray-200">Checkouts</th>
+                        {callNumData.some(r => (r.roomUse ?? 0) > 0) && (
+                          <th className="text-right p-2 border border-gray-200">Room Use</th>
+                        )}
+                        {callNumData.some(r => (r.roomUse ?? 0) > 0) && (
+                          <th className="text-right p-2 border border-gray-200">Total Use</th>
+                        )}
                         <th className="text-right p-2 border border-gray-200">Usage %</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {callNumData.map((r, i) => (
+                      {callNumData.map((r, i) => {
+                        const hasRoomUse = callNumData.some(x => (x.roomUse ?? 0) > 0);
+                        return (
                         <tr key={r.firstDigit} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                           <td className="p-2 border border-gray-200 font-medium text-gray-900">{r.range}</td>
                           <td className="p-2 border border-gray-200 text-right">{r.items.toLocaleString()}</td>
                           <td className="p-2 border border-gray-200 text-right">{r.titles.toLocaleString()}</td>
                           <td className="p-2 border border-gray-200 text-right text-emerald-700">{r.checkouts.toLocaleString()}</td>
+                          {hasRoomUse && <td className="p-2 border border-gray-200 text-right text-purple-600">{(r.roomUse ?? 0) > 0 ? (r.roomUse ?? 0).toLocaleString() : '—'}</td>}
+                          {hasRoomUse && <td className="p-2 border border-gray-200 text-right font-bold text-blue-700">{(r.totalUse ?? r.checkouts).toLocaleString()}</td>}
                           <td className="p-2 border border-gray-200 text-right font-semibold" style={{ color: r.utilRate > 50 ? '#dc2626' : r.utilRate > 20 ? '#d97706' : '#059669' }}>
                             {r.utilRate}%
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -3974,13 +4005,13 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* ── Top 20 Most Borrowed Titles ── */}
+          {/* ── Top 20 Most Used Titles ── */}
           {topTitles.length > 0 && (
             <div className="mb-8">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span>🏆</span>Top {topTitles.length} Most Borrowed Titles
+                <span>🏆</span>Top {topTitles.length} Most Used Titles
               </h2>
-              <p className="text-xs text-gray-600 mb-4">Titles with the highest total checkout count. Use this to identify high-demand materials that may need additional copies.</p>
+              <p className="text-xs text-gray-600 mb-4">Titles ranked by total use (checkouts + in-library room use). Use this to identify high-demand materials that may need additional copies.</p>
               <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead>
@@ -3988,29 +4019,45 @@ export default function Dashboard() {
                       <th className="text-center p-2 w-8">#</th>
                       <th className="text-left p-2">Title</th>
                       <th className="text-left p-2">Author</th>
-                      <th className="text-right p-2">Total Checkouts</th>
+                      <th className="text-right p-2">Checkouts</th>
+                      {topTitles.some(t => (t as unknown as {roomUse:number}).roomUse > 0) && (
+                        <th className="text-right p-2">Room Use</th>
+                      )}
+                      {topTitles.some(t => (t as unknown as {roomUse:number}).roomUse > 0) && (
+                        <th className="text-right p-2">Total Use</th>
+                      )}
                       <th className="text-right p-2">Currently Out</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {topTitles.map((t, i) => (
-                      <tr key={t.BibID} className={i % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'}>
-                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-700">{i + 1}</td>
-                        <td className="p-2 border-b border-gray-100 font-medium text-gray-900 max-w-xs">
-                          <div className="line-clamp-2">{t.Title}</div>
-                        </td>
-                        <td className="p-2 border-b border-gray-100 text-gray-600">{t.Author}</td>
-                        <td className="p-2 border-b border-gray-100 text-right">
-                          <span className="font-bold text-blue-700">{t.checkoutCount.toLocaleString()}</span>
-                        </td>
-                        <td className="p-2 border-b border-gray-100 text-right">
-                          {t.currentlyOut > 0
-                            ? <span className="font-semibold text-amber-600">{t.currentlyOut}</span>
-                            : <span className="text-gray-500">—</span>
-                          }
-                        </td>
-                      </tr>
-                    ))}
+                    {topTitles.map((t, i) => {
+                      const ru = (t as unknown as {roomUse:number;totalUse:number});
+                      const hasRoomUse = topTitles.some(x => (x as unknown as {roomUse:number}).roomUse > 0);
+                      return (
+                        <tr key={t.BibID} className={i % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'}>
+                          <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-700">{i + 1}</td>
+                          <td className="p-2 border-b border-gray-100 font-medium text-gray-900 max-w-xs">
+                            <div className="line-clamp-2">{t.Title}</div>
+                          </td>
+                          <td className="p-2 border-b border-gray-100 text-gray-600">{t.Author}</td>
+                          <td className="p-2 border-b border-gray-100 text-right">
+                            <span className="font-bold text-blue-700">{t.checkoutCount.toLocaleString()}</span>
+                          </td>
+                          {hasRoomUse && (
+                            <td className="p-2 border-b border-gray-100 text-right text-purple-600">{ru.roomUse > 0 ? ru.roomUse.toLocaleString() : '—'}</td>
+                          )}
+                          {hasRoomUse && (
+                            <td className="p-2 border-b border-gray-100 text-right font-bold text-emerald-700">{(ru.totalUse ?? t.checkoutCount).toLocaleString()}</td>
+                          )}
+                          <td className="p-2 border-b border-gray-100 text-right">
+                            {t.currentlyOut > 0
+                              ? <span className="font-semibold text-amber-600">{t.currentlyOut}</span>
+                              : <span className="text-gray-500">—</span>
+                            }
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -4074,26 +4121,38 @@ export default function Dashboard() {
           {/* ── Never-Borrowed Items ── */}
           <div className="mb-8">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-              <span>📦</span>Items Never Borrowed
+              <span>📦</span>Items Never Used
             </h2>
-            <p className="text-xs text-gray-600 mb-4">Titles/items acquired but never checked out — signals poor acquisitions or poor discoverability.</p>
+            <p className="text-xs text-gray-600 mb-4">Titles/items with no checkout AND no in-library use — signals poor acquisitions or poor discoverability. Items with room-use-only activity are counted separately.</p>
             {extra2Loading.neverBorrowed ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.neverBorrowed ? (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.neverBorrowed}</div>
             ) : neverBorrowed ? (
               <>
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                {!neverBorrowed.roomUseAware && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700 mb-3">
+                    In-library use data not available — counts below include items used in-library without checkout.
+                  </div>
+                )}
+                <div className="grid grid-cols-3 gap-4 mb-4">
                   <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-                    <div className="text-3xl font-bold text-red-600">{neverBorrowed.totals.neverBorrowedItems.toLocaleString()}</div>
-                    <div className="text-sm text-red-500 mt-1">Items Never Borrowed</div>
-                    <div className="text-xs text-gray-600">{pct(neverBorrowed.totals.neverBorrowedItems, neverBorrowed.totals.totalItems)} of collection</div>
+                    <div className="text-3xl font-bold text-red-600">{neverBorrowed.totals.neverUsedItems.toLocaleString()}</div>
+                    <div className="text-sm text-red-500 mt-1">Items Never Used</div>
+                    <div className="text-xs text-gray-600">{pct(neverBorrowed.totals.neverUsedItems, neverBorrowed.totals.totalItems)} of collection</div>
                   </div>
                   <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
-                    <div className="text-3xl font-bold text-orange-600">{neverBorrowed.totals.neverBorrowedTitles.toLocaleString()}</div>
-                    <div className="text-sm text-orange-500 mt-1">Titles Never Borrowed</div>
-                    <div className="text-xs text-gray-600">{pct(neverBorrowed.totals.neverBorrowedTitles, neverBorrowed.totals.totalTitles)} of titles</div>
+                    <div className="text-3xl font-bold text-orange-600">{neverBorrowed.totals.neverUsedTitles.toLocaleString()}</div>
+                    <div className="text-sm text-orange-500 mt-1">Titles Never Used</div>
+                    <div className="text-xs text-gray-600">{pct(neverBorrowed.totals.neverUsedTitles, neverBorrowed.totals.totalTitles)} of titles</div>
                   </div>
+                  {neverBorrowed.roomUseAware && neverBorrowed.totals.roomUseOnlyItems > 0 && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 text-center">
+                      <div className="text-3xl font-bold text-purple-600">{neverBorrowed.totals.roomUseOnlyItems.toLocaleString()}</div>
+                      <div className="text-sm text-purple-500 mt-1">Room-Use-Only Items</div>
+                      <div className="text-xs text-gray-600">used in-library, never checked out</div>
+                    </div>
+                  )}
                 </div>
                 {neverBorrowed.byDewey.length > 0 && (
                   <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
@@ -4103,8 +4162,8 @@ export default function Dashboard() {
                         {neverBorrowed.byDewey.map((r, i) => (
                           <tr key={r.firstDigit} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                             <td className="p-2 border-b border-gray-100 font-medium">{r.firstDigit}00s</td>
-                            <td className="p-2 border-b border-gray-100 text-right">{r.neverBorrowedTitles.toLocaleString()}</td>
-                            <td className="p-2 border-b border-gray-100 text-right font-semibold text-orange-700">{r.neverBorrowedItems.toLocaleString()}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.neverUsedTitles.toLocaleString()}</td>
+                            <td className="p-2 border-b border-gray-100 text-right font-semibold text-orange-700">{r.neverUsedItems.toLocaleString()}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -4843,10 +4902,10 @@ export default function Dashboard() {
                   <div className="bg-red-50 rounded-lg p-4 text-xs text-red-600">Never-borrowed error: {extra2Errors.neverBorrowed}</div>
                 ) : neverBorrowed ? (
                   <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                    <div className="text-xs font-semibold text-orange-800 uppercase tracking-wide mb-2">Items Never Borrowed</div>
-                    <div className="text-3xl font-bold text-orange-700 mb-1">{neverBorrowed.totals.neverBorrowedItems.toLocaleString()}</div>
-                    <div className="text-xs text-gray-700">of {neverBorrowed.totals.totalItems.toLocaleString()} total items ({neverBorrowed.totals.totalItems ? ((neverBorrowed.totals.neverBorrowedItems/neverBorrowed.totals.totalItems)*100).toFixed(1) : '—'}%)</div>
-                    <div className="text-xs text-gray-700 mt-1">{neverBorrowed.totals.neverBorrowedTitles.toLocaleString()} unique titles never borrowed</div>
+                    <div className="text-xs font-semibold text-orange-800 uppercase tracking-wide mb-2">Items Never Used</div>
+                    <div className="text-3xl font-bold text-orange-700 mb-1">{neverBorrowed.totals.neverUsedItems.toLocaleString()}</div>
+                    <div className="text-xs text-gray-700">of {neverBorrowed.totals.totalItems.toLocaleString()} total items ({neverBorrowed.totals.totalItems ? ((neverBorrowed.totals.neverUsedItems/neverBorrowed.totals.totalItems)*100).toFixed(1) : '—'}%)</div>
+                    <div className="text-xs text-gray-700 mt-1">{neverBorrowed.totals.neverUsedTitles.toLocaleString()} unique titles never used</div>
                   </div>
                 ) : null}
                 {/* Weeding Candidates */}

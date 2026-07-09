@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 import { supabaseServer } from '@/lib/supabase-server';
+import { getRoomUseConfig } from '@/lib/audit-room-use';
 
 export async function POST(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -14,6 +15,7 @@ export async function POST(request: Request) {
   try {
     const pool = await getPool();
     const p = await getSchemaPrefix();
+    const cfg = await getRoomUseConfig();
     const req = pool.request();
     req.input('monthsBack', sql.Int, monthsBack);
 
@@ -83,21 +85,42 @@ export async function POST(request: Request) {
     type MonthRow = { year: number; month: number; checkouts: number; checkins: number; activePatrons: number; newPatrons: number; newItems: number };
     const rows = result.recordset as MonthRow[];
 
-    const upsertRows = rows.map(r => ({
-      year:           r.year,
-      month:          r.month,
-      checkouts:      r.checkouts,
-      checkins:       r.checkins,
-      active_patrons: r.activePatrons,
-      new_patrons:    r.newPatrons,
-      new_items:      r.newItems,
-    }));
+    // Enrich with room use per month if Audit is available
+    const roomUseByMonth: Record<string, number> = {};
+    if (cfg) {
+      try {
+        const ruRes = await pool.request().query(`
+          SELECT YEAR(Created) AS yr, MONTH(Created) AS mo, COUNT(*) AS cnt
+          FROM ${t(p,'Audit')}
+          WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+          GROUP BY YEAR(Created), MONTH(Created)
+        `);
+        for (const r of ruRes.recordset as { yr: number; mo: number; cnt: number }[]) {
+          roomUseByMonth[`${r.yr}-${r.mo}`] = r.cnt;
+        }
+      } catch { /* skip */ }
+    }
+
+    const upsertRows = rows.map(r => {
+      const roomUse = roomUseByMonth[`${r.year}-${r.month}`] ?? 0;
+      return {
+        year:           r.year,
+        month:          r.month,
+        checkouts:      r.checkouts,
+        checkins:       r.checkins,
+        active_patrons: r.activePatrons,
+        new_patrons:    r.newPatrons,
+        new_items:      r.newItems,
+        room_use:       roomUse,
+        total_borrows:  r.checkouts + roomUse,
+      };
+    });
 
     const { error } = await supabaseServer.from('monthly_circulation').upsert(upsertRows, { onConflict: 'year,month' });
 
     if (error) throw new Error(error.message);
 
-    return NextResponse.json({ ok: true, rows: upsertRows.length });
+    return NextResponse.json({ ok: true, rows: upsertRows.length, roomUseAware: cfg !== null });
   } catch (err: unknown) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },

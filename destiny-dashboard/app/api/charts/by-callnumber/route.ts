@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { getRoomUseConfig } from '@/lib/audit-room-use';
 
 const DEWEY_LABELS: Record<string, string> = {
   '0': '000 – Computer Science & Generalities',
@@ -19,6 +20,7 @@ export async function GET() {
   try {
     const pool = await getPool();
     const p = await getSchemaPrefix();
+    const cfg = await getRoomUseConfig();
 
     const result = await pool.request().query(`
       SELECT
@@ -38,16 +40,43 @@ export async function GET() {
       ORDER BY firstDigit
     `);
 
-    const rows = result.recordset.map((r: { firstDigit: string; items: number; titles: number; checkouts: number }) => ({
-      range:     DEWEY_LABELS[r.firstDigit] ?? `${r.firstDigit}00s`,
-      firstDigit: r.firstDigit,
-      items:     r.items,
-      titles:    r.titles,
-      checkouts: r.checkouts,
-      utilRate:  r.items > 0 ? parseFloat(((r.checkouts / r.items) * 100).toFixed(1)) : 0,
-    }));
+    // Room use by Dewey class via Audit → Copy
+    const roomUseMap: Record<string, number> = {};
+    if (cfg) {
+      try {
+        const ruRes = await pool.request().query(`
+          SELECT
+            LEFT(LTRIM(c.CallNumber), 1) AS firstDigit,
+            COUNT(*) AS roomUse
+          FROM ${t(p,'Audit')} a
+          JOIN ${t(p,'Copy')} c ON c.CopyID = a.CopyID
+          WHERE a.TransType = ${cfg.checkInType} AND a.TransModifier = ${cfg.inLibMod}
+            AND c.CallNumber IS NOT NULL AND c.CallNumber != ''
+            AND LEFT(LTRIM(c.CallNumber), 1) BETWEEN '0' AND '9'
+          GROUP BY LEFT(LTRIM(c.CallNumber), 1)
+        `);
+        for (const r of ruRes.recordset as { firstDigit: string; roomUse: number }[]) {
+          roomUseMap[r.firstDigit] = r.roomUse;
+        }
+      } catch { /* skip */ }
+    }
 
-    return NextResponse.json(rows);
+    const rows = result.recordset.map((r: { firstDigit: string; items: number; titles: number; checkouts: number }) => {
+      const roomUse = roomUseMap[r.firstDigit] ?? 0;
+      const totalUse = r.checkouts + roomUse;
+      return {
+        range:      DEWEY_LABELS[r.firstDigit] ?? `${r.firstDigit}00s`,
+        firstDigit: r.firstDigit,
+        items:      r.items,
+        titles:     r.titles,
+        checkouts:  r.checkouts,
+        roomUse,
+        totalUse,
+        utilRate:   r.items > 0 ? parseFloat(((totalUse / r.items) * 100).toFixed(1)) : 0,
+      };
+    });
+
+    return NextResponse.json({ rows, roomUseAware: cfg !== null });
   } catch (err: unknown) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
