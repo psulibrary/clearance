@@ -1466,7 +1466,7 @@ export default function Dashboard() {
                   <tbody>
                     {activePatrons.map((ap, i) => (
                       <tr key={ap.PatronBarcode} className={i % 2 === 0 ? 'bg-white hover:bg-indigo-50' : 'bg-gray-50 hover:bg-indigo-50'}>
-                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-400">{i + 1}</td>
+                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-500">{i + 1}</td>
                         <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{ap.PatronBarcode}</td>
                         <td className="p-2 border-b border-gray-100 font-medium text-gray-900">{ap.LastName}, {ap.FirstName}</td>
                         <td className="p-2 border-b border-gray-100 text-gray-500">{ap.PatronType}</td>
@@ -2127,7 +2127,7 @@ export default function Dashboard() {
                   <tbody>
                     {topTitles.map((t, i) => (
                       <tr key={t.BibID} className={i % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'}>
-                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-400">{i + 1}</td>
+                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-500">{i + 1}</td>
                         <td className="p-2 border-b border-gray-100 font-medium text-gray-900 max-w-xs">
                           <div className="line-clamp-2">{t.Title}</div>
                         </td>
@@ -2190,7 +2190,7 @@ export default function Dashboard() {
                           <td className="p-2 border-b border-gray-100 font-medium">{r.range}</td>
                           <td className={`p-2 border-b border-gray-100 text-right font-bold ${r.avgAgeYears >= 15 ? 'text-red-600' : r.avgAgeYears >= 10 ? 'text-amber-600' : 'text-green-600'}`}>{r.avgAgeYears}</td>
                           <td className="p-2 border-b border-gray-100 text-right">{r.itemCount.toLocaleString()}</td>
-                          <td className="p-2 border-b border-gray-100 text-right text-gray-400">{r.oldestYear}</td>
+                          <td className="p-2 border-b border-gray-100 text-right text-gray-600">{r.oldestYear}</td>
                           <td className="p-2 border-b border-gray-100 text-right">{r.newestYear}</td>
                         </tr>
                       ))}
@@ -2288,9 +2288,9 @@ export default function Dashboard() {
                         <tr key={w.CopyBarcode} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                           <td className="p-2 border-b border-gray-100 font-medium max-w-xs truncate">{w.Title}</td>
                           <td className="p-2 border-b border-gray-100 text-gray-500">{w.Author}</td>
-                          <td className="p-2 border-b border-gray-100 font-mono text-xs">{w.CallNumber}</td>
-                          <td className="p-2 border-b border-gray-100 text-right text-gray-400">{w.Acquired}</td>
-                          <td className="p-2 border-b border-gray-100 text-right text-gray-400">{w.LastBorrowed ?? '—'}</td>
+                          <td className="p-2 border-b border-gray-100 font-mono text-xs text-gray-700">{w.CallNumber}</td>
+                          <td className="p-2 border-b border-gray-100 text-right text-gray-600">{w.Acquired}</td>
+                          <td className="p-2 border-b border-gray-100 text-right text-gray-600">{w.LastBorrowed ?? '—'}</td>
                           <td className="p-2 border-b border-gray-100 text-right font-semibold text-yellow-700">{w.daysSinceActivity.toLocaleString()}</td>
                         </tr>
                       ))}

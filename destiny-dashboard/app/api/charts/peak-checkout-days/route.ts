@@ -11,11 +11,11 @@ export async function GET() {
 
     const result = await pool.request().query(`
       SELECT
-        DATEPART(weekday, DateReturned) - 1  AS dayOfWeek,
-        COUNT(*)                              AS checkouts
+        DATEPART(weekday, DateOut) - 1  AS dayOfWeek,
+        COUNT(*)                         AS checkouts
       FROM ${t(p,'Copy')}
-      WHERE DateReturned IS NOT NULL
-      GROUP BY DATEPART(weekday, DateReturned)
+      WHERE DateOut IS NOT NULL
+      GROUP BY DATEPART(weekday, DateOut)
       ORDER BY dayOfWeek
     `);
 
