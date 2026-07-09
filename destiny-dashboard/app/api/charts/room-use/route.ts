@@ -3,6 +3,11 @@ import { NextRequest } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 
+// In Destiny, in-library use transactions have:
+//   TransType    = 'Checked in'
+//   TransModifier = 'In-Library'
+// This is set when staff use Check In with "Record in-library use" checked.
+
 export async function GET(request: NextRequest) {
   const year = parseInt(request.nextUrl.searchParams.get('year') || String(new Date().getFullYear()));
 
@@ -13,145 +18,122 @@ export async function GET(request: NextRequest) {
     const req = pool.request();
     req.input('year', sql.Int, year);
 
-    // Discover columns on CopyTransaction to find the in-library use flag
+    // Discover column names on CopyTransaction
     const ctColsRes = await pool.request().query(`
-      SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA = '${schema}' AND TABLE_NAME = 'CopyTransaction'
       ORDER BY ORDINAL_POSITION
     `);
-    const ctCols: { COLUMN_NAME: string; DATA_TYPE: string }[] = ctColsRes.recordset;
-    const ctColNames = ctCols.map(c => c.COLUMN_NAME.toLowerCase());
+    const ctCols: string[] = ctColsRes.recordset.map((r: { COLUMN_NAME: string }) => r.COLUMN_NAME.toLowerCase());
 
     if (ctCols.length === 0) {
-      // Table doesn't exist — return debug info
-      const allTablesRes = await pool.request().query(`
-        SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_SCHEMA = '${schema}' ORDER BY TABLE_NAME
-      `);
-      return NextResponse.json({
-        source: 'none',
-        year,
-        message: 'CopyTransaction table not found.',
-        debug: { allTables: allTablesRes.recordset.map((r: { TABLE_NAME: string }) => r.TABLE_NAME) },
-      });
+      return NextResponse.json({ source: 'none', year, message: 'CopyTransaction table not found in this Destiny schema.' });
     }
 
-    // Find the in-library use flag column (bit/boolean that marks in-library vs checkout)
-    const inLibFlag = ctCols.find(c => {
-      const n = c.COLUMN_NAME.toLowerCase();
-      return n.includes('inlibrary') || n.includes('localuse') || n.includes('inhouse')
-        || n.includes('roomuse') || n === 'islocaluse' || n === 'isinlibrary'
-        || n === 'transactiontype' || n === 'type' || n === 'circtypeid';
-    })?.COLUMN_NAME ?? null;
+    // Map to actual column names (case-sensitive for SQL Server)
+    const actual = (candidates: string[]): string | null => {
+      const colsOrig: string[] = ctColsRes.recordset.map((r: { COLUMN_NAME: string }) => r.COLUMN_NAME);
+      for (const c of candidates) {
+        const found = colsOrig.find((col: string) => col.toLowerCase() === c);
+        if (found) return found;
+      }
+      return null;
+    };
 
-    // Find the date column
-    const dateCol = ctCols.find(c => {
-      const n = c.COLUMN_NAME.toLowerCase();
-      return n === 'transactiondate' || n === 'date' || n === 'dateout'
-        || n === 'datecheckedout' || n === 'created' || n === 'transdate';
-    })?.COLUMN_NAME ?? null;
-
-    // Find patron/copy link columns
-    const copyIdCol  = ctCols.find(c => c.COLUMN_NAME.toLowerCase() === 'copyid')?.COLUMN_NAME ?? null;
-    const patronIdCol = ctCols.find(c => c.COLUMN_NAME.toLowerCase() === 'patronid')?.COLUMN_NAME ?? null;
+    const dateCol     = actual(['transdate','transactiondate','date','dateout','created','datecreated']);
+    const typeCol     = actual(['transtype','transactiontype','type','circtranstype']);
+    const modCol      = actual(['transmodifier','modifier','transmod','transactionmodifier']);
+    const copyIdCol   = actual(['copyid']);
+    const patronIdCol = actual(['patronid']);
+    const titleCol    = actual(['title']);
+    const authorCol   = actual(['author']);
+    const patronTypeCol = actual(['patrontype','patrontyped','patrontypedescription']);
 
     if (!dateCol) {
-      return NextResponse.json({
-        source: 'none',
-        year,
-        message: 'CopyTransaction table found but no date column identified.',
-        debug: { ctCols: ctColNames },
-      });
+      return NextResponse.json({ source: 'none', year, message: 'No date column found on CopyTransaction.', debug: { ctCols } });
     }
 
-    // Determine WHERE clause for in-library use records
-    // Destiny uses a flag column or a specific transaction type value
-    let inLibWhere = '';
-    if (inLibFlag) {
-      const fl = inLibFlag.toLowerCase();
-      if (fl.includes('type') || fl === 'circtypeid') {
-        // TransactionType or CircTypeID — in-library use is typically type 3 or 'L'
-        // Try both; we'll return counts by type so the user can confirm
-        inLibWhere = ''; // no filter yet — return all and let counts guide us
-      } else {
-        // Boolean flag
-        inLibWhere = `AND ${inLibFlag} = 1`;
-      }
-    }
+    // WHERE clause: TransModifier = 'In-Library' (and optionally TransType = 'Checked in')
+    const inLibWhere = modCol
+      ? `WHERE ${modCol} = 'In-Library' AND YEAR(${dateCol}) = @year`
+      : typeCol
+        ? `WHERE ${typeCol} = 'Checked in' AND YEAR(${dateCol}) = @year`
+        : `WHERE YEAR(${dateCol}) = @year`;
 
-    // ── Summary: total in-library uses this year ──
+    const inLibWhereAllTime = modCol
+      ? `WHERE ${modCol} = 'In-Library'`
+      : typeCol
+        ? `WHERE ${typeCol} = 'Checked in'`
+        : '';
+
+    // ── Summary ──
     const summary = await req.query(`
-      SELECT COUNT(*) AS totalThisYear
-      FROM ${t(p,'CopyTransaction')}
-      WHERE YEAR(${dateCol}) = @year ${inLibWhere}
+      SELECT COUNT(*) AS totalThisYear FROM ${t(p,'CopyTransaction')} ${inLibWhere}
+    `);
+    const allTime = await req.query(`
+      SELECT COUNT(*) AS totalAllTime FROM ${t(p,'CopyTransaction')} ${inLibWhereAllTime}
     `);
 
     // ── Monthly breakdown ──
     const byMonth = await req.query(`
       SELECT MONTH(${dateCol}) AS mo, COUNT(*) AS uses
-      FROM ${t(p,'CopyTransaction')}
-      WHERE YEAR(${dateCol}) = @year ${inLibWhere}
-      GROUP BY MONTH(${dateCol})
-      ORDER BY mo
+      FROM ${t(p,'CopyTransaction')} ${inLibWhere}
+      GROUP BY MONTH(${dateCol}) ORDER BY mo
     `);
 
-    // ── All-time total ──
-    const allTime = await req.query(`
-      SELECT COUNT(*) AS totalAllTime
-      FROM ${t(p,'CopyTransaction')} ${inLibWhere ? `WHERE ${inLibWhere.replace('AND ','')}` : ''}
-    `);
-
-    // ── If TransactionType exists, show distribution so we can identify the right value ──
-    let typeBreakdown: { type: unknown; cnt: number }[] = [];
-    if (inLibFlag && (inLibFlag.toLowerCase().includes('type') || inLibFlag.toLowerCase() === 'circtypeid')) {
-      const tb = await req.query(`
-        SELECT TOP 20 ${inLibFlag} AS type, COUNT(*) AS cnt
-        FROM ${t(p,'CopyTransaction')}
-        WHERE YEAR(${dateCol}) = @year
-        GROUP BY ${inLibFlag}
-        ORDER BY cnt DESC
-      `);
-      typeBreakdown = tb.recordset;
-    }
-
-    // ── Top titles by in-library use (if CopyID links to Copy/BibMaster) ──
-    let topTitles: { Title: string; Author: string; inLibraryUses: number; copies: number }[] = [];
-    if (copyIdCol) {
-      try {
-        const tt = await req.query(`
-          SELECT TOP 20 bm.Title, bm.Author,
-            COUNT(ct.${copyIdCol}) AS inLibraryUses,
-            COUNT(DISTINCT ct.${copyIdCol}) AS copies
-          FROM ${t(p,'CopyTransaction')} ct
-          JOIN ${t(p,'Copy')} c ON c.CopyID = ct.${copyIdCol}
-          JOIN ${t(p,'BibMaster')} bm ON bm.BibID = c.BibID
-          WHERE YEAR(ct.${dateCol}) = @year ${inLibWhere}
-          GROUP BY bm.Title, bm.Author
-          ORDER BY inLibraryUses DESC
-        `);
-        topTitles = tt.recordset;
-      } catch (_) {
-        // join failed — skip top titles
-      }
-    }
-
-    // ── Top patron types using in-library ──
+    // ── By patron type ──
     let byPatronType: { patronType: string; uses: number }[] = [];
-    if (patronIdCol) {
+    if (patronTypeCol) {
+      // patron type stored directly on CopyTransaction
+      const pt = await req.query(`
+        SELECT ${patronTypeCol} AS patronType, COUNT(*) AS uses
+        FROM ${t(p,'CopyTransaction')} ${inLibWhere}
+        GROUP BY ${patronTypeCol} ORDER BY uses DESC
+      `);
+      byPatronType = pt.recordset;
+    } else if (patronIdCol) {
+      // join to SitePatron → PatronType
       try {
         const pt = await req.query(`
           SELECT sp.PatronTypeDescription AS patronType, COUNT(*) AS uses
           FROM ${t(p,'CopyTransaction')} ct
           JOIN ${t(p,'SitePatron')} spt ON spt.PatronID = ct.${patronIdCol}
           JOIN ${t(p,'PatronType')} sp ON sp.PatronTypeID = spt.PatronTypeID
-          WHERE YEAR(ct.${dateCol}) = @year ${inLibWhere}
-          GROUP BY sp.PatronTypeDescription
-          ORDER BY uses DESC
+          ${inLibWhere.replace('WHERE', 'WHERE ct.'+ dateCol + ' IS NOT NULL AND').replace('YEAR('+dateCol+')', 'YEAR(ct.'+dateCol+')')}
+          GROUP BY sp.PatronTypeDescription ORDER BY uses DESC
         `);
         byPatronType = pt.recordset;
-      } catch (_) {
-        // join failed — skip
-      }
+      } catch (_) { /* skip if join fails */ }
+    }
+
+    // ── Top titles ──
+    let topTitles: { Title: string; Author: string; inLibraryUses: number }[] = [];
+    if (titleCol) {
+      // Title stored directly on CopyTransaction
+      const tt = await req.query(`
+        SELECT TOP 20
+          ${titleCol} AS Title,
+          ${authorCol ? authorCol + ' AS Author' : 'NULL AS Author'},
+          COUNT(*) AS inLibraryUses
+        FROM ${t(p,'CopyTransaction')} ${inLibWhere}
+        GROUP BY ${titleCol}${authorCol ? ', ' + authorCol : ''}
+        ORDER BY inLibraryUses DESC
+      `);
+      topTitles = tt.recordset;
+    } else if (copyIdCol) {
+      // Join CopyID → Copy → BibMaster
+      try {
+        const tt = await req.query(`
+          SELECT TOP 20 bm.Title, bm.Author, COUNT(*) AS inLibraryUses
+          FROM ${t(p,'CopyTransaction')} ct
+          JOIN ${t(p,'Copy')} c ON c.CopyID = ct.${copyIdCol}
+          JOIN ${t(p,'BibMaster')} bm ON bm.BibID = c.BibID
+          ${inLibWhere.replace('WHERE','WHERE ct.'+ dateCol + ' IS NOT NULL AND').replace('YEAR('+dateCol+')','YEAR(ct.'+dateCol+')')}
+          GROUP BY bm.Title, bm.Author
+          ORDER BY inLibraryUses DESC
+        `);
+        topTitles = tt.recordset;
+      } catch (_) { /* skip */ }
     }
 
     return NextResponse.json({
@@ -160,15 +142,9 @@ export async function GET(request: NextRequest) {
       totalThisYear: summary.recordset[0]?.totalThisYear ?? 0,
       totalAllTime: allTime.recordset[0]?.totalAllTime ?? 0,
       byMonth: byMonth.recordset,
-      topTitles,
       byPatronType,
-      debug: {
-        ctCols: ctColNames,
-        dateCol,
-        inLibFlag,
-        inLibWhere,
-        typeBreakdown: typeBreakdown.length ? typeBreakdown : undefined,
-      },
+      topTitles,
+      debug: { ctCols, dateCol, typeCol, modCol, patronTypeCol, copyIdCol, titleCol },
     });
 
   } catch (err: unknown) {
