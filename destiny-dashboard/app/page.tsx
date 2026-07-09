@@ -2274,6 +2274,20 @@ export default function Dashboard() {
   const [patronTiers, setPatronTiers]     = useState<{totalPatrons:number;activeThisYear:number;lapsed:number;neverBorrowed:number;newThisYear:number;year:number}|null>(null);
   const [yoyLoaded, setYoyLoaded]         = useState(false);
 
+  type RoomUseData = {
+    source: 'transaction_table' | 'copy_column' | 'none';
+    year: number;
+    totalThisYear?: number;
+    totalAllTime?: number;
+    titlesWithUse?: number;
+    yearTotal?: number | null;
+    topTitles?: { Title: string; Author: string; inLibraryUses: number; copies: number }[];
+    byMonth?: { mo: number; uses: number }[];
+    message?: string;
+  };
+  const [roomUse, setRoomUse]             = useState<RoomUseData | null>(null);
+  const [roomUseLoaded, setRoomUseLoaded] = useState(false);
+
   type MonthlyRow = { year: number; month: number; checkouts: number; checkins: number; active_patrons: number; new_patrons: number; new_items: number };
   type DailySnap  = { snapshot_date: string; total_items: number; checked_out: number; active_patrons_30d: number; checkouts_30d: number; total_patrons: number };
   const [trendsLoaded,    setTrendsLoaded]    = useState(false);
@@ -2398,7 +2412,11 @@ export default function Dashboard() {
         });
       })();
     }
-  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded]);
+    if (activeTab === 'patrons' && !roomUseLoaded) {
+      setRoomUseLoaded(true);
+      fetch(`/api/charts/room-use?year=${year}`).then(r => r.json()).then(setRoomUse).catch(() => {});
+    }
+  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded, roomUseLoaded]);
 
   const s = stats;
   const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
@@ -3160,6 +3178,132 @@ export default function Dashboard() {
             ) : extraLoaded2.patrons ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available</div>
             ) : null}
+          </div>
+
+          {/* ── In-Library (Room) Use ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <span>🪑</span>In-Library (Room) Use
+            </h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Items read inside the library without checkout. Recorded by staff via <strong>Circulation → Check In</strong> with <em>"Record in-library use"</em> checked before re-shelving.
+            </p>
+
+            {!roomUseLoaded && (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading in-library use data…</div>
+            )}
+
+            {roomUse && roomUse.source === 'none' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                <div className="font-semibold text-amber-800 mb-1">⚠ No in-library use data found in Destiny</div>
+                <p className="text-sm text-amber-700">{roomUse.message}</p>
+                <div className="mt-3 bg-white border border-amber-200 rounded-lg p-4 text-sm text-gray-700">
+                  <p className="font-semibold mb-2">How to start tracking:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-gray-600">
+                    <li>At the end of each day, collect all items left on tables and reading areas</li>
+                    <li>Go to <strong>Destiny → Circulation → Check In</strong></li>
+                    <li>Make sure <strong>"Record in-library use"</strong> ✓ is checked (as shown in your screenshot)</li>
+                    <li>Scan each item barcode before re-shelving it</li>
+                    <li>Data will appear here once scanning begins</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+
+            {roomUse && roomUse.source !== 'none' && (
+              <div>
+                {/* Summary cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                  {roomUse.source === 'transaction_table' && (
+                    <>
+                      <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                        <div className="text-2xl font-bold text-violet-700">{(roomUse.totalThisYear ?? 0).toLocaleString()}</div>
+                        <div className="text-xs text-gray-500 mt-1">In-Library Uses {year}</div>
+                      </div>
+                      <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                        <div className="text-2xl font-bold text-gray-700">{(roomUse.byMonth?.length ?? 0)}</div>
+                        <div className="text-xs text-gray-500 mt-1">Months with Data</div>
+                      </div>
+                    </>
+                  )}
+                  {roomUse.source === 'copy_column' && (
+                    <>
+                      <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                        <div className="text-2xl font-bold text-violet-700">{(roomUse.totalAllTime ?? 0).toLocaleString()}</div>
+                        <div className="text-xs text-gray-500 mt-1">Total In-Library Uses</div>
+                        <div className="text-xs text-gray-400">(all time)</div>
+                      </div>
+                      <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                        <div className="text-2xl font-bold text-indigo-700">{(roomUse.titlesWithUse ?? 0).toLocaleString()}</div>
+                        <div className="text-xs text-gray-500 mt-1">Titles Used In-Library</div>
+                      </div>
+                      {roomUse.yearTotal != null && (
+                        <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                          <div className="text-2xl font-bold text-emerald-700">{roomUse.yearTotal.toLocaleString()}</div>
+                          <div className="text-xs text-gray-500 mt-1">In-Library Uses {year}</div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Monthly trend (transaction table only) */}
+                {roomUse.byMonth && roomUse.byMonth.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-3">Monthly In-Library Use — {year}</p>
+                    <div className="flex items-end gap-1 h-24">
+                      {(() => {
+                        const max = Math.max(...roomUse.byMonth!.map(r => r.uses), 1);
+                        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                        return Array.from({ length: 12 }, (_, i) => {
+                          const row = roomUse.byMonth!.find(r => r.mo === i + 1);
+                          const h = row ? Math.max(4, (row.uses / max) * 80) : 0;
+                          return (
+                            <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                              <div className="text-xs text-gray-500">{row ? row.uses : ''}</div>
+                              <div className="w-full rounded-t" style={{ height: `${h}px`, backgroundColor: row ? '#7c3aed' : '#e5e7eb' }} title={row ? `${months[i]}: ${row.uses}` : months[i]} />
+                              <div className="text-xs text-gray-400">{months[i].slice(0,1)}</div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Top titles */}
+                {roomUse.topTitles && roomUse.topTitles.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm p-5">
+                    <p className="text-sm font-semibold text-gray-700 mb-3">Most-Used Titles In-Library (Top 20)</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                            <th className="text-left p-2 border border-gray-200">#</th>
+                            <th className="text-left p-2 border border-gray-200">Title</th>
+                            <th className="text-left p-2 border border-gray-200">Author</th>
+                            <th className="text-right p-2 border border-gray-200">In-Library Uses</th>
+                            <th className="text-right p-2 border border-gray-200">Copies</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {roomUse.topTitles.map((r, i) => (
+                            <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="p-2 border border-gray-200 text-gray-400 font-mono">{i + 1}</td>
+                              <td className="p-2 border border-gray-200 font-medium text-gray-900">{r.Title}</td>
+                              <td className="p-2 border border-gray-200 text-gray-600">{r.Author}</td>
+                              <td className="p-2 border border-gray-200 text-right font-bold text-violet-700">{r.inLibraryUses.toLocaleString()}</td>
+                              <td className="p-2 border border-gray-200 text-right text-gray-600">{r.copies}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">High in-library use with no checkouts = strong candidate for additional copies or course reserve listing.</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
         </div>
