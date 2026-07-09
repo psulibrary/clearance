@@ -292,6 +292,376 @@ function RecommendedActions({ stats, chedStats, year }: { stats: Stats; chedStat
   );
 }
 
+// ── Strategic Planning Tab ───────────────────────────────────────────────────
+
+type StrategicStored = { enrolledStudents: number | null; annualBudget: number | null };
+
+function StrategicTab({
+  stats,
+  mainStats,
+  year,
+}: {
+  stats: Record<string, number> | null;
+  mainStats: Stats | null;
+  year: number;
+}) {
+  const [stored, setStored]           = useState<StrategicStored>({ enrolledStudents: null, annualBudget: null });
+  const [sbLoading, setSbLoading]     = useState(true);
+  const [sbError, setSbError]         = useState<string | null>(null);
+  const [editing, setEditing]         = useState<'enrolledStudents' | 'annualBudget' | null>(null);
+  const [draft, setDraft]             = useState('');
+  const [saving, setSaving]           = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const { data, error } = await supabase
+          .from('green_metrics')
+          .select('metric_id, value')
+          .in('metric_id', ['STRAT-ENROLLED', 'STRAT-BUDGET'])
+          .order('recorded_on', { ascending: false });
+        if (error) { setSbError(error.message); return; }
+        const map: StrategicStored = { enrolledStudents: null, annualBudget: null };
+        for (const row of data ?? []) {
+          if (row.metric_id === 'STRAT-ENROLLED' && map.enrolledStudents === null)
+            map.enrolledStudents = Number(row.value);
+          if (row.metric_id === 'STRAT-BUDGET' && map.annualBudget === null)
+            map.annualBudget = Number(row.value);
+        }
+        setStored(map);
+      } catch (err: unknown) {
+        setSbError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setSbLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  async function saveManual(key: 'enrolledStudents' | 'annualBudget') {
+    const num = parseFloat(draft);
+    if (isNaN(num) || num <= 0) { setEditing(null); return; }
+    setSaving(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const metricId = key === 'enrolledStudents' ? 'STRAT-ENROLLED' : 'STRAT-BUDGET';
+      const today = new Date().toISOString().slice(0, 10);
+      await supabase.from('green_metrics').upsert(
+        { metric_id: metricId, recorded_on: today, value: num, notes: null },
+        { onConflict: 'metric_id,recorded_on' },
+      );
+      setStored(prev => ({ ...prev, [key]: num }));
+    } catch {
+      // ignore save errors silently
+    } finally {
+      setSaving(false);
+      setEditing(null);
+    }
+  }
+
+  if (!stats) {
+    return (
+      <div className="flex items-center justify-center py-20 text-gray-400">
+        <svg className="animate-spin w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        </svg>
+        Loading strategic metrics…
+      </div>
+    );
+  }
+
+  const enrolled = stored.enrolledStudents;
+  const budget   = stored.annualBudget;
+
+  const totalItems        = stats.totalItems ?? 0;
+  const totalTitles       = stats.totalTitles ?? 0;
+  const totalPatrons      = stats.totalPatrons ?? 0;
+  const activeBorrowers   = stats.activeBorrowersThisYear ?? 0;
+  const checkoutsThisYear = stats.checkoutsThisYear ?? 0;
+  const itemsLast10Years  = stats.itemsLast10Years ?? 0;
+  const overdueCount      = stats.overdueCount ?? 0;
+  const newPatrons        = stats.newPatronsThisYear ?? 0;
+
+  // KPI computations
+  const activeBorrowerRate   = totalPatrons > 0 ? (activeBorrowers / totalPatrons) * 100 : null;
+  const perCapitaCirc        = enrolled && enrolled > 0 ? checkoutsThisYear / enrolled : null;
+  const collectionCurrency   = totalItems > 0 ? (itemsLast10Years / totalItems) * 100 : null;
+  const costPerCirculation   = budget && checkoutsThisYear > 0 ? budget / checkoutsThisYear : null;
+  const duplicateRatio       = totalTitles > 0 ? totalItems / totalTitles : null;
+  const overdueRate          = checkoutsThisYear > 0 ? (overdueCount / checkoutsThisYear) * 100 : null;
+
+  type KPI = {
+    id: string;
+    name: string;
+    icon: string;
+    value: number | null;
+    unit: string;
+    baseline: number;
+    goal: number;
+    lowerIsBetter: boolean;
+    source: string;
+    desc: string;
+    note?: string;
+  };
+
+  const kpis: KPI[] = [
+    {
+      id: 'active-borrower-rate',
+      name: 'Active Borrower Rate',
+      icon: '👥',
+      value: activeBorrowerRate,
+      unit: '%',
+      baseline: 30,
+      goal: 65,
+      lowerIsBetter: false,
+      source: 'ILS — auto-computed',
+      desc: 'Percentage of registered patrons who borrowed at least one item this year. A low rate signals untapped patronage.',
+      note: `${fmt(activeBorrowers)} active of ${fmt(totalPatrons)} total patrons`,
+    },
+    {
+      id: 'per-capita-circ',
+      name: 'Per-Capita Circulation',
+      icon: '📖',
+      value: perCapitaCirc,
+      unit: 'checkouts/student',
+      baseline: 2,
+      goal: 6,
+      lowerIsBetter: false,
+      source: enrolled ? 'ILS ÷ enrolled students (manual)' : 'Needs enrolled student count ↓',
+      desc: 'Annual checkouts ÷ enrolled student headcount. UNESCO/ISO benchmarks suggest ≥5 for academic libraries.',
+      note: enrolled ? `${fmt(checkoutsThisYear)} checkouts ÷ ${fmt(enrolled)} students` : undefined,
+    },
+    {
+      id: 'collection-currency',
+      name: 'Collection Currency Rate',
+      icon: '🆕',
+      value: collectionCurrency,
+      unit: '% items ≤10 yrs old',
+      baseline: 35,
+      goal: 60,
+      lowerIsBetter: false,
+      source: 'ILS — auto-computed',
+      desc: 'Percentage of the active collection acquired in the last 10 years. Outdated collections fail accreditation reviews.',
+      note: `${fmt(itemsLast10Years)} of ${fmt(totalItems)} items acquired since ${year - 10}`,
+    },
+    {
+      id: 'cost-per-circ',
+      name: 'Cost per Circulation',
+      icon: '💰',
+      value: costPerCirculation,
+      unit: '₱ / checkout',
+      baseline: 500,
+      goal: 200,
+      lowerIsBetter: true,
+      source: budget ? 'ILS ÷ annual budget (manual)' : 'Needs annual library budget ↓',
+      desc: 'Annual library budget ÷ total checkouts. Measures ROI of library spend. Lower means each item borrowed costs less.',
+      note: budget ? `₱${budget.toLocaleString()} budget ÷ ${fmt(checkoutsThisYear)} checkouts` : undefined,
+    },
+    {
+      id: 'duplicate-ratio',
+      name: 'Duplicate Ratio',
+      icon: '📚',
+      value: duplicateRatio,
+      unit: 'items / title',
+      baseline: 1.5,
+      goal: 2.5,
+      lowerIsBetter: false,
+      source: 'ILS — auto-computed',
+      desc: 'Total items ÷ unique titles. A ratio below 1.5 means too few copies; above 4 may indicate redundant purchasing.',
+      note: `${fmt(totalItems)} items across ${fmt(totalTitles)} titles`,
+    },
+    {
+      id: 'overdue-rate',
+      name: 'Overdue Rate',
+      icon: '⏰',
+      value: overdueRate,
+      unit: '% of active loans',
+      baseline: 20,
+      goal: 5,
+      lowerIsBetter: true,
+      source: 'ILS — auto-computed',
+      desc: 'Overdue items as a percentage of total checkouts this year. High rates signal poor return compliance or overly long loan periods.',
+      note: `${fmt(overdueCount)} overdue items`,
+    },
+  ];
+
+  function ManualInput({ fieldKey, label, placeholder, prefix }: { fieldKey: 'enrolledStudents' | 'annualBudget'; label: string; placeholder: string; prefix?: string }) {
+    const val = stored[fieldKey];
+    const isEdit = editing === fieldKey;
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4">
+        <div>
+          <div className="text-sm font-semibold text-gray-700">{label}</div>
+          {val !== null
+            ? <div className="text-xl font-bold text-indigo-700 mt-0.5">{prefix ?? ''}{val.toLocaleString()}</div>
+            : <div className="text-sm text-gray-400 italic mt-0.5">Not set</div>
+          }
+        </div>
+        {!sbError && (
+          isEdit ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="number" step="1" min="1"
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                className="w-32 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                placeholder={placeholder}
+                autoFocus
+              />
+              <button onClick={() => saveManual(fieldKey)} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button onClick={() => setEditing(null)} className="text-xs text-gray-500 hover:text-gray-700 px-2">Cancel</button>
+            </div>
+          ) : (
+            <button onClick={() => { setDraft(val !== null ? String(val) : ''); setEditing(fieldKey); }}
+              className="text-xs font-semibold border border-gray-300 hover:border-indigo-400 hover:text-indigo-700 text-gray-600 px-3 py-1.5 rounded-lg transition-colors">
+              {val !== null ? '✏️ Update' : '+ Enter'}
+            </button>
+          )
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="mb-6 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl p-5 text-white">
+        <h2 className="text-lg font-bold mb-1">📊 Strategic Planning Dashboard</h2>
+        <p className="text-sm text-indigo-100">
+          Key Performance Indicators for institutional planning, accreditation, and budget justification.
+          Auto-computed metrics come directly from your ILS. Enter your enrolled student count and annual budget to unlock per-capita and cost metrics.
+        </p>
+      </div>
+
+      {/* Manual inputs */}
+      <div className="mb-6">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">📝 Manual Inputs (stored in Supabase)</h3>
+        {sbError && (
+          <div className="mb-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-xs text-amber-800">
+            ⚠️ Supabase not connected — manual inputs cannot be saved. {sbError}
+          </div>
+        )}
+        {sbLoading ? (
+          <div className="text-sm text-gray-400">Loading saved values…</div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <ManualInput fieldKey="enrolledStudents" label="Total Enrolled Students" placeholder="e.g. 3500" />
+            <ManualInput fieldKey="annualBudget" label="Annual Library Budget (₱)" placeholder="e.g. 500000" prefix="₱" />
+          </div>
+        )}
+      </div>
+
+      {/* KPI Cards */}
+      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">📈 KPI Metrics ({year})</h3>
+      <div className="grid grid-cols-1 gap-4 mb-8">
+        {kpis.map(kpi => {
+          const lob = kpi.lowerIsBetter;
+          const pct = kpi.value !== null
+            ? lob
+              ? Math.min(100, Math.max(0, ((kpi.baseline - kpi.value) / (kpi.baseline - kpi.goal)) * 100))
+              : Math.min(100, Math.max(0, ((kpi.value - kpi.baseline) / (kpi.goal - kpi.baseline)) * 100))
+            : null;
+          const achieved = pct !== null && pct >= 100;
+          const needsInput = kpi.value === null && (kpi.id === 'per-capita-circ' || kpi.id === 'cost-per-circ');
+
+          return (
+            <div key={kpi.id} className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-lg">{kpi.icon}</span>
+                    <span className="font-semibold text-gray-900 text-sm">{kpi.name}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${kpi.source.includes('manual') || kpi.source.includes('Needs') ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {kpi.source.includes('ILS') ? 'ILS auto' : 'Manual input'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">{kpi.desc}</p>
+                  {kpi.note && <p className="text-xs text-gray-400 mt-0.5 font-mono">📌 {kpi.note}</p>}
+                </div>
+                <div className="text-right shrink-0 min-w-[110px]">
+                  {kpi.value !== null ? (
+                    <>
+                      <div className={`text-2xl font-bold ${achieved ? 'text-emerald-600' : 'text-indigo-700'}`}>
+                        {kpi.id === 'cost-per-circ' ? `₱${kpi.value.toFixed(0)}` : kpi.value.toFixed(kpi.value < 10 ? 2 : 1)}
+                      </div>
+                      <div className="text-xs text-gray-400">{kpi.unit}</div>
+                    </>
+                  ) : needsInput ? (
+                    <div className="text-xs text-amber-600 italic text-right">Enter value above</div>
+                  ) : (
+                    <div className="text-sm text-gray-400 italic">No data</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div>
+                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                  <span>Baseline: <strong>{kpi.id === 'cost-per-circ' ? `₱${kpi.baseline}` : kpi.baseline}</strong></span>
+                  <span className="font-semibold text-indigo-700">Goal: {kpi.id === 'cost-per-circ' ? `₱${kpi.goal}` : kpi.goal} {kpi.id !== 'cost-per-circ' ? kpi.unit : ''}</span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                  {pct !== null
+                    ? <div className={`h-2.5 rounded-full transition-all ${achieved ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${Math.max(3, pct)}%` }} />
+                    : <div className="h-2.5 w-8 rounded-full bg-gray-200 opacity-60" />
+                  }
+                </div>
+                {pct !== null && (
+                  <p className="text-xs mt-1">
+                    {achieved
+                      ? <span className="text-emerald-600 font-semibold">✓ Goal achieved!</span>
+                      : <span className="text-gray-500">{pct.toFixed(0)}% progress toward goal</span>
+                    }
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Summary scorecard */}
+      <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-4">
+        <h3 className="text-sm font-bold text-indigo-800 mb-3">📋 Summary Scorecard</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="bg-white rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-gray-800">{fmt(totalItems)}</div>
+            <div className="text-xs text-gray-500">Total Active Items</div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-gray-800">{fmt(totalTitles)}</div>
+            <div className="text-xs text-gray-500">Unique Titles</div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-gray-800">{fmt(totalPatrons)}</div>
+            <div className="text-xs text-gray-500">Registered Patrons</div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-indigo-700">{fmt(activeBorrowers)}</div>
+            <div className="text-xs text-gray-500">Active Borrowers {year}</div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-indigo-700">{fmt(checkoutsThisYear)}</div>
+            <div className="text-xs text-gray-500">Checkouts {year}</div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-indigo-700">{fmt(newPatrons)}</div>
+            <div className="text-xs text-gray-500">New Patrons {year}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-500">
+        <strong>Data source:</strong> All auto-computed metrics query your Destiny ILS database in real-time. Manual inputs (enrolled students, annual budget) are saved to Supabase and persist across sessions. Use the main dashboard&apos;s Export CSV for full operational data.
+      </div>
+    </div>
+  );
+}
+
 // ── Green Library KPI Tab ────────────────────────────────────────────────────
 
 const GREEN_METRICS = [
@@ -589,9 +959,11 @@ export default function Dashboard() {
   const [genderActivity, setGenderActivity]       = useState<ActivityRow[]>([]);
   const [patronTypeActivity, setPatronTypeActivity] = useState<ActivityRow[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'|'insights'|'green'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'|'insights'|'green'|'strategic'>('overview');
   const [chartsLoaded, setChartsLoaded] = useState({ patrons: false, collection: false, insights: false });
   const [chedStats, setChedStats] = useState<Record<string,number> | null>(null);
+  const [strategicStats, setStrategicStats] = useState<Record<string,number> | null>(null);
+  const [strategicLoaded, setStrategicLoaded] = useState(false);
   const [acqData, setAcqData] = useState<{year:number;items:number;titles:number;spend:number}[]>([]);
   const [chedLoaded, setChedLoaded] = useState(false);
 
@@ -642,12 +1014,16 @@ export default function Dashboard() {
       fetch('/api/charts/collection-by-publisher').then(r=>r.json()).then(d=>{ if(d.data) setPublisherData(d.data); }).catch(() => {});
       setChartsLoaded(p => ({ ...p, collection: true }));
     }
+    if (activeTab === 'strategic' && !strategicLoaded) {
+      setStrategicLoaded(true);
+      fetch('/api/strategic/stats').then(r => r.json()).then(setStrategicStats).catch(() => {});
+    }
     if (activeTab === 'ched' && !chedLoaded) {
       setChedLoaded(true);
       fetch('/api/ched/stats').then(r=>r.json()).then(d=>{ setChedStats(d); }).catch(() => {});
       fetch('/api/ched/acquisition-by-year').then(r=>r.json()).then(d=>{ if(d.data) setAcqData(d.data); }).catch(() => {});
     }
-  }, [activeTab, chartsLoaded, chedLoaded]);
+  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded]);
 
   const s = stats;
   const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
@@ -779,7 +1155,7 @@ export default function Dashboard() {
 
         {/* Tab bar */}
         <div className="flex gap-2 mb-6 border-b border-gray-200 print:hidden">
-          {(['overview','patrons','collection','iso','ched','insights','green'] as const).map(tab => (
+          {(['overview','patrons','collection','iso','ched','insights','green','strategic'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -789,7 +1165,7 @@ export default function Dashboard() {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'insights' ? '💡 Insights' : tab === 'green' ? '🌿 Green Library' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'insights' ? '💡 Insights' : tab === 'green' ? '🌿 Green Library' : tab === 'strategic' ? '📊 Strategic' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
@@ -1463,6 +1839,9 @@ export default function Dashboard() {
 
           {/* ── Green Library Tab ── */}
           {activeTab === 'green' && <GreenLibraryTab reuseRate={s && s.totalItems ? parseFloat((s.checkoutsThisYear / s.totalItems).toFixed(2)) : null} />}
+
+          {/* ── Strategic Planning Tab ── */}
+          {activeTab === 'strategic' && <StrategicTab stats={strategicStats} mainStats={s} year={year} />}
 
           {/* ── Recommended Actions ── */}
           {s && !s.error && <RecommendedActions stats={s} chedStats={chedStats} year={year} />}
