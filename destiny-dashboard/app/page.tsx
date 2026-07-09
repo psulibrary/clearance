@@ -499,28 +499,26 @@ function StrategicTab({
             : <div className="text-sm text-gray-400 italic mt-0.5">Not set</div>
           }
         </div>
-        {!sbError && (
-          isEdit ? (
-            <div className="flex items-center gap-2">
-              <input
-                type="number" step="1" min="1"
-                value={draft}
-                onChange={e => setDraft(e.target.value)}
-                className="w-32 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                placeholder={placeholder}
-                autoFocus
-              />
-              <button onClick={() => saveManual(fieldKey)} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-              <button onClick={() => setEditing(null)} className="text-xs text-gray-500 hover:text-gray-700 px-2">Cancel</button>
-            </div>
-          ) : (
-            <button onClick={() => { setDraft(val !== null ? String(val) : ''); setEditing(fieldKey); }}
-              className="text-xs font-semibold border border-gray-300 hover:border-indigo-400 hover:text-indigo-700 text-gray-600 px-3 py-1.5 rounded-lg transition-colors">
-              {val !== null ? '✏️ Update' : '+ Enter'}
+        {isEdit ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="number" step="1" min="1"
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              className="w-32 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              placeholder={placeholder}
+              autoFocus
+            />
+            <button onClick={() => saveManual(fieldKey)} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
+              {saving ? 'Saving…' : 'Save'}
             </button>
-          )
+            <button onClick={() => setEditing(null)} className="text-xs text-gray-500 hover:text-gray-700 px-2">Cancel</button>
+          </div>
+        ) : (
+          <button onClick={() => { setDraft(val !== null ? String(val) : ''); setEditing(fieldKey); }}
+            className="text-xs font-semibold border border-gray-300 hover:border-indigo-400 hover:text-indigo-700 text-gray-600 px-3 py-1.5 rounded-lg transition-colors">
+            {val !== null ? '✏️ Update' : '+ Enter'}
+          </button>
         )}
       </div>
     );
@@ -542,7 +540,7 @@ function StrategicTab({
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">📝 Manual Inputs (stored in Supabase)</h3>
         {sbError && (
           <div className="mb-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-xs text-amber-800">
-            ⚠️ Supabase not connected — manual inputs cannot be saved. {sbError}
+            ⚠️ Could not load saved values from Supabase ({sbError}). You can still enter values below — create the <code>green_metrics</code> table in Supabase first to enable saving.
           </div>
         )}
         {sbLoading ? (
@@ -775,7 +773,6 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
     </div>
   );
 
-  const supabaseAvailable = !supabaseError;
 
   return (
     <div>
@@ -872,7 +869,7 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
                     </div>
 
                     {/* Edit form (manual metrics only) */}
-                    {!isAuto && supabaseAvailable && (
+                    {!isAuto && (
                       isEdit ? (
                         <div className="border-t border-gray-200 pt-3 mt-1 flex flex-wrap gap-2 items-end">
                           <div>
