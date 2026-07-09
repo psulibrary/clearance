@@ -42,7 +42,7 @@ export async function POST() {
         -- fines
         (SELECT ISNULL(SUM(Balance), 0) FROM ${t(p,'Fine')} WHERE Balance > 0)                                  AS totalFinesBalance,
         -- holds
-        (SELECT COUNT(*) FROM ${t(p,'Hold')} WHERE Filled = 0)                                                  AS pendingHolds,
+        (SELECT COUNT(*) FROM ${t(p,'Hold')} WHERE IsReady = 0 AND ExpireDate > GETDATE())                      AS pendingHolds,
         -- never checked out
         (SELECT COUNT(*) FROM ${t(p,'Copy')}
           WHERE DateWithdrawn IS NULL AND PatronID IS NULL AND DateReturned IS NULL)                             AS neverCheckedOut
