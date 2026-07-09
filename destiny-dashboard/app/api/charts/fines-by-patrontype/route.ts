@@ -20,7 +20,8 @@ export async function GET() {
       FROM ${t(p,'Fine')} f
       JOIN ${t(p,'SitePatron')} sp ON sp.PatronID = f.PatronID
       LEFT JOIN ${t(p,'PatronType')} pt ON pt.PatronTypeID = sp.PatronTypeID
-      WHERE YEAR(f.DateAssessed) = @year
+      WHERE YEAR(f.Created) = @year
+        AND f.Active = 1
       GROUP BY pt.PatronTypeDescription
       ORDER BY totalFines DESC
     `);

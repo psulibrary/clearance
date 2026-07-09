@@ -1010,6 +1010,8 @@ export default function Dashboard() {
   const [finesByType, setFinesByType]     = useState<FineByTypeRow[]>([]);
   const [avgColAge, setAvgColAge]         = useState<AvgAgeRow[]>([]);
   const [extraLoaded2, setExtraLoaded2]   = useState({ collection: false, patrons: false });
+  const [extra2Errors, setExtra2Errors]   = useState<Record<string, string>>({});
+  const [extra2Loading, setExtra2Loading] = useState<Record<string, boolean>>({});
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1062,16 +1064,29 @@ export default function Dashboard() {
     }
     if (activeTab === 'collection' && !extraLoaded2.collection) {
       setExtraLoaded2(p => ({ ...p, collection: true }));
-      fetch('/api/charts/weeding-candidates?years=3&limit=20').then(r=>r.json()).then(d=>{ if(d && !d.error) setWeedData(d); }).catch(() => {});
-      fetch('/api/charts/never-borrowed').then(r=>r.json()).then(d=>{ if(d && !d.error) setNeverBorrowed(d); }).catch(() => {});
-      fetch('/api/charts/avg-collection-age').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setAvgColAge(d); }).catch(() => {});
+      const mkLoad = (key: string) => setExtra2Loading(p => ({ ...p, [key]: true }));
+      const mkDone = (key: string) => setExtra2Loading(p => ({ ...p, [key]: false }));
+      const mkErr  = (key: string, msg: string) => { setExtra2Errors(p => ({ ...p, [key]: msg })); setExtra2Loading(p => ({ ...p, [key]: false })); };
+      mkLoad('weed');
+      fetch('/api/charts/weeding-candidates?years=3&limit=20').then(r=>r.json()).then(d=>{ if(d && !d.error) { setWeedData(d); mkDone('weed'); } else mkErr('weed', d?.error ?? 'No data'); }).catch(e=>mkErr('weed', String(e)));
+      mkLoad('neverBorrowed');
+      fetch('/api/charts/never-borrowed').then(r=>r.json()).then(d=>{ if(d && !d.error) { setNeverBorrowed(d); mkDone('neverBorrowed'); } else mkErr('neverBorrowed', d?.error ?? 'No data'); }).catch(e=>mkErr('neverBorrowed', String(e)));
+      mkLoad('avgColAge');
+      fetch('/api/charts/avg-collection-age').then(r=>r.json()).then(d=>{ if(Array.isArray(d) && d.length) { setAvgColAge(d); mkDone('avgColAge'); } else mkErr('avgColAge', d?.error ?? 'No data'); }).catch(e=>mkErr('avgColAge', String(e)));
     }
     if (activeTab === 'patrons' && !extraLoaded2.patrons) {
       setExtraLoaded2(p => ({ ...p, patrons: true }));
-      fetch('/api/charts/peak-checkout-days').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setPeakDays(d); }).catch(() => {});
-      fetch('/api/charts/avg-loan-duration').then(r=>r.json()).then(d=>{ if(d && !d.error) setLoanDur(d); }).catch(() => {});
-      fetch('/api/charts/lapsed-patrons').then(r=>r.json()).then(d=>{ if(d && !d.error) setLapsedData(d); }).catch(() => {});
-      fetch('/api/charts/fines-by-patrontype').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setFinesByType(d); }).catch(() => {});
+      const mkLoad = (key: string) => setExtra2Loading(p => ({ ...p, [key]: true }));
+      const mkDone = (key: string) => setExtra2Loading(p => ({ ...p, [key]: false }));
+      const mkErr  = (key: string, msg: string) => { setExtra2Errors(p => ({ ...p, [key]: msg })); setExtra2Loading(p => ({ ...p, [key]: false })); };
+      mkLoad('peakDays');
+      fetch('/api/charts/peak-checkout-days').then(r=>r.json()).then(d=>{ if(Array.isArray(d) && d.length) { setPeakDays(d); mkDone('peakDays'); } else mkErr('peakDays', d?.error ?? 'No data'); }).catch(e=>mkErr('peakDays', String(e)));
+      mkLoad('loanDur');
+      fetch('/api/charts/avg-loan-duration').then(r=>r.json()).then(d=>{ if(d && !d.error) { setLoanDur(d); mkDone('loanDur'); } else mkErr('loanDur', d?.error ?? 'No data'); }).catch(e=>mkErr('loanDur', String(e)));
+      mkLoad('lapsed');
+      fetch('/api/charts/lapsed-patrons').then(r=>r.json()).then(d=>{ if(d && !d.error) { setLapsedData(d); mkDone('lapsed'); } else mkErr('lapsed', d?.error ?? 'No data'); }).catch(e=>mkErr('lapsed', String(e)));
+      mkLoad('fines');
+      fetch('/api/charts/fines-by-patrontype').then(r=>r.json()).then(d=>{ if(Array.isArray(d) && d.length) { setFinesByType(d); mkDone('fines'); } else mkErr('fines', d?.error ?? 'No data'); }).catch(e=>mkErr('fines', String(e)));
     }
     if (activeTab === 'collection' && !chartsLoaded.collection) {
       fetch('/api/charts/collection-by-sublocation').then(r=>r.json()).then(d=>{ if(d.data) setSublocData(d.data); }).catch(() => {});
@@ -1471,12 +1486,16 @@ export default function Dashboard() {
           )}
 
           {/* ── Peak Checkout Days ── */}
-          {peakDays.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span>📅</span>Peak Checkout Days (All-Time)
-              </h2>
-              <p className="text-xs text-gray-400 mb-4">Which days of the week see the most returns/checkouts — use this for staffing decisions.</p>
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>📅</span>Peak Checkout Days (All-Time)
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">Which days of the week see the most returns/checkouts — use this for staffing decisions.</p>
+            {extra2Loading.peakDays ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
+            ) : extra2Errors.peakDays ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.peakDays}</div>
+            ) : peakDays.length > 0 ? (
               <div className="bg-white rounded-xl shadow-sm p-4">
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={peakDays} margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
@@ -1488,103 +1507,125 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-          )}
+            ) : extraLoaded2.patrons ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available</div>
+            ) : null}
+          </div>
 
           {/* ── Average Loan Duration ── */}
-          {loanDur && (
-            <div className="mb-8">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span>⏱</span>Average Loan Duration by Patron Type
-              </h2>
-              <p className="text-xs text-gray-400 mb-4">How long patrons actually keep items vs. the loan period. High ratios may signal needed loan period adjustments.</p>
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                  <div className="text-3xl font-bold text-blue-700">{loanDur.overall.avgDays?.toFixed(1) ?? '—'}</div>
-                  <div className="text-sm text-gray-500 mt-1">Avg Days Kept</div>
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>⏱</span>Average Loan Duration by Patron Type
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">How long patrons actually keep items vs. the loan period. High ratios may signal needed loan period adjustments.</p>
+            {extra2Loading.loanDur ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
+            ) : extra2Errors.loanDur ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.loanDur}</div>
+            ) : loanDur ? (
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <div className="text-3xl font-bold text-blue-700">{loanDur.overall.avgDays?.toFixed(1) ?? '—'}</div>
+                    <div className="text-sm text-gray-500 mt-1">Avg Days Kept</div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <div className="text-3xl font-bold text-indigo-700">{loanDur.overall.avgLoanPeriod?.toFixed(1) ?? '—'}</div>
+                    <div className="text-sm text-gray-500 mt-1">Avg Loan Period (days)</div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <div className="text-3xl font-bold text-gray-700">{loanDur.overall.totalReturned?.toLocaleString() ?? '—'}</div>
+                    <div className="text-sm text-gray-500 mt-1">Total Returns Analyzed</div>
+                  </div>
                 </div>
-                <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                  <div className="text-3xl font-bold text-indigo-700">{loanDur.overall.avgLoanPeriod?.toFixed(1) ?? '—'}</div>
-                  <div className="text-sm text-gray-500 mt-1">Avg Loan Period (days)</div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                  <div className="text-3xl font-bold text-gray-700">{loanDur.overall.totalReturned?.toLocaleString() ?? '—'}</div>
-                  <div className="text-sm text-gray-500 mt-1">Total Returns Analyzed</div>
-                </div>
-              </div>
-              {loanDur.byPatronType.length > 0 && (
-                <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-blue-700 text-white">
-                        <th className="text-left p-2">Patron Type</th>
-                        <th className="text-right p-2">Avg Days Kept</th>
-                        <th className="text-right p-2">Avg Loan Period</th>
-                        <th className="text-right p-2">Returns</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loanDur.byPatronType.map((r, i) => (
-                        <tr key={r.patronType} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="p-2 border-b border-gray-100 font-medium">{r.patronType}</td>
-                          <td className="p-2 border-b border-gray-100 text-right">{r.avgDays?.toFixed(1)}</td>
-                          <td className="p-2 border-b border-gray-100 text-right">{r.avgLoanPeriod?.toFixed(1)}</td>
-                          <td className="p-2 border-b border-gray-100 text-right">{r.totalReturned?.toLocaleString()}</td>
+                {loanDur.byPatronType.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-blue-700 text-white">
+                          <th className="text-left p-2">Patron Type</th>
+                          <th className="text-right p-2">Avg Days Kept</th>
+                          <th className="text-right p-2">Avg Loan Period</th>
+                          <th className="text-right p-2">Returns</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+                      </thead>
+                      <tbody>
+                        {loanDur.byPatronType.map((r, i) => (
+                          <tr key={r.patronType} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="p-2 border-b border-gray-100 font-medium">{r.patronType}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.avgDays?.toFixed(1)}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.avgLoanPeriod?.toFixed(1)}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.totalReturned?.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            ) : extraLoaded2.patrons ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available</div>
+            ) : null}
+          </div>
 
           {/* ── Lapsed Patrons ── */}
-          {lapsedData && (
-            <div className="mb-8">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span>😴</span>Lapsed Patrons ({lapsedData.year})
-              </h2>
-              <p className="text-xs text-gray-400 mb-4">Patrons who borrowed last year but not this year — prime targets for re-engagement outreach.</p>
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                  <div className="text-3xl font-bold text-gray-700">{lapsedData.activeLastYear.toLocaleString()}</div>
-                  <div className="text-sm text-gray-500 mt-1">Active {lapsedData.year - 1}</div>
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>😴</span>Lapsed Patrons
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">Patrons who borrowed last year but not this year — prime targets for re-engagement outreach.</p>
+            {extra2Loading.lapsed ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
+            ) : extra2Errors.lapsed ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.lapsed}</div>
+            ) : lapsedData ? (
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <div className="text-3xl font-bold text-gray-700">{lapsedData.activeLastYear.toLocaleString()}</div>
+                    <div className="text-sm text-gray-500 mt-1">Active {lapsedData.year - 1}</div>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-bold text-red-600">{lapsedData.lapsedCount.toLocaleString()}</div>
+                    <div className="text-sm text-red-500 mt-1">Lapsed ({lapsedData.lapsedRate}%)</div>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-bold text-green-700">{lapsedData.activeThisYear.toLocaleString()}</div>
+                    <div className="text-sm text-green-600 mt-1">Active {lapsedData.year}</div>
+                  </div>
                 </div>
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-                  <div className="text-3xl font-bold text-red-600">{lapsedData.lapsedCount.toLocaleString()}</div>
-                  <div className="text-sm text-red-500 mt-1">Lapsed ({lapsedData.lapsedRate}%)</div>
-                </div>
-                <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-                  <div className="text-3xl font-bold text-green-700">{lapsedData.activeThisYear.toLocaleString()}</div>
-                  <div className="text-sm text-green-600 mt-1">Active {lapsedData.year}</div>
-                </div>
-              </div>
-              {lapsedData.byType.length > 0 && (
-                <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
-                  <table className="w-full text-xs border-collapse">
-                    <thead><tr className="bg-red-600 text-white"><th className="text-left p-2">Patron Type</th><th className="text-right p-2">Lapsed</th></tr></thead>
-                    <tbody>
-                      {lapsedData.byType.map((r, i) => (
-                        <tr key={r.patronType} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="p-2 border-b border-gray-100 font-medium">{r.patronType}</td>
-                          <td className="p-2 border-b border-gray-100 text-right text-red-600 font-semibold">{r.lapsedCount.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+                {lapsedData.byType.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                    <table className="w-full text-xs border-collapse">
+                      <thead><tr className="bg-red-600 text-white"><th className="text-left p-2">Patron Type</th><th className="text-right p-2">Lapsed</th></tr></thead>
+                      <tbody>
+                        {lapsedData.byType.map((r, i) => (
+                          <tr key={r.patronType} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="p-2 border-b border-gray-100 font-medium">{r.patronType}</td>
+                            <td className="p-2 border-b border-gray-100 text-right text-red-600 font-semibold">{r.lapsedCount.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            ) : extraLoaded2.patrons ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available</div>
+            ) : null}
+          </div>
 
           {/* ── Fines by Patron Type ── */}
-          {finesByType.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span>💰</span>Fine Revenue by Patron Type (This Year)
-              </h2>
-              <p className="text-xs text-gray-400 mb-4">Which patron groups generate the most fines — useful for policy review and targeted reminders.</p>
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>💰</span>Fine Revenue by Patron Type (This Year)
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">Which patron groups generate the most fines — useful for policy review and targeted reminders.</p>
+            {extra2Loading.fines ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
+            ) : extra2Errors.fines ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.fines}</div>
+            ) : finesByType.length > 0 ? (
               <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead>
@@ -1609,8 +1650,10 @@ export default function Dashboard() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
+            ) : extraLoaded2.patrons ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available</div>
+            ) : null}
+          </div>
 
         </div>
 
@@ -2107,133 +2150,158 @@ export default function Dashboard() {
           )}
 
           {/* ── Average Collection Age by Dewey ── */}
-          {avgColAge.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span>🕰</span>Average Collection Age by Dewey Range
-              </h2>
-              <p className="text-xs text-gray-400 mb-4">Which subject areas have the oldest collections — helps prioritize acquisition budgets for outdated sections.</p>
-              <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
-                <ResponsiveContainer width="100%" height={Math.max(220, avgColAge.length * 36)}>
-                  <BarChart data={avgColAge} layout="vertical" margin={{ left: 200, right: 80, top: 4, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={n => `${n}y`} />
-                    <YAxis type="category" dataKey="range" tick={{ fontSize: 11 }} width={195} />
-                    <Tooltip formatter={(v) => typeof v === "number" ? `${v} years` : String(v)} />
-                    <Bar dataKey="avgAgeYears" name="Avg Age (years)" fill="#f59e0b" radius={[0,4,4,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-amber-600 text-white">
-                      <th className="text-left p-2">Dewey Range</th>
-                      <th className="text-right p-2">Avg Age (yrs)</th>
-                      <th className="text-right p-2">Items</th>
-                      <th className="text-right p-2">Oldest Year</th>
-                      <th className="text-right p-2">Newest Year</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {avgColAge.map((r, i) => (
-                      <tr key={r.firstDigit} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="p-2 border-b border-gray-100 font-medium">{r.range}</td>
-                        <td className={`p-2 border-b border-gray-100 text-right font-bold ${r.avgAgeYears >= 15 ? 'text-red-600' : r.avgAgeYears >= 10 ? 'text-amber-600' : 'text-green-600'}`}>{r.avgAgeYears}</td>
-                        <td className="p-2 border-b border-gray-100 text-right">{r.itemCount.toLocaleString()}</td>
-                        <td className="p-2 border-b border-gray-100 text-right text-gray-400">{r.oldestYear}</td>
-                        <td className="p-2 border-b border-gray-100 text-right">{r.newestYear}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ── Never-Borrowed Items ── */}
-          {neverBorrowed && (
-            <div className="mb-8">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span>📦</span>Items Never Borrowed
-              </h2>
-              <p className="text-xs text-gray-400 mb-4">Titles/items acquired but never checked out — signals poor acquisitions or poor discoverability.</p>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-                  <div className="text-3xl font-bold text-red-600">{neverBorrowed.totals.neverBorrowedItems.toLocaleString()}</div>
-                  <div className="text-sm text-red-500 mt-1">Items Never Borrowed</div>
-                  <div className="text-xs text-gray-400">{pct(neverBorrowed.totals.neverBorrowedItems, neverBorrowed.totals.totalItems)} of collection</div>
+          {/* ── Average Collection Age by Dewey ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>🕰</span>Average Collection Age by Dewey Range
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">Which subject areas have the oldest collections — helps prioritize acquisition budgets for outdated sections.</p>
+            {extra2Loading.avgColAge ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
+            ) : extra2Errors.avgColAge ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.avgColAge}</div>
+            ) : avgColAge.length > 0 ? (
+              <>
+                <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+                  <ResponsiveContainer width="100%" height={Math.max(220, avgColAge.length * 36)}>
+                    <BarChart data={avgColAge} layout="vertical" margin={{ left: 200, right: 80, top: 4, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={n => `${n}y`} />
+                      <YAxis type="category" dataKey="range" tick={{ fontSize: 11 }} width={195} />
+                      <Tooltip formatter={(v) => typeof v === "number" ? `${v} years` : String(v)} />
+                      <Bar dataKey="avgAgeYears" name="Avg Age (years)" fill="#f59e0b" radius={[0,4,4,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
-                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
-                  <div className="text-3xl font-bold text-orange-600">{neverBorrowed.totals.neverBorrowedTitles.toLocaleString()}</div>
-                  <div className="text-sm text-orange-500 mt-1">Titles Never Borrowed</div>
-                  <div className="text-xs text-gray-400">{pct(neverBorrowed.totals.neverBorrowedTitles, neverBorrowed.totals.totalTitles)} of titles</div>
-                </div>
-              </div>
-              {neverBorrowed.byDewey.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                   <table className="w-full text-xs border-collapse">
-                    <thead><tr className="bg-orange-600 text-white"><th className="text-left p-2">Dewey</th><th className="text-right p-2">Titles</th><th className="text-right p-2">Items</th></tr></thead>
+                    <thead>
+                      <tr className="bg-amber-600 text-white">
+                        <th className="text-left p-2">Dewey Range</th>
+                        <th className="text-right p-2">Avg Age (yrs)</th>
+                        <th className="text-right p-2">Items</th>
+                        <th className="text-right p-2">Oldest Year</th>
+                        <th className="text-right p-2">Newest Year</th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      {neverBorrowed.byDewey.map((r, i) => (
+                      {avgColAge.map((r, i) => (
                         <tr key={r.firstDigit} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="p-2 border-b border-gray-100 font-medium">{r.firstDigit}00s</td>
-                          <td className="p-2 border-b border-gray-100 text-right">{r.neverBorrowedTitles.toLocaleString()}</td>
-                          <td className="p-2 border-b border-gray-100 text-right font-semibold text-orange-700">{r.neverBorrowedItems.toLocaleString()}</td>
+                          <td className="p-2 border-b border-gray-100 font-medium">{r.range}</td>
+                          <td className={`p-2 border-b border-gray-100 text-right font-bold ${r.avgAgeYears >= 15 ? 'text-red-600' : r.avgAgeYears >= 10 ? 'text-amber-600' : 'text-green-600'}`}>{r.avgAgeYears}</td>
+                          <td className="p-2 border-b border-gray-100 text-right">{r.itemCount.toLocaleString()}</td>
+                          <td className="p-2 border-b border-gray-100 text-right text-gray-400">{r.oldestYear}</td>
+                          <td className="p-2 border-b border-gray-100 text-right">{r.newestYear}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
-          )}
+              </>
+            ) : extraLoaded2.collection ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available (items may lack acquisition dates)</div>
+            ) : null}
+          </div>
+
+          {/* ── Never-Borrowed Items ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>📦</span>Items Never Borrowed
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">Titles/items acquired but never checked out — signals poor acquisitions or poor discoverability.</p>
+            {extra2Loading.neverBorrowed ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
+            ) : extra2Errors.neverBorrowed ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.neverBorrowed}</div>
+            ) : neverBorrowed ? (
+              <>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-bold text-red-600">{neverBorrowed.totals.neverBorrowedItems.toLocaleString()}</div>
+                    <div className="text-sm text-red-500 mt-1">Items Never Borrowed</div>
+                    <div className="text-xs text-gray-400">{pct(neverBorrowed.totals.neverBorrowedItems, neverBorrowed.totals.totalItems)} of collection</div>
+                  </div>
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-bold text-orange-600">{neverBorrowed.totals.neverBorrowedTitles.toLocaleString()}</div>
+                    <div className="text-sm text-orange-500 mt-1">Titles Never Borrowed</div>
+                    <div className="text-xs text-gray-400">{pct(neverBorrowed.totals.neverBorrowedTitles, neverBorrowed.totals.totalTitles)} of titles</div>
+                  </div>
+                </div>
+                {neverBorrowed.byDewey.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                    <table className="w-full text-xs border-collapse">
+                      <thead><tr className="bg-orange-600 text-white"><th className="text-left p-2">Dewey</th><th className="text-right p-2">Titles</th><th className="text-right p-2">Items</th></tr></thead>
+                      <tbody>
+                        {neverBorrowed.byDewey.map((r, i) => (
+                          <tr key={r.firstDigit} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="p-2 border-b border-gray-100 font-medium">{r.firstDigit}00s</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.neverBorrowedTitles.toLocaleString()}</td>
+                            <td className="p-2 border-b border-gray-100 text-right font-semibold text-orange-700">{r.neverBorrowedItems.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            ) : extraLoaded2.collection ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available</div>
+            ) : null}
+          </div>
 
           {/* ── Weeding Candidates ── */}
-          {weedData && (
-            <div className="mb-8">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span>🌿</span>Weeding Candidates (Not Borrowed in {weedData.yearsThreshold}+ Years)
-              </h2>
-              <p className="text-xs text-gray-400 mb-4">Items inactive for {weedData.yearsThreshold}+ years — candidates for withdrawal to free shelf space.</p>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
-                  <div className="text-3xl font-bold text-yellow-700">{weedData.summary.candidateCount.toLocaleString()}</div>
-                  <div className="text-sm text-yellow-600 mt-1">Total Weeding Candidates</div>
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>🌿</span>Weeding Candidates (Not Borrowed in 3+ Years)
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">Items inactive for 3+ years — candidates for withdrawal to free shelf space.</p>
+            {extra2Loading.weed ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
+            ) : extra2Errors.weed ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.weed}</div>
+            ) : weedData ? (
+              <>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-bold text-yellow-700">{weedData.summary.candidateCount.toLocaleString()}</div>
+                    <div className="text-sm text-yellow-600 mt-1">Total Weeding Candidates</div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <div className="text-3xl font-bold text-gray-700">₱{weedData.summary.totalValue?.toFixed(2)}</div>
+                    <div className="text-sm text-gray-500 mt-1">Estimated Value on Shelf</div>
+                  </div>
                 </div>
-                <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                  <div className="text-3xl font-bold text-gray-700">₱{weedData.summary.totalValue?.toFixed(2)}</div>
-                  <div className="text-sm text-gray-500 mt-1">Estimated Value on Shelf</div>
-                </div>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-yellow-600 text-white">
-                      <th className="text-left p-2">Title</th>
-                      <th className="text-left p-2">Author</th>
-                      <th className="text-left p-2">Call #</th>
-                      <th className="text-right p-2">Acquired</th>
-                      <th className="text-right p-2">Last Borrowed</th>
-                      <th className="text-right p-2">Days Idle</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {weedData.items.map((w, i) => (
-                      <tr key={w.CopyBarcode} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="p-2 border-b border-gray-100 font-medium max-w-xs truncate">{w.Title}</td>
-                        <td className="p-2 border-b border-gray-100 text-gray-500">{w.Author}</td>
-                        <td className="p-2 border-b border-gray-100 font-mono text-xs">{w.CallNumber}</td>
-                        <td className="p-2 border-b border-gray-100 text-right text-gray-400">{w.Acquired}</td>
-                        <td className="p-2 border-b border-gray-100 text-right text-gray-400">{w.LastBorrowed ?? '—'}</td>
-                        <td className="p-2 border-b border-gray-100 text-right font-semibold text-yellow-700">{w.daysSinceActivity.toLocaleString()}</td>
+                <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-yellow-600 text-white">
+                        <th className="text-left p-2">Title</th>
+                        <th className="text-left p-2">Author</th>
+                        <th className="text-left p-2">Call #</th>
+                        <th className="text-right p-2">Acquired</th>
+                        <th className="text-right p-2">Last Borrowed</th>
+                        <th className="text-right p-2">Days Idle</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+                    </thead>
+                    <tbody>
+                      {weedData.items.map((w, i) => (
+                        <tr key={w.CopyBarcode} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="p-2 border-b border-gray-100 font-medium max-w-xs truncate">{w.Title}</td>
+                          <td className="p-2 border-b border-gray-100 text-gray-500">{w.Author}</td>
+                          <td className="p-2 border-b border-gray-100 font-mono text-xs">{w.CallNumber}</td>
+                          <td className="p-2 border-b border-gray-100 text-right text-gray-400">{w.Acquired}</td>
+                          <td className="p-2 border-b border-gray-100 text-right text-gray-400">{w.LastBorrowed ?? '—'}</td>
+                          <td className="p-2 border-b border-gray-100 text-right font-semibold text-yellow-700">{w.daysSinceActivity.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : extraLoaded2.collection ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available</div>
+            ) : null}
+          </div>
 
         </div>
 
