@@ -1383,6 +1383,141 @@ const AACCUP_SECTIONS = [
 type AaccupMetricID = typeof AACCUP_SECTIONS[number]['metrics'][number]['id'];
 type AaccupStored = Record<string, { value: number; notes: string; date: string }>;
 
+function AaccupAutoVerified({ chedStats }: { chedStats: Record<string,number> | null }) {
+  if (!chedStats || chedStats.error) return null;
+
+  const totalTitles      = chedStats.totalTitles ?? 0;
+  const totalItems       = chedStats.totalItems ?? 0;
+  const filipiniana      = chedStats.filipianianaItems ?? 0;
+  const last10Years      = chedStats.itemsLast10Years ?? 0;
+  const withdrawnThisYr  = chedStats.withdrawnThisYear ?? 0;
+  const totalILL         = chedStats.totalILL ?? 0;
+
+  const currencyPct = totalItems > 0 ? (last10Years / totalItems) * 100 : 0;
+  const filPct      = totalItems > 0 ? (filipiniana / totalItems) * 100 : 0;
+
+  const items: { id: string; label: string; value: string; pass: boolean; note: string }[] = [
+    {
+      id: 'C4',
+      label: 'C.4 Core Collection Titles',
+      value: `${totalTitles.toLocaleString()} titles`,
+      pass: totalTitles >= 5000,
+      note: totalTitles >= 5000 ? 'Meets ≥5,000 title requirement' : `Deficit: ${(5000 - totalTitles).toLocaleString()} titles to go`,
+    },
+    {
+      id: 'C5',
+      label: 'C.5 ≥30% Holdings are Current (≤10 yrs)',
+      value: `${currencyPct.toFixed(1)}% (${last10Years.toLocaleString()} of ${totalItems.toLocaleString()})`,
+      pass: currencyPct >= 30,
+      note: currencyPct >= 30 ? 'Collection currency meets 30% threshold' : `Gap: ${(30 - currencyPct).toFixed(1)} pp below threshold`,
+    },
+    {
+      id: 'C8',
+      label: 'C.8 Filipiniana Collection Maintained',
+      value: `${filipiniana.toLocaleString()} items (${filPct.toFixed(1)}%)`,
+      pass: filipiniana > 0,
+      note: filipiniana > 0 ? 'Filipiniana sublocation present in catalog' : 'No Filipiniana items found — check sublocation tag',
+    },
+    {
+      id: 'C11',
+      label: 'C.11 Integrated Library System (ILS)',
+      value: 'Destiny ILS — Active',
+      pass: true,
+      note: 'Dashboard is connected to a live Destiny ILS instance',
+    },
+    {
+      id: 'C13',
+      label: 'C.13 Regular Weeding Program',
+      value: `${withdrawnThisYr.toLocaleString()} items withdrawn this year`,
+      pass: withdrawnThisYr > 0,
+      note: withdrawnThisYr > 0 ? 'Deselection activity confirmed in Destiny' : 'No withdrawals recorded this year',
+    },
+    {
+      id: 'D5.2',
+      label: 'D.5.2 Integrated Library System Available',
+      value: 'Destiny ILS — Active',
+      pass: true,
+      note: 'Confirmed: ILS is running and serving this dashboard',
+    },
+    {
+      id: 'D5.2.1',
+      label: 'D.5.2.1 OPAC Available',
+      value: 'Destiny OPAC — Available',
+      pass: true,
+      note: 'Destiny provides an OPAC for patron catalog searching',
+    },
+    {
+      id: 'D5.2.2',
+      label: 'D.5.2.2 Computerized Circulation',
+      value: 'Destiny Circulation — Active',
+      pass: true,
+      note: 'Circulation data is live in this dashboard',
+    },
+    {
+      id: 'D5.2.3',
+      label: 'D.5.2.3 Computerized Cataloguing',
+      value: 'Destiny Cataloguing — Active',
+      pass: true,
+      note: `${totalTitles.toLocaleString()} bibliographic records in ILS`,
+    },
+    {
+      id: 'D5.2.10',
+      label: 'D.5.2.10 Bar Coding of Library Materials',
+      value: `${totalItems.toLocaleString()} barcoded items`,
+      pass: totalItems > 0,
+      note: 'Destiny uses barcodes for circulation; item count confirms active barcoding',
+    },
+    {
+      id: 'D6',
+      label: 'D.6 Statistical Data Compiled & Used',
+      value: 'This Dashboard — Active',
+      pass: true,
+      note: 'Circulation, patron, and collection statistics generated from live ILS data',
+    },
+    {
+      id: 'G.ILL',
+      label: 'G.3 / CHED §5 — ILL / Resource Sharing',
+      value: `${totalILL.toLocaleString()} total ILL records`,
+      pass: totalILL > 0,
+      note: totalILL > 0 ? 'ILL transactions found in Destiny — supports G.3 linkage claim' : 'No ILL records found in Destiny',
+    },
+  ];
+
+  const passCount = items.filter(i => i.pass).length;
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+        <span>🤖</span>ILS Auto-Verified Indicators
+        <span className="ml-auto text-xs font-normal bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+          {passCount}/{items.length} confirmed from Destiny
+        </span>
+      </h2>
+      <div className="bg-white rounded-xl shadow-sm p-4 text-sm divide-y divide-gray-100">
+        {items.map(item => (
+          <div key={item.id} className="flex items-start gap-3 py-2.5">
+            <span className={`mt-0.5 text-base flex-shrink-0 ${item.pass ? 'text-green-500' : 'text-red-400'}`}>
+              {item.pass ? '✓' : '✗'}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-gray-800">{item.label}</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${item.pass ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                  {item.value}
+                </span>
+              </div>
+              <div className="text-xs text-gray-500 mt-0.5">{item.note}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-gray-400 mt-1.5">
+        These indicators are computed automatically from live Destiny ILS data. To record the verified values into your AACCUP self-survey below, enter them in the corresponding manual fields.
+      </p>
+    </div>
+  );
+}
+
 function AaccupManualSection({ unlocked }: { unlocked: boolean }) {
   const [stored, setStored]   = useState<AaccupStored>({});
   const [loading, setLoading] = useState(true);
@@ -2188,7 +2323,7 @@ export default function Dashboard() {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'aaccup' ? 'AACCUP Area VII' : tab === 'insights' ? '💡 Insights' : tab === 'trends' ? '📈 Trends' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'iso' ? '🌐 Intl Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'aaccup' ? 'AACCUP Area VII' : tab === 'insights' ? '💡 Insights' : tab === 'trends' ? '📈 Trends' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
@@ -3483,6 +3618,182 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {/* ── ALA / ACRL Holdings (ILS auto-computable) ── */}
+          {s && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <span>🏛️</span>ALA / ACRL — Holdings &amp; Inventory (Auto from ILS)
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                <Card label="Physical Volumes Held" value={fmt(s.totalItems)} sub="ALA/ACRL — gross cataloged print items in active inventory" color="text-blue-700" />
+                <Card label="Unique Titles" value={fmt(s.uniqueTitles)} sub="ALA/ACRL — unique bibliographic titles" color="text-blue-700" />
+                <Card label="Items Withdrawn (All-Time)" value={fmt(s.withdrawnItems)} sub="ALA/ACRL — deselected / weeded items on record" color="text-gray-600" />
+                <Card label="Items Never Borrowed" value={fmt(s.neverCheckedOut)} sub="ALA/ACRL — physical items with zero loan history" color="text-amber-700" />
+                <Card label="New Items This Year" value={fmt(s.newItemsThisYear)} sub={`ALA/ACRL — acquisitions added in ${s.year}`} color="text-green-700" />
+                <Card label="New Items This Month" value={fmt(s.newItemsThisMonth)} sub="ALA/ACRL — acquisitions added this calendar month" color="text-green-600" />
+                <Card label="Total Checkouts This Period" value={fmt(s.checkoutsThisYear)} sub={`ALA/ACRL — total loans in ${periodLabel}`} color="text-indigo-700" />
+                <Card label="Registered Users" value={fmt(s.totalPatrons)} sub="ALA/ACRL — total enrolled patron accounts" color="text-indigo-700" />
+              </div>
+              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+                ALA/ACRL also tracks <strong>Licensed Digital Databases</strong>, <strong>E-Books &amp; E-Serials</strong>, and <strong>Institutional Repository Holdings</strong> — enter these in the <strong>CHED CMO 22</strong> tab (§4.b / §7) and <strong>AACCUP Area VII</strong> tab (D.5.2.8) since they are not stored in Destiny.
+              </div>
+            </div>
+          )}
+
+          {/* ── IFLA Financial & Management — Reference Table ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>💸</span>IFLA / ISO 11620 — Financial &amp; Management Metrics
+            </h2>
+            <p className="text-xs text-gray-600 mb-3">These require financial ledger data not stored in Destiny. Use the formulas below with your institutional budget records.</p>
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-gray-700 text-white uppercase tracking-wide">
+                    <th className="text-left p-3">Metric</th>
+                    <th className="text-left p-3 hidden sm:table-cell">Formula</th>
+                    <th className="text-left p-3 hidden md:table-cell">Stakeholder</th>
+                    {s && <th className="text-left p-3">ILS Input Available</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {[
+                    { name: 'Cost per User', formula: 'Total operating expenditure ÷ Active registered users', stake: 'Funding Bodies', ilsVal: s ? `÷ ${fmt(s.activePatronsThisYear)} active users` : null },
+                    { name: 'Cost per Visit', formula: 'Total expenditure ÷ (Gate count + Website visits)', stake: 'Library Board', ilsVal: null },
+                    { name: 'Cost per Resource Download', formula: 'Subscription cost ÷ Full-text downloads', stake: 'Collection Librarians', ilsVal: null },
+                    { name: 'Library Expenditures as % of Institutional Budget', formula: '(Library budget ÷ Total institution budget) × 100', stake: 'Provost / Board', ilsVal: null },
+                    { name: 'Staff Costs as % of Operating Expenditures', formula: '(Staff compensation ÷ Total annual budget) × 100', stake: 'Library Director', ilsVal: null },
+                    { name: 'Total Library Expenditures per Capita', formula: 'Annual budget ÷ Total target census population', stake: 'Government / Taxpayers', ilsVal: null },
+                  ].map((r, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="p-3 font-semibold text-gray-800">{r.name}</td>
+                      <td className="p-3 text-gray-600 hidden sm:table-cell font-mono">{r.formula}</td>
+                      <td className="p-3 text-gray-500 hidden md:table-cell">{r.stake}</td>
+                      {s && <td className="p-3">{r.ilsVal ? <span className="text-green-700 font-medium">{r.ilsVal}</span> : <span className="text-gray-400">Enter budget in Insights tab</span>}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── IFLA User Perspective (additional non-duplicate) ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>👤</span>IFLA / ISO 11620 — User Perspective Metrics
+            </h2>
+            <p className="text-xs text-gray-600 mb-3">ILS-computable metrics are shown as cards. Survey-based metrics require separate data collection.</p>
+            {s && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
+                <Card label="Circulation per Capita (Registered)" value={(s.totalPatrons ? s.checkoutsThisYear / s.totalPatrons : 0).toFixed(2)} sub={`ISO 11620 — loans ÷ registered users · ${periodLabel}`} color="text-indigo-700" />
+                <Card label="Turnover Rate" value={s.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(3) + 'x' : '—'} sub="ISO 11620 — loans ÷ total physical items" color="text-teal-700" />
+                <Card label="% Target Population Reached" value={pct(s.activePatronsThisYear, s.totalPatrons)} sub="ISO 11620 B.2.4.1 — active borrowers ÷ registered users" color="text-blue-700" />
+                <Card label="% Stock Not Used" value={pct(s.neverCheckedOut, s.totalItems)} sub="ISO 11620 B.2.1.3 — never-borrowed items ÷ total (lower = better)" color="text-amber-700" />
+              </div>
+            )}
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                    <th className="text-left p-3">Metric</th>
+                    <th className="text-left p-3 hidden sm:table-cell">Formula</th>
+                    <th className="text-left p-3">Data Source Needed</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {[
+                    { name: 'User Satisfaction Index', formula: 'Avg Likert score from LibQUAL+ / survey', source: 'Annual user satisfaction survey' },
+                    { name: 'Title / Subject Availability Rate', formula: '(Titles found ÷ Titles sought) × 100', source: 'User sampling / shelf-availability study' },
+                    { name: 'Facilities Satisfaction Rate', formula: '% users rating spaces as satisfactory', source: 'Facility satisfaction survey' },
+                    { name: 'Public Workstation / Wi-Fi Downtime Rate', formula: '(Downtime hours ÷ Total open hours) × 100', source: 'IT syslog / ticket management' },
+                    { name: 'Speed of ILL / Document Delivery', formula: 'Median days from ILL request to user notification', source: 'ILL management software log' },
+                    { name: 'Correct Answer Rate (Reference)', formula: '(Accurately answered queries ÷ Sampled queries) × 100', source: 'Reference audit / mystery shopping' },
+                    { name: 'Library Visits per Capita', formula: 'Annual gate count ÷ Target population', source: 'Physical gate counter + census data' },
+                  ].map((r, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="p-3 font-semibold text-gray-800">{r.name}</td>
+                      <td className="p-3 font-mono text-gray-600 hidden sm:table-cell">{r.formula}</td>
+                      <td className="p-3 text-amber-700">{r.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── IFLA Internal Processes & Learning/Growth — Reference ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>⚙️</span>IFLA / ISO 11620 — Internal Processes &amp; Learning/Growth
+            </h2>
+            <p className="text-xs text-gray-600 mb-3">Operational efficiency and staff development metrics — require internal logs and HR records.</p>
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                    <th className="text-left p-3">Metric</th>
+                    <th className="text-left p-3 hidden sm:table-cell">Formula</th>
+                    <th className="text-left p-3">Data Source</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {[
+                    { name: 'Median Processing Time for New Acquisitions', formula: 'Median days: receipt → live catalog entry', source: 'Acquisitions & cataloging logs' },
+                    { name: 'Cataloging Accuracy Rate', formula: '(Correct MARC/RDA records ÷ Records audited) × 100', source: 'Peer cataloging audit' },
+                    { name: 'Time to Resolve System Failures', formula: 'Mean time to repair (MTTR) critical systems', source: 'IT service desk platform' },
+                    { name: 'Conservation Stabilization Rate', formula: '(Items stabilized or digitized ÷ Items flagged) × 100', source: 'Conservation database' },
+                    { name: 'Cost per Cataloged Item', formula: 'Total technical services staff cost ÷ Titles processed', source: 'HR records + cataloging reports' },
+                    { name: 'Staff Training Hours per FTE', formula: 'Total professional development hours ÷ FTE staff', source: 'HR / training records' },
+                    { name: '% Electronic Library Expenditures', formula: '(Digital content budget ÷ Total collection budget) × 100', source: 'Financial ledger + ERM system' },
+                    { name: '% Staff with Specialized IT / Data Certifications', formula: '(Staff with IT certs ÷ Total FTE) × 100', source: 'HR credentials database' },
+                  ].map((r, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="p-3 font-semibold text-gray-800">{r.name}</td>
+                      <td className="p-3 font-mono text-gray-600 hidden sm:table-cell">{r.formula}</td>
+                      <td className="p-3 text-amber-700">{r.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── ALA Project Outcome ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>🎯</span>ALA / PLA — Project Outcome (Impact) Metrics
+            </h2>
+            <p className="text-xs text-gray-600 mb-3">Survey-based outcome metrics from ALA Project Outcome standard. Require post-program participant surveys.</p>
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                    <th className="text-left p-3">Outcome Metric</th>
+                    <th className="text-left p-3 hidden sm:table-cell">Formula</th>
+                    <th className="text-left p-3">Target Stakeholder</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {[
+                    { name: 'Knowledge Acquisition Rate', formula: '(Attendees who learned something new ÷ Survey respondents) × 100', stake: 'Grant agencies / Donors' },
+                    { name: 'Confidence Building Rate', formula: '(Attendees reporting increased confidence ÷ Respondents) × 100', stake: 'Educational boards' },
+                    { name: 'Behavioral Change Intention Rate', formula: '(Attendees who plan behavior change ÷ Respondents) × 100', stake: 'City councils' },
+                    { name: 'Resource Awareness Rate', formula: '(Attendees with expanded library resource awareness ÷ Respondents) × 100', stake: 'Marketing & PR' },
+                  ].map((r, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="p-3 font-semibold text-gray-800">{r.name}</td>
+                      <td className="p-3 font-mono text-gray-600 hidden sm:table-cell">{r.formula}</td>
+                      <td className="p-3 text-gray-500">{r.stake}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="px-4 py-3 bg-blue-50 text-xs text-blue-700 border-t border-blue-100">
+                Use <a href="https://www.ala.org/pla/initiatives/performancemeasurement" target="_blank" rel="noopener noreferrer" className="underline">ALA Project Outcome</a> standard survey forms to collect these after each library program or instruction session. Results can be recorded in the CHED CMO 22 tab (§5 — Instruction Sessions).
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Tab: CHED CMO 22 */}
@@ -3619,6 +3930,7 @@ export default function Dashboard() {
             </div>
           )}
 
+          <AaccupAutoVerified chedStats={chedStats} />
           <AaccupManualSection unlocked={insightsUnlocked} />
         </div>
 
