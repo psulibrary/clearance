@@ -15,7 +15,6 @@ export async function GET() {
         COUNT(*)                              AS checkouts
       FROM ${t(p,'Copy')}
       WHERE DateReturned IS NOT NULL
-        AND DateWithdrawn IS NULL
       GROUP BY DATEPART(weekday, DateReturned)
       ORDER BY dayOfWeek
     `);
