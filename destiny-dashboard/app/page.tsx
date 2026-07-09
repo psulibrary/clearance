@@ -978,13 +978,22 @@ export default function Dashboard() {
   const [acqData, setAcqData] = useState<{year:number;items:number;titles:number;spend:number}[]>([]);
   const [chedLoaded, setChedLoaded] = useState(false);
 
-  type TopTitle = { Title: string; Author: string; BibID: number; checkoutCount: number; currentlyOut: number };
-  type CollAgeRow = { acqYear: number; items: number; titles: number; everBorrowed: number };
+  type TopTitle       = { Title: string; Author: string; BibID: number; checkoutCount: number; currentlyOut: number };
+  type CollAgeRow     = { acqYear: number; items: number; titles: number; everBorrowed: number };
   type PatronGrowthRow = { label: string; yr: number; mo: number; newPatrons: number };
-  const [topTitles, setTopTitles]       = useState<TopTitle[]>([]);
-  const [collAge, setCollAge]           = useState<CollAgeRow[]>([]);
-  const [patronGrowth, setPatronGrowth] = useState<PatronGrowthRow[]>([]);
-  const [extraLoaded, setExtraLoaded]   = useState({ collection: false, patrons: false });
+  type RetentionStats = { activeLastYear: number; activeThisYear: number; retained: number; newBorrowers: number; retentionRate: number; year: number };
+  type ActivePatron   = { PatronBarcode: string; LastName: string; FirstName: string; PatronType: string; totalCheckouts: number; checkoutsThisYear: number; overdueCount: number };
+  type OverdueItem    = { CopyBarcode: string; Title: string; Author: string; PatronBarcode: string; PatronType: string; DateDue: string; DaysOverdue: number; ReplacementCost: number };
+  type CallNumRow     = { range: string; firstDigit: string; items: number; titles: number; checkouts: number; utilRate: number };
+
+  const [topTitles, setTopTitles]         = useState<TopTitle[]>([]);
+  const [collAge, setCollAge]             = useState<CollAgeRow[]>([]);
+  const [patronGrowth, setPatronGrowth]   = useState<PatronGrowthRow[]>([]);
+  const [retention, setRetention]         = useState<RetentionStats | null>(null);
+  const [activePatrons, setActivePatrons] = useState<ActivePatron[]>([]);
+  const [longestOverdue, setLongestOverdue] = useState<OverdueItem[]>([]);
+  const [callNumData, setCallNumData]     = useState<CallNumRow[]>([]);
+  const [extraLoaded, setExtraLoaded]     = useState({ collection: false, patrons: false });
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1026,10 +1035,14 @@ export default function Dashboard() {
       setExtraLoaded(p => ({ ...p, collection: true }));
       fetch('/api/charts/top-titles').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setTopTitles(d); }).catch(() => {});
       fetch('/api/charts/collection-age').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setCollAge(d); }).catch(() => {});
+      fetch('/api/charts/longest-overdue?limit=10').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setLongestOverdue(d); }).catch(() => {});
+      fetch('/api/charts/by-callnumber').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setCallNumData(d); }).catch(() => {});
     }
     if (activeTab === 'patrons' && !extraLoaded.patrons) {
       setExtraLoaded(p => ({ ...p, patrons: true }));
       fetch('/api/charts/patron-growth?years=3').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setPatronGrowth(d); }).catch(() => {});
+      fetch('/api/charts/patron-retention').then(r=>r.json()).then(d=>{ if(d && !d.error) setRetention(d); }).catch(() => {});
+      fetch('/api/charts/top-active-patrons?limit=10').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setActivePatrons(d); }).catch(() => {});
     }
     if (activeTab === 'collection' && !chartsLoaded.collection) {
       fetch('/api/charts/collection-by-sublocation').then(r=>r.json()).then(d=>{ if(d.data) setSublocData(d.data); }).catch(() => {});
@@ -1244,6 +1257,13 @@ export default function Dashboard() {
             <Card label="Utilization Rate"         value={pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)} sub="items checked out vs total right now" color="text-amber-700" />
           </Section>
 
+          <Section title="Efficiency & Engagement Ratios" icon="📊">
+            <Card label="Items per Patron"        value={s && s.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'} sub="ISO 2789 target: ≥ 3" color="text-indigo-700" />
+            <Card label="Loans per Patron"        value={s && s.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`checkouts ÷ patrons (${periodLabel})`} color="text-blue-700" />
+            <Card label="Holds Satisfaction Rate" value={s ? pct(s.readyHolds, (s.pendingHolds + s.readyHolds) || 0) : '—'} sub="ready holds ÷ all active holds" color="text-green-700" />
+            <Card label="Patron Reach Rate"       value={s && s.totalPatrons ? pct(s.activePatronsThisYear, s.totalPatrons) : '—'} sub={`active borrowers vs total (${periodLabel})`} color="text-teal-700" />
+          </Section>
+
           <Section title="Holds & Reservations" icon="🔖">
             <Card label="Pending Holds"                value={fmt(s?.pendingHolds)}        sub="waiting for a copy" />
             <Card label="Ready for Pickup"             value={fmt(s?.readyHolds)}          sub="holds ready now" color="text-green-700" />
@@ -1336,6 +1356,87 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Patron Retention ── */}
+          {retention && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>🔁</span>Patron Retention & New vs. Returning Borrowers ({retention.year})
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Retention rate shows what % of last year&apos;s active borrowers borrowed again this year.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                <div className="bg-white rounded-xl shadow-sm p-5 text-center">
+                  <div className="text-3xl font-bold text-blue-700">{retention.activeLastYear.toLocaleString()}</div>
+                  <div className="text-sm font-medium text-gray-600">Active {retention.year - 1}</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-5 text-center">
+                  <div className="text-3xl font-bold text-indigo-700">{retention.retained.toLocaleString()}</div>
+                  <div className="text-sm font-medium text-gray-600">Returned This Year</div>
+                  <div className="text-xs text-gray-400">Retention Rate</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-5 text-center">
+                  <div className="text-3xl font-bold text-emerald-600">{retention.newBorrowers.toLocaleString()}</div>
+                  <div className="text-sm font-medium text-gray-600">First-Time Borrowers</div>
+                  <div className="text-xs text-gray-400">{retention.year}</div>
+                </div>
+                <div className={`rounded-xl shadow-sm p-5 text-center ${retention.retentionRate >= 60 ? 'bg-emerald-50 border border-emerald-200' : retention.retentionRate >= 40 ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}>
+                  <div className={`text-3xl font-bold ${retention.retentionRate >= 60 ? 'text-emerald-700' : retention.retentionRate >= 40 ? 'text-amber-700' : 'text-red-700'}`}>{retention.retentionRate}%</div>
+                  <div className="text-sm font-medium text-gray-600">Retention Rate</div>
+                  <div className="text-xs text-gray-400">{retention.retentionRate >= 60 ? '✓ Healthy' : retention.retentionRate >= 40 ? '⚠ Moderate' : '✗ Low — improve outreach'}</div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-4">
+                <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden">
+                  <div className="h-4 bg-indigo-500 rounded-l-full transition-all" style={{ width: `${retention.retentionRate}%` }} />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>0%</span><span className="font-semibold text-indigo-700">{retention.retentionRate}% retained</span><span>100%</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Top 10 Most Active Patrons ── */}
+          {activePatrons.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>🥇</span>Top {activePatrons.length} Most Active Patrons (All-Time Checkouts)
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Patrons with the highest lifetime borrowing. Useful for identifying power users and loyal readers.</p>
+              <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-indigo-700 text-white">
+                      <th className="text-center p-2 w-8">#</th>
+                      <th className="text-left p-2">Barcode</th>
+                      <th className="text-left p-2">Name</th>
+                      <th className="text-left p-2">Type</th>
+                      <th className="text-right p-2">Total Checkouts</th>
+                      <th className="text-right p-2">This Year</th>
+                      <th className="text-right p-2">Overdue Now</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activePatrons.map((ap, i) => (
+                      <tr key={ap.PatronBarcode} className={i % 2 === 0 ? 'bg-white hover:bg-indigo-50' : 'bg-gray-50 hover:bg-indigo-50'}>
+                        <td className="p-2 border-b border-gray-100 text-center font-bold text-gray-400">{i + 1}</td>
+                        <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{ap.PatronBarcode}</td>
+                        <td className="p-2 border-b border-gray-100 font-medium text-gray-900">{ap.LastName}, {ap.FirstName}</td>
+                        <td className="p-2 border-b border-gray-100 text-gray-500">{ap.PatronType}</td>
+                        <td className="p-2 border-b border-gray-100 text-right font-bold text-indigo-700">{ap.totalCheckouts.toLocaleString()}</td>
+                        <td className="p-2 border-b border-gray-100 text-right text-blue-700">{ap.checkoutsThisYear.toLocaleString()}</td>
+                        <td className="p-2 border-b border-gray-100 text-right">
+                          {ap.overdueCount > 0
+                            ? <span className="font-semibold text-red-600">{ap.overdueCount}</span>
+                            : <span className="text-gray-400">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -1644,6 +1745,100 @@ export default function Dashboard() {
                   </div>
                 )}
 
+              </div>
+            </div>
+          )}
+
+          {/* ── Items by Call Number / Dewey Range ── */}
+          {callNumData.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>📂</span>Collection Coverage by Dewey Subject Range
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Items and checkout activity grouped by Dewey Decimal class. Identifies under-represented subjects relative to program needs.</p>
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <ResponsiveContainer width="100%" height={Math.max(240, callNumData.length * 40)}>
+                  <BarChart data={callNumData} layout="vertical" margin={{ left: 280, right: 80, top: 4, bottom: 4 }}>
+                    <XAxis type="number" tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="range" tick={{ fontSize: 11 }} width={275} />
+                    <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
+                    <Legend />
+                    <Bar dataKey="items" name="Items" fill="#3b82f6" radius={[0,2,2,0]} />
+                    <Bar dataKey="checkouts" name="Checkouts" fill="#10b981" radius={[0,2,2,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                        <th className="text-left p-2 border border-gray-200">Dewey Range</th>
+                        <th className="text-right p-2 border border-gray-200">Items</th>
+                        <th className="text-right p-2 border border-gray-200">Titles</th>
+                        <th className="text-right p-2 border border-gray-200">Checkouts</th>
+                        <th className="text-right p-2 border border-gray-200">Usage %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {callNumData.map((r, i) => (
+                        <tr key={r.firstDigit} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="p-2 border border-gray-200 font-medium text-gray-900">{r.range}</td>
+                          <td className="p-2 border border-gray-200 text-right">{r.items.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right">{r.titles.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-emerald-700">{r.checkouts.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right font-semibold" style={{ color: r.utilRate > 50 ? '#dc2626' : r.utilRate > 20 ? '#d97706' : '#059669' }}>
+                            {r.utilRate}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Longest Overdue Items ── */}
+          {longestOverdue.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>⏰</span>Top {longestOverdue.length} Longest-Overdue Items
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Items overdue the longest. Consider escalating to replacement billing for items beyond 90 days.</p>
+              <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-red-700 text-white">
+                      <th className="text-left p-2">Item Barcode</th>
+                      <th className="text-left p-2">Title</th>
+                      <th className="text-left p-2">Author</th>
+                      <th className="text-left p-2">Patron</th>
+                      <th className="text-left p-2">Type</th>
+                      <th className="text-right p-2">Due Date</th>
+                      <th className="text-right p-2">Days Overdue</th>
+                      <th className="text-right p-2">Replacement ₱</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {longestOverdue.map((item, i) => (
+                      <tr key={item.CopyBarcode} className={i % 2 === 0 ? 'bg-white hover:bg-red-50' : 'bg-gray-50 hover:bg-red-50'}>
+                        <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{item.CopyBarcode}</td>
+                        <td className="p-2 border-b border-gray-100 font-medium text-gray-900 max-w-[200px]"><div className="line-clamp-2">{item.Title}</div></td>
+                        <td className="p-2 border-b border-gray-100 text-gray-600">{item.Author}</td>
+                        <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{item.PatronBarcode}</td>
+                        <td className="p-2 border-b border-gray-100 text-gray-500">{item.PatronType}</td>
+                        <td className="p-2 border-b border-gray-100 text-right text-gray-700">{item.DateDue}</td>
+                        <td className="p-2 border-b border-gray-100 text-right">
+                          <span className={`font-bold ${item.DaysOverdue > 90 ? 'text-red-700' : item.DaysOverdue > 30 ? 'text-amber-600' : 'text-yellow-600'}`}>
+                            {item.DaysOverdue.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="p-2 border-b border-gray-100 text-right text-gray-700">
+                          {item.ReplacementCost > 0 ? `₱${item.ReplacementCost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
