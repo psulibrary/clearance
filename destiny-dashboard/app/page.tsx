@@ -394,6 +394,14 @@ function StrategicTab({
     );
   }
 
+  if ((stats as Record<string,unknown>).error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-red-700 text-sm">
+        <strong>Strategic KPI data error:</strong> {String((stats as Record<string,unknown>).error)}
+      </div>
+    );
+  }
+
   const enrolled = stored.enrolledStudents;
   const budget   = stored.annualBudget;
 
@@ -2787,7 +2795,7 @@ export default function Dashboard() {
           {/* ── Green Library KPIs ── */}
           <div className="mb-8">
             <ErrorBoundary>
-              <GreenLibraryTab reuseRate={s && s.totalItems ? parseFloat((s.checkoutsThisYear / s.totalItems).toFixed(2)) : null} />
+              <GreenLibraryTab reuseRate={strategicStats && !strategicStats.error && strategicStats.totalItems > 0 ? parseFloat((strategicStats.checkoutsThisYear / strategicStats.totalItems).toFixed(2)) : null} />
             </ErrorBoundary>
           </div>
 

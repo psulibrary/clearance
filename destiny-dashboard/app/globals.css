@@ -24,3 +24,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@media print {
+  thead tr {
+    background-color: #e5e7eb !important;
+    color: #111827 !important;
+  }
+  thead tr th {
+    color: #111827 !important;
+  }
+}
