@@ -2275,7 +2275,7 @@ export default function Dashboard() {
   const [yoyLoaded, setYoyLoaded]         = useState(false);
 
   type RoomUseData = {
-    source: 'transaction_table' | 'copy_column' | 'none';
+    source: 'transaction_table' | 'copy_transaction' | 'copy_column' | 'none';
     year: number;
     totalThisYear?: number;
     totalAllTime?: number;
@@ -2283,8 +2283,9 @@ export default function Dashboard() {
     yearTotal?: number | null;
     topTitles?: { Title: string; Author: string; inLibraryUses: number; copies: number }[];
     byMonth?: { mo: number; uses: number }[];
+    byPatronType?: { patronType: string; uses: number }[];
     message?: string;
-    debug?: { copyCols: string[]; allTables: string[]; patternsSearched?: string[] };
+    debug?: { copyCols?: string[]; allTables?: string[]; patternsSearched?: string[]; ctCols?: string[]; dateCol?: string; inLibFlag?: string | null; inLibWhere?: string; typeBreakdown?: { type: unknown; cnt: number }[] };
   };
   const [roomUse, setRoomUse]             = useState<RoomUseData | null>(null);
   const [roomUseLoaded, setRoomUseLoaded] = useState(false);
@@ -3223,58 +3224,64 @@ export default function Dashboard() {
               <div>
                 {/* Summary cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-                  {roomUse.source === 'transaction_table' && (
-                    <>
-                      <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                        <div className="text-2xl font-bold text-violet-700">{(roomUse.totalThisYear ?? 0).toLocaleString()}</div>
-                        <div className="text-xs text-gray-500 mt-1">In-Library Uses {year}</div>
-                      </div>
-                      <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                        <div className="text-2xl font-bold text-gray-700">{(roomUse.byMonth?.length ?? 0)}</div>
-                        <div className="text-xs text-gray-500 mt-1">Months with Data</div>
-                      </div>
-                    </>
-                  )}
-                  {roomUse.source === 'copy_column' && (
-                    <>
-                      <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                        <div className="text-2xl font-bold text-violet-700">{(roomUse.totalAllTime ?? 0).toLocaleString()}</div>
-                        <div className="text-xs text-gray-500 mt-1">Total In-Library Uses</div>
-                        <div className="text-xs text-gray-400">(all time)</div>
-                      </div>
-                      <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                        <div className="text-2xl font-bold text-indigo-700">{(roomUse.titlesWithUse ?? 0).toLocaleString()}</div>
-                        <div className="text-xs text-gray-500 mt-1">Titles Used In-Library</div>
-                      </div>
-                      {roomUse.yearTotal != null && (
-                        <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                          <div className="text-2xl font-bold text-emerald-700">{roomUse.yearTotal.toLocaleString()}</div>
-                          <div className="text-xs text-gray-500 mt-1">In-Library Uses {year}</div>
-                        </div>
-                      )}
-                    </>
-                  )}
+                  <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <div className="text-2xl font-bold text-violet-700">{(roomUse.totalThisYear ?? 0).toLocaleString()}</div>
+                    <div className="text-xs text-gray-500 mt-1">In-Library Uses {year}</div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <div className="text-2xl font-bold text-indigo-700">{(roomUse.totalAllTime ?? 0).toLocaleString()}</div>
+                    <div className="text-xs text-gray-500 mt-1">Total All-Time</div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <div className="text-2xl font-bold text-gray-700">{(roomUse.byMonth?.length ?? 0)}</div>
+                    <div className="text-xs text-gray-500 mt-1">Months with Data</div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <div className="text-2xl font-bold text-emerald-700">{roomUse.topTitles?.length ?? 0}</div>
+                    <div className="text-xs text-gray-500 mt-1">Distinct Titles Used</div>
+                  </div>
                 </div>
 
-                {/* Monthly trend (transaction table only) */}
+                {/* Monthly trend */}
                 {roomUse.byMonth && roomUse.byMonth.length > 0 && (
                   <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
                     <p className="text-sm font-semibold text-gray-700 mb-3">Monthly In-Library Use — {year}</p>
-                    <div className="flex items-end gap-1 h-24">
+                    <div className="flex items-end gap-1 h-28">
                       {(() => {
                         const max = Math.max(...roomUse.byMonth!.map(r => r.uses), 1);
                         const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                         return Array.from({ length: 12 }, (_, i) => {
                           const row = roomUse.byMonth!.find(r => r.mo === i + 1);
-                          const h = row ? Math.max(4, (row.uses / max) * 80) : 0;
+                          const h = row ? Math.max(4, (row.uses / max) * 90) : 0;
                           return (
                             <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                              <div className="text-xs text-gray-500">{row ? row.uses : ''}</div>
-                              <div className="w-full rounded-t" style={{ height: `${h}px`, backgroundColor: row ? '#7c3aed' : '#e5e7eb' }} title={row ? `${months[i]}: ${row.uses}` : months[i]} />
-                              <div className="text-xs text-gray-400">{months[i].slice(0,1)}</div>
+                              <div className="text-xs text-gray-500 leading-none">{row ? row.uses.toLocaleString() : ''}</div>
+                              <div className="w-full rounded-t transition-all" style={{ height: `${h}px`, backgroundColor: row ? '#7c3aed' : '#e5e7eb' }} title={row ? `${months[i]}: ${row.uses.toLocaleString()}` : months[i]} />
+                              <div className="text-xs text-gray-400">{months[i].slice(0,3)}</div>
                             </div>
                           );
                         });
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* By patron type */}
+                {roomUse.byPatronType && roomUse.byPatronType.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-3">In-Library Use by Patron Type — {year}</p>
+                    <div className="space-y-2">
+                      {(() => {
+                        const max = Math.max(...roomUse.byPatronType!.map(r => r.uses), 1);
+                        return roomUse.byPatronType!.map((r, i) => (
+                          <div key={i} className="flex items-center gap-3">
+                            <div className="w-36 text-xs text-gray-700 font-medium truncate shrink-0">{r.patronType}</div>
+                            <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                              <div className="h-4 rounded-full bg-violet-500" style={{ width: `${(r.uses / max * 100).toFixed(1)}%` }} />
+                            </div>
+                            <div className="text-xs font-semibold text-gray-700 w-14 text-right">{r.uses.toLocaleString()}</div>
+                          </div>
+                        ));
                       })()}
                     </div>
                   </div>
