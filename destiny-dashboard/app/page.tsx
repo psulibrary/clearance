@@ -317,23 +317,34 @@ const COLOR = {
 } as const;
 
 type StoredValues = Record<string, { value: number; notes: string; date: string }>;
-const LS_KEY = 'psu_green_metrics_v1';
-
-function loadGreenValues(): StoredValues {
-  if (typeof window === 'undefined') return {};
-  try { return JSON.parse(localStorage.getItem(LS_KEY) ?? '{}'); } catch { return {}; }
-}
-function saveGreenValues(v: StoredValues) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(LS_KEY, JSON.stringify(v));
-}
 
 function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
-  const [stored, setStored] = useState<StoredValues>({});
+  const [stored, setStored]   = useState<StoredValues>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState<MetricID | null>(null);
   const [editing, setEditing] = useState<MetricID | null>(null);
-  const [draft, setDraft] = useState({ value: '', notes: '' });
+  const [draft, setDraft]     = useState({ value: '', notes: '' });
 
-  useEffect(() => { setStored(loadGreenValues()); }, []);
+  useEffect(() => {
+    import('@/lib/supabase').then(({ supabase }) => {
+      supabase
+        .from('green_metrics')
+        .select('metric_id, value, notes, recorded_on')
+        .order('recorded_on', { ascending: false })
+        .then(({ data }) => {
+          if (!data) return;
+          // Keep only the most recent entry per metric
+          const map: StoredValues = {};
+          for (const row of data) {
+            if (!map[row.metric_id]) {
+              map[row.metric_id] = { value: Number(row.value), notes: row.notes ?? '', date: row.recorded_on };
+            }
+          }
+          setStored(map);
+          setLoading(false);
+        });
+    });
+  }, []);
 
   function startEdit(id: MetricID) {
     const cur = stored[id];
@@ -341,20 +352,26 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
     setEditing(id);
   }
 
-  function saveEdit(id: MetricID) {
+  async function saveEdit(id: MetricID) {
     const num = parseFloat(draft.value);
     if (isNaN(num)) { setEditing(null); return; }
-    const next = { ...stored, [id]: { value: num, notes: draft.notes, date: new Date().toISOString().slice(0, 10) } };
-    setStored(next);
-    saveGreenValues(next);
+    const today = new Date().toISOString().slice(0, 10);
+    setSaving(id);
+    const { supabase } = await import('@/lib/supabase');
+    await supabase.from('green_metrics').upsert({
+      metric_id: id, recorded_on: today, value: num, notes: draft.notes || null,
+    }, { onConflict: 'metric_id,recorded_on' });
+    setStored(prev => ({ ...prev, [id]: { value: num, notes: draft.notes, date: today } }));
+    setSaving(null);
     setEditing(null);
   }
 
-  function clearValue(id: MetricID) {
-    const next = { ...stored };
-    delete next[id];
-    setStored(next);
-    saveGreenValues(next);
+  async function clearValue(id: MetricID) {
+    const entry = stored[id];
+    if (!entry) return;
+    const { supabase } = await import('@/lib/supabase');
+    await supabase.from('green_metrics').delete().eq('metric_id', id).eq('recorded_on', entry.date);
+    setStored(prev => { const n = { ...prev }; delete n[id]; return n; });
   }
 
   function exportCSV() {
@@ -370,12 +387,19 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
 
   const categories = [...new Set(GREEN_METRICS.map(m => m.cat))];
 
+  if (loading) return (
+    <div className="flex items-center justify-center py-20 text-gray-400">
+      <svg className="animate-spin w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+      Loading Green Library metrics from Supabase…
+    </div>
+  );
+
   return (
     <div>
       <div className="mb-6 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl p-5 text-white flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold mb-1">🌿 Green Library KPI Dashboard</h2>
-          <p className="text-sm text-emerald-100">Track environmental sustainability metrics. <strong>LIB-CIRC-001</strong> is auto-computed from your ILS. Enter current values for the rest by clicking <em>Update</em> — saved locally in your browser.</p>
+          <p className="text-sm text-emerald-100">Track environmental sustainability metrics. <strong>LIB-CIRC-001</strong> is auto-computed from your ILS. Enter current values for the rest by clicking <em>Update</em> — saved to Supabase and available on any device.</p>
         </div>
         <button onClick={exportCSV} className="shrink-0 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors">
           ↓ Export CSV
@@ -483,7 +507,9 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
                             />
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={() => saveEdit(m.id as MetricID)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">Save</button>
+                            <button onClick={() => saveEdit(m.id as MetricID)} disabled={saving === m.id} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1">
+                            {saving === m.id ? <><svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Saving…</> : 'Save'}
+                          </button>
                             <button onClick={() => setEditing(null)} className="bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold px-3 py-1.5 rounded-lg">Cancel</button>
                           </div>
                         </div>
@@ -507,7 +533,7 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
       })}
 
       <div className="mt-2 p-4 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
-        <strong>How values are stored:</strong> Entered values are saved in your browser&apos;s localStorage — no server or database needed. They persist between sessions on this device. Use <em>Export CSV</em> to back them up or share with colleagues.
+        <strong>How values are stored:</strong> Entered values are saved to <strong>Supabase</strong> and available on any device or browser. Use <em>Export CSV</em> to download a backup spreadsheet.
       </div>
     </div>
   );
