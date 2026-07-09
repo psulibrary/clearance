@@ -3197,18 +3197,11 @@ export default function Dashboard() {
 
             {roomUse && roomUse.source === 'none' && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-                <div className="font-semibold text-amber-800 mb-1">⚠ Column name not yet identified</div>
-                <p className="text-sm text-amber-700 mb-3">Destiny stores room/in-library use data but under a different column name in this version. Column names found on the Copy table:</p>
-                {roomUse.debug?.copyCols && (
-                  <div className="bg-white border border-amber-200 rounded-lg p-3 mb-3 font-mono text-xs text-gray-700 max-h-48 overflow-y-auto">
-                    {roomUse.debug.copyCols.map((col, i) => (
-                      <span key={i} className="inline-block bg-gray-100 rounded px-1.5 py-0.5 m-0.5">{col}</span>
-                    ))}
-                  </div>
-                )}
+                <div className="font-semibold text-amber-800 mb-1">⚠ Transaction table not found under expected name</div>
+                <p className="text-sm text-amber-700 mb-3">{roomUse.message}</p>
                 {roomUse.debug?.allTables && (
                   <>
-                    <p className="text-sm text-amber-700 mb-2">Tables in this Destiny schema:</p>
+                    <p className="text-xs font-semibold text-amber-700 mb-1">All tables in this Destiny schema:</p>
                     <div className="bg-white border border-amber-200 rounded-lg p-3 font-mono text-xs text-gray-700 max-h-48 overflow-y-auto">
                       {roomUse.debug.allTables.map((tbl, i) => (
                         <span key={i} className="inline-block bg-gray-100 rounded px-1.5 py-0.5 m-0.5">{tbl}</span>
@@ -3216,7 +3209,16 @@ export default function Dashboard() {
                     </div>
                   </>
                 )}
-                <p className="text-xs text-gray-500 mt-3">Share these column/table names with your developer to wire up the correct query.</p>
+                {roomUse.debug?.ctCols && (
+                  <>
+                    <p className="text-xs font-semibold text-amber-700 mt-3 mb-1">Columns on found table:</p>
+                    <div className="bg-white border border-amber-200 rounded-lg p-3 font-mono text-xs text-gray-700 max-h-32 overflow-y-auto">
+                      {roomUse.debug.ctCols.map((col, i) => (
+                        <span key={i} className="inline-block bg-gray-100 rounded px-1.5 py-0.5 m-0.5">{col}</span>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
