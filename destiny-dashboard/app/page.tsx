@@ -952,6 +952,180 @@ function GreenLibraryTab({ reuseRate, unlocked }: { reuseRate: number | null; un
   );
 }
 
+// ── International Standards Manual Metrics (IFLA / ALA) ─────────────────────
+
+const ISO_MANUAL_METRICS = [
+  // Financial & Management
+  { id: 'ISO-FIN-TOTAL-BUDGET',        group: 'Financial & Management', label: 'Total Library Operating Expenditure (₱)',           unit: '₱',         hint: 'Annual operating budget from financial ledger' },
+  { id: 'ISO-FIN-COST-PER-USER',       group: 'Financial & Management', label: 'Cost per User (₱)',                                 unit: '₱',         hint: 'Total expenditure ÷ active registered users' },
+  { id: 'ISO-FIN-COST-PER-VISIT',      group: 'Financial & Management', label: 'Annual Physical Gate Count (visits)',               unit: 'visits',    hint: 'Annual physical door count for Cost per Visit calculation' },
+  { id: 'ISO-FIN-STAFF-COST-PCT',      group: 'Financial & Management', label: 'Staff Costs as % of Operating Expenditures',        unit: '%',         hint: '(Staff compensation ÷ Total budget) × 100' },
+  { id: 'ISO-FIN-DIGITAL-BUDGET-PCT',  group: 'Financial & Management', label: '% of Expenditures on Electronic Resources',         unit: '%',         hint: '(Digital content budget ÷ Total collection budget) × 100' },
+  // User Perspective — Survey
+  { id: 'ISO-UX-SATISFACTION',         group: 'User Perspective (Surveys)', label: 'User Satisfaction Index (avg score)',            unit: 'score 1–5', hint: 'Average Likert score from LibQUAL+ or annual user survey' },
+  { id: 'ISO-UX-TITLE-AVAIL',          group: 'User Perspective (Surveys)', label: 'Title / Subject Availability Rate (%)',           unit: '%',         hint: '(Titles found ÷ Titles sought) × 100 — from shelf-availability study' },
+  { id: 'ISO-UX-FACILITY-SAT',         group: 'User Perspective (Surveys)', label: 'Facilities Satisfaction Rate (%)',                unit: '%',         hint: '% of surveyed users rating study spaces as satisfactory' },
+  { id: 'ISO-UX-DOWNTIME-RATE',        group: 'User Perspective (Surveys)', label: 'Workstation / Wi-Fi Downtime Rate (%)',           unit: '%',         hint: '(Offline hours ÷ Total open hours) × 100 — from IT logs' },
+  { id: 'ISO-UX-ILL-DAYS',             group: 'User Perspective (Surveys)', label: 'Median Days to Fulfill ILL / Document Delivery',  unit: 'days',      hint: 'Median calendar days from ILL request to notification' },
+  { id: 'ISO-UX-CORRECT-ANSWER',       group: 'User Perspective (Surveys)', label: 'Correct Answer Rate for Reference Queries (%)',   unit: '%',         hint: '(Accurate answers ÷ Sampled queries) × 100 — from reference audit' },
+  { id: 'ISO-UX-GATE-COUNT',           group: 'User Perspective (Surveys)', label: 'Annual Library Visits (Gate Count)',              unit: 'visits',    hint: 'Physical door count for the year' },
+  // Internal Processes
+  { id: 'ISO-INT-PROC-DAYS',           group: 'Internal Processes', label: 'Median Processing Days for New Acquisitions',            unit: 'days',      hint: 'Median days from receipt to live catalog entry' },
+  { id: 'ISO-INT-CAT-ACCURACY',        group: 'Internal Processes', label: 'Cataloging Accuracy Rate (%)',                           unit: '%',         hint: '(Correct MARC/RDA records ÷ Audited records) × 100' },
+  { id: 'ISO-INT-MTTR-HOURS',          group: 'Internal Processes', label: 'Mean Time to Resolve System Failures (hours)',           unit: 'hours',     hint: 'Mean time to repair critical software/network issues' },
+  { id: 'ISO-INT-CONSERV-RATE',        group: 'Internal Processes', label: 'Conservation Stabilization Rate (%)',                    unit: '%',         hint: '(Items stabilized or digitized ÷ Items flagged as vulnerable) × 100' },
+  // Learning & Growth
+  { id: 'ISO-LG-TRAINING-HRS',         group: 'Learning & Growth', label: 'Staff Training Hours per FTE',                           unit: 'hours',     hint: 'Total professional development hours ÷ FTE staff count' },
+  { id: 'ISO-LG-IT-CERT-PCT',          group: 'Learning & Growth', label: '% Staff with Specialized IT / Data Certifications',      unit: '%',         hint: '(Staff with current IT certs ÷ Total FTE) × 100' },
+  // ALA Project Outcome
+  { id: 'ISO-ALA-KNOWLEDGE',           group: 'ALA Project Outcome', label: 'Knowledge Acquisition Rate (%)',                        unit: '%',         hint: 'Post-program survey: % who learned something new' },
+  { id: 'ISO-ALA-CONFIDENCE',          group: 'ALA Project Outcome', label: 'Confidence Building Rate (%)',                          unit: '%',         hint: 'Post-program survey: % reporting increased confidence' },
+  { id: 'ISO-ALA-BEHAVIOR',            group: 'ALA Project Outcome', label: 'Behavioral Change Intention Rate (%)',                  unit: '%',         hint: 'Post-program survey: % who plan to change a behavior' },
+  { id: 'ISO-ALA-AWARENESS',           group: 'ALA Project Outcome', label: 'Resource Awareness Rate (%)',                           unit: '%',         hint: 'Post-program survey: % with expanded library resource awareness' },
+  { id: 'ISO-ALA-SESSIONS',            group: 'ALA Project Outcome', label: 'Program / Instruction Sessions Conducted This Year',    unit: 'sessions',  hint: 'Total library programs, orientations, and instruction events' },
+  { id: 'ISO-ALA-PARTICIPANTS',        group: 'ALA Project Outcome', label: 'Total Program Participants This Year',                  unit: 'persons',   hint: 'Aggregate headcount across all library programs' },
+] as const;
+
+type IsoMetricID = typeof ISO_MANUAL_METRICS[number]['id'];
+type IsoStored = Record<string, { value: number; notes: string; date: string }>;
+
+function IsoManualSection({ unlocked }: { unlocked: boolean }) {
+  const [stored, setStored]   = useState<IsoStored>({});
+  const [loading, setLoading] = useState(true);
+  const [sbError, setSbError] = useState<string | null>(null);
+  const [saving, setSaving]   = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft]     = useState({ value: '', notes: '' });
+
+  const allIds = ISO_MANUAL_METRICS.map(m => m.id);
+
+  useEffect(() => {
+    (async () => {
+      const { supabase } = await import('@/lib/supabase');
+      const { data, error } = await supabase
+        .from('green_metrics')
+        .select('metric_id, value, notes, updated_at')
+        .in('metric_id', allIds);
+      if (error) { setSbError(error.message); } else {
+        const map: IsoStored = {};
+        (data ?? []).forEach((r: { metric_id: string; value: number; notes: string; updated_at: string }) => {
+          map[r.metric_id] = { value: r.value, notes: r.notes ?? '', date: r.updated_at?.slice(0, 10) ?? '' };
+        });
+        setStored(map);
+      }
+      setLoading(false);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function save(id: IsoMetricID) {
+    const val = parseFloat(draft.value);
+    if (isNaN(val)) return;
+    setSaving(id);
+    const { supabase } = await import('@/lib/supabase');
+    const { error } = await supabase.from('green_metrics').upsert(
+      { metric_id: id, value: val, notes: draft.notes, updated_at: new Date().toISOString() },
+      { onConflict: 'metric_id' }
+    );
+    if (!error) {
+      setStored(prev => ({ ...prev, [id]: { value: val, notes: draft.notes, date: new Date().toISOString().slice(0, 10) } }));
+      setEditing(null);
+      setDraft({ value: '', notes: '' });
+    }
+    setSaving(null);
+  }
+
+  const groups = [...new Set(ISO_MANUAL_METRICS.map(m => m.group))];
+  const filled = ISO_MANUAL_METRICS.filter(m => stored[m.id] !== undefined).length;
+
+  if (loading) return <div className="text-center py-8 text-gray-400 text-sm">Loading saved metrics…</div>;
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-3 mb-4">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+          <span>📝</span>Manual Data Entry — IFLA / ALA Reference Metrics
+        </h2>
+        <span className="ml-auto text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+          {filled}/{ISO_MANUAL_METRICS.length} metrics entered
+        </span>
+      </div>
+      {sbError && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">{sbError}</div>}
+      {!unlocked && (
+        <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+          🔒 Unlock the dashboard with the editor password (CHED CMO 22 tab) to enter or edit values.
+        </div>
+      )}
+      {groups.map(group => {
+        const metrics = ISO_MANUAL_METRICS.filter(m => m.group === group);
+        const groupFilled = metrics.filter(m => stored[m.id]).length;
+        return (
+          <div key={group} className="mb-5">
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{group}</h3>
+              <span className="text-xs text-gray-400">{groupFilled}/{metrics.length} filled</span>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+              {metrics.map(m => {
+                const rec = stored[m.id];
+                const isEdit = editing === m.id;
+                return (
+                  <div key={m.id} className="p-3 flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                        <span className="text-sm font-medium text-gray-800">{m.label}</span>
+                        <span className="text-xs text-gray-400 font-mono">{m.unit}</span>
+                        {rec && !isEdit && (
+                          <span className="text-xs bg-green-50 text-green-700 px-1.5 py-0.5 rounded font-bold">
+                            {Number(rec.value).toLocaleString()} {m.unit}
+                          </span>
+                        )}
+                        {rec?.date && !isEdit && <span className="text-xs text-gray-400">· {rec.date}</span>}
+                      </div>
+                      <div className="text-xs text-gray-400">{m.hint}</div>
+                      {rec?.notes && !isEdit && <div className="text-xs text-indigo-600 mt-0.5 italic">{rec.notes}</div>}
+                      {isEdit && unlocked && (
+                        <div className="mt-2 flex flex-wrap gap-2 items-center">
+                          <input type="number" value={draft.value} onChange={e => setDraft(d => ({ ...d, value: e.target.value }))}
+                            placeholder="Value" className="border border-gray-300 rounded px-2 py-1 text-sm w-28 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                          <input type="text" value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))}
+                            placeholder="Notes (optional)" className="border border-gray-300 rounded px-2 py-1 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                          <button onClick={() => save(m.id as IsoMetricID)} disabled={saving === m.id}
+                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg disabled:opacity-50">
+                            {saving === m.id ? 'Saving…' : 'Save'}
+                          </button>
+                          <button onClick={() => { setEditing(null); setDraft({ value: '', notes: '' }); }}
+                            className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5 border border-gray-200 rounded-lg">
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {unlocked && !isEdit && (
+                      <button onClick={() => { setEditing(m.id); setDraft({ value: rec ? String(rec.value) : '', notes: rec?.notes ?? '' }); }}
+                        className="text-xs text-blue-500 hover:text-blue-700 shrink-0 border border-blue-100 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">
+                        {rec ? 'Edit' : 'Enter'}
+                      </button>
+                    )}
+                    {!unlocked && !rec && (
+                      <span className="text-xs text-gray-300 shrink-0">—</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      {filled === 0 && !unlocked && (
+        <div className="text-center py-6 text-gray-400 text-sm">
+          No data entered yet. Unlock with the editor password to begin entering IFLA / ALA metric values.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── CHED CMO 22 Manual Metrics ──────────────────────────────────────────────
 
 const CHED_MANUAL_SECTIONS = [
@@ -1206,7 +1380,7 @@ function ChedComplianceSummary({ chedStats }: { chedStats: Record<string,number>
       section: '§5.a.iii',
       value: `${Number(chedStats.totalILL ?? 0).toLocaleString()} ILL records`,
       pass: (chedStats.totalILL ?? 0) > 0,
-      note: (chedStats.totalILL ?? 0) > 0 ? 'ILL transactions found in Destiny' : 'No ILL transactions recorded — verify if service is active in Destiny',
+      note: (chedStats.totalILL ?? 0) > 0 ? 'ILL transactions found in Destiny CrossDistrictLoan table' : 'No Destiny ILL record found — if ILL is done manually, enter count in §5 manual fields below',
     },
   ];
 
@@ -3794,6 +3968,15 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* ── Manual entry for all non-ILS metrics ── */}
+          <div className="mt-4 mb-3 bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-800">
+            <strong>📝 Enter Actual Values Below</strong> — The reference tables above show formulas and data sources. Use the fields below to record your collected figures so the dashboard can display a summary.
+            {!insightsUnlocked && (
+              <span className="ml-2 text-indigo-500">Unlock editing in the <strong>CHED CMO 22</strong> tab.</span>
+            )}
+          </div>
+          <IsoManualSection unlocked={insightsUnlocked} />
         </div>
 
         {/* Tab: CHED CMO 22 */}
@@ -3808,6 +3991,9 @@ export default function Dashboard() {
           )}
           {chedStats && !chedStats.error && (
             <>
+              {/* ── Compliance Summary at a Glance ── */}
+              <ChedComplianceSummary chedStats={chedStats} />
+
               <Section title="§4.b.1 — Minimum Title Requirement" icon="📖">
                 <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 print:shadow-none print:border print:border-gray-200">
                   <div className={`text-3xl font-bold ${(chedStats.totalTitles ?? 0) >= 5000 ? 'text-green-700' : 'text-red-600'}`}>
@@ -3873,9 +4059,6 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
-
-              {/* ── Cross-computed Compliance Indicators ── */}
-              <ChedComplianceSummary chedStats={chedStats} />
 
               {/* Manual documentation sections */}
               <div className="mb-6 flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl print:hidden">
