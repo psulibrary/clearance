@@ -955,91 +955,300 @@ function GreenLibraryTab({ reuseRate, unlocked }: { reuseRate: number | null; un
 // ── CHED CMO 22 Manual Metrics ──────────────────────────────────────────────
 
 const CHED_MANUAL_SECTIONS = [
+  // ── §1 VMGO ────────────────────────────────────────────────────────────────
   {
     section: '§1 — Vision, Mission, Goals & Objectives (VMGO)',
     icon: '🎯',
+    note: 'Library VMGO must align with the institution, be visibly posted, and published on the library website.',
     metrics: [
-      { id: 'CHED-S1-VMGO-APPROVED',    label: 'VMGO Document Formally Approved',               unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes, 0 for No',                comply: (v:number) => v === 1 },
-      { id: 'CHED-S1-VMGO-REVIEW-YEAR', label: 'Year VMGO Last Reviewed',                        unit: 'year',          hint: 'e.g. 2024',                                comply: (v:number) => v >= new Date().getFullYear() - 3 },
-      { id: 'CHED-S1-LIB-ALIGNMENT',    label: 'Library Mission Aligned with Institutional VMGO', unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes',                           comply: (v:number) => v === 1 },
+      { id: 'CHED-S1-VMGO-APPROVED',    label: 'VMGO Document Formally Approved by Administration', unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes, 0 for No', comply: (v:number) => v === 1 },
+      { id: 'CHED-S1-VMGO-POSTED',      label: 'VMGO Visibly Posted Inside Library Premises',       unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes',            comply: (v:number) => v === 1 },
+      { id: 'CHED-S1-VMGO-WEBSITE',     label: 'VMGO Published on Library Website',                 unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes',            comply: (v:number) => v === 1 },
+      { id: 'CHED-S1-VMGO-REVIEW-YEAR', label: 'Year VMGO Last Reviewed / Updated',                 unit: 'year',          hint: 'e.g. 2024',                 comply: (v:number) => v >= new Date().getFullYear() - 3 },
+      { id: 'CHED-S1-LIB-ALIGNMENT',    label: 'Library Mission Aligned with Institutional VMGO',   unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes',            comply: (v:number) => v === 1 },
     ],
   },
+  // ── §2 Administration ─────────────────────────────────────────────────────
   {
     section: '§2 — Administration & Organization',
     icon: '🏛️',
+    note: 'Head librarian must be PRC-licensed, hold a Master\'s in LIS, be a member of an accredited professional org, and have ≥2 years supervisory experience.',
     metrics: [
-      { id: 'CHED-S2-LICENSED-LIBRARIANS', label: 'Licensed Professional Librarians (PRC)',          unit: 'persons', hint: 'Staff with active PRC license' },
-      { id: 'CHED-S2-DIRECTOR-EDUC',       label: "Director's Highest Degree (1=BS 2=MA 3=PhD)",    unit: 'level',   hint: '1=BS/AB, 2=Masters, 3=Doctorate',     comply: (v:number) => v >= 2 },
-      { id: 'CHED-S2-ORG-CHART',           label: 'Organizational Chart Documented & Filed',          unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes',                   comply: (v:number) => v === 1 },
+      { id: 'CHED-S2-LICENSED-LIBRARIANS',  label: 'Licensed Professional Librarians (PRC-licensed)',          unit: 'persons',      hint: 'Staff with valid active PRC license' },
+      { id: 'CHED-S2-DIRECTOR-EDUC',        label: "Head Librarian's Highest Degree (1=BS 2=MA 3=PhD)",        unit: 'level',        hint: '1=BS/AB, 2=Masters in LIS or related, 3=Doctorate', comply: (v:number) => v >= 2 },
+      { id: 'CHED-S2-DIR-PROF-ORG',         label: 'Head Librarian Member of Accredited Professional Org',     unit: '1=Yes / 0=No', hint: 'e.g. PAARL, PLAI',                                 comply: (v:number) => v === 1 },
+      { id: 'CHED-S2-DIR-SUPERVISORY-YRS',  label: 'Head Librarian Supervisory Experience (years)',            unit: 'years',        hint: 'Minimum 2 years required (§2.b.3)',                 comply: (v:number) => v >= 2 },
+      { id: 'CHED-S2-ORG-CHART',            label: 'Organizational Chart Documented & Filed',                  unit: '1=Yes / 0=No', hint: 'Library clearly defined in institutional org chart', comply: (v:number) => v === 1 },
+      { id: 'CHED-S2-ADVISORY-COMMITTEE',   label: 'Library Advisory Committee Constituted (§2.d)',            unit: '1=Yes / 0=No', hint: 'With faculty reps from each college + student council', comply: (v:number) => v === 1 },
+      { id: 'CHED-S2-STRATEGIC-PLAN',       label: 'Library Development / Strategic Plan Exists (§2.e)',       unit: '1=Yes / 0=No', hint: 'Formal written plan approved by administration',    comply: (v:number) => v === 1 },
+      { id: 'CHED-S2-RESEARCH-PROG',        label: 'Library Research Program Institutionalized (§2.f)',        unit: '1=Yes / 0=No', hint: 'Formal research program to improve LIS operations',  comply: (v:number) => v === 1 },
+      { id: 'CHED-S2-POLICY-MANUAL',        label: 'Updated Manual of Policies & Procedures Exists (§2.g)',   unit: '1=Yes / 0=No', hint: 'Covers both face-to-face and online services',       comply: (v:number) => v === 1 },
+      { id: 'CHED-S2-ANNUAL-EVAL',          label: 'Annual In-House Evaluation Conducted This Year (§2.h)',    unit: '1=Yes / 0=No', hint: 'e.g. library surveys, customer satisfaction surveys', comply: (v:number) => v === 1 },
     ],
   },
+  // ── §3 Human Resources ────────────────────────────────────────────────────
   {
-    section: '§3 — Staff Ratios & Human Resources',
+    section: '§3 — Human Resources & Staffing Ratios',
     icon: '👥',
+    note: 'For ≤1,000 users: at least 1 full-time librarian + 1 support staff. For every additional 3,000 users: +1 librarian +3 support staff.',
     metrics: [
-      { id: 'CHED-S3-FULL-TIME-STAFF',      label: 'Total Full-Time Library Staff',                          unit: 'persons',            hint: 'Librarians + assistants + clerks combined' },
-      { id: 'CHED-S3-LIBRARIANS',           label: 'Professional Librarians (PRC-licensed)',                  unit: 'persons',            hint: 'PRC-licensed librarians only' },
-      { id: 'CHED-S3-ASSISTANTS',           label: 'Library Assistants & Clerks',                             unit: 'persons',            hint: 'Non-librarian support staff' },
-      { id: 'CHED-S3-STUDENTS-PER-LIB',    label: 'Students per Professional Librarian',                     unit: 'students/librarian', hint: 'Enrollment ÷ librarian count; CHED recommends ≤500', comply: (v:number) => v <= 500 },
+      { id: 'CHED-S3-TOTAL-USERS',        label: 'Total User Population (Students + Faculty + Staff)',  unit: 'persons',            hint: 'Combined headcount used for ratio calculations' },
+      { id: 'CHED-S3-FULL-TIME-STAFF',    label: 'Total Full-Time Library Staff',                       unit: 'persons',            hint: 'Librarians + assistants + clerks combined' },
+      { id: 'CHED-S3-LIBRARIANS',         label: 'Professional Librarians (PRC-licensed)',               unit: 'persons',            hint: 'PRC-licensed librarians only' },
+      { id: 'CHED-S3-ASSISTANTS',         label: 'Library Assistants / Support Staff (non-licensed)',   unit: 'persons',            hint: 'Paraprofessionals: bachelor\'s degree holders or Grade 12 grads' },
+      { id: 'CHED-S3-STUDENT-ASST',       label: 'Student Assistants (augmentation)',                   unit: 'persons',            hint: 'Hours equivalent to required support staff; not substitutes' },
+      { id: 'CHED-S3-STUDENTS-PER-LIB',  label: 'Students per Professional Librarian',                  unit: 'students/librarian', hint: 'Enrollment ÷ licensed librarian count; ≤3,000 per §3.a.2', comply: (v:number) => v <= 3000 },
+      { id: 'CHED-S3-DEV-TRAININGS',      label: 'Staff Development Trainings Attended This Year',      unit: 'trainings',          hint: 'Sum across all library staff; supports §3.c' },
+      { id: 'CHED-S3-DEV-PROGRAM',        label: 'Continuous Personnel Development Program Exists',      unit: '1=Yes / 0=No',       hint: 'Formal program for career progression (§3.c)',            comply: (v:number) => v === 1 },
     ],
   },
+  // ── §4.a Collection Development Policy ────────────────────────────────────
   {
-    section: '§4.a — Collection Development Policy',
+    section: '§4.a — Selection, Acquisition & Collection Policy',
     icon: '📋',
+    note: 'Selection is faculty-led with librarians; acquisition is librarians\' responsibility. A written policy is required.',
     metrics: [
-      { id: 'CHED-S4A-POLICY-EXISTS',  label: 'Written Collection Development Policy Exists',    unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes', comply: (v:number) => v === 1 },
-      { id: 'CHED-S4A-POLICY-YEAR',   label: 'Year Policy Last Reviewed / Updated',              unit: 'year',          hint: 'e.g. 2023',       comply: (v:number) => v >= new Date().getFullYear() - 5 },
+      { id: 'CHED-S4A-POLICY-EXISTS',      label: 'Written Collection Development Policy Exists (§4.a.4)',  unit: '1=Yes / 0=No', hint: 'Approved by administration, prepared with Advisory Committee', comply: (v:number) => v === 1 },
+      { id: 'CHED-S4A-POLICY-YEAR',        label: 'Year Collection Development Policy Last Reviewed',       unit: 'year',          hint: 'e.g. 2023; policy should be reviewed at least every 5 years', comply: (v:number) => v >= new Date().getFullYear() - 5 },
+      { id: 'CHED-S4A-EVAL-CONDUCTED',     label: 'Periodic Collection Evaluation Conducted This Year (§4.a.5)', unit: '1=Yes / 0=No', hint: 'Various approaches/tools used to assess existing collection', comply: (v:number) => v === 1 },
+      { id: 'CHED-S4A-WEEDING-CONDUCTED',  label: 'Weeding / Deselection Program Active This Year (§4.a.6)', unit: '1=Yes / 0=No', hint: 'Regular withdrawal of outdated/irrelevant print and electronic', comply: (v:number) => v === 1 },
     ],
   },
+  // ── §4.b Holdings ─────────────────────────────────────────────────────────
   {
-    section: '§4.c — Serials & Periodicals',
+    section: '§4.b — Holdings: Programs, Journals & Special Materials',
+    icon: '📚',
+    note: 'Per program: 5 relevant titles per major subject (last 5 years); ≥3 journal titles per undergrad program; ≥2 additional peer-reviewed journals per grad program.',
+    metrics: [
+      { id: 'CHED-S4B-UG-PROGRAMS',         label: 'Number of Undergraduate Programs Offered',                 unit: 'programs',  hint: 'Total undergrad degree programs in institution' },
+      { id: 'CHED-S4B-GRAD-PROGRAMS',       label: 'Number of Graduate Programs Offered (Masters/PhD)',        unit: 'programs',  hint: 'Total graduate programs (Masters + Doctorate)' },
+      { id: 'CHED-S4B-RESERVE-COPIES',      label: 'Reserve / High-Use Copy System in Place (§4.b.6)',        unit: '1=Yes / 0=No', hint: 'At least 1 copy reserved for frequently used books', comply: (v:number) => v === 1 },
+      { id: 'CHED-S4B-THESIS-DISS',         label: 'Theses & Dissertations in Collection (§4.b.11)',          unit: 'items',     hint: 'Print and/or electronic theses and dissertations held' },
+      { id: 'CHED-S4B-TOTAL-PERIODICALS',   label: 'Total Periodical Titles (print + electronic) (§4.b.7)',   unit: 'titles',    hint: 'Minimum 50 required; combination of print and e-format', comply: (v:number) => v >= 50 },
+      { id: 'CHED-S4B-UG-JOURNAL-TITLES',   label: 'Professional Journal Titles per Undergrad Program (§4.b.8)', unit: 'titles/program', hint: 'Min 3 per undergrad program; local + foreign, print/e', comply: (v:number) => v >= 3 },
+      { id: 'CHED-S4B-GRAD-JOURNAL-TITLES', label: 'Additional Peer-Reviewed Journals per Grad Program (§4.b.9)', unit: 'titles/program', hint: 'Min 2 additional peer-reviewed/internationally-refereed', comply: (v:number) => v >= 2 },
+      { id: 'CHED-S4B-OER-RESOURCES',       label: 'Open Educational Resources (OER) Listed/Cataloged (§4.b.1)', unit: 'items',    hint: 'OER resources listed in discovery tool/OPAC' },
+    ],
+  },
+  // ── §4.c Organization ─────────────────────────────────────────────────────
+  {
+    section: '§4.c — Cataloging, Classification & Organization',
+    icon: '🗂️',
+    note: 'Collection must be organized per international standards (MARC21 or Dublin Core). An OPAC/discovery tool must be available.',
+    metrics: [
+      { id: 'CHED-S4C-MARC-COMPLIANT',     label: 'Bibliographic Records in MARC21 / Dublin Core (§4.c.3)',   unit: '1=Yes / 0=No', hint: 'Records conform to international metadata standards', comply: (v:number) => v === 1 },
+      { id: 'CHED-S4C-DISCOVERY-TOOL',     label: 'Online Catalog / Discovery Tool Available (§4.c.2)',       unit: '1=Yes / 0=No', hint: 'OPAC or library management system accessible by users',  comply: (v:number) => v === 1 },
+      { id: 'CHED-S4C-STAMPING',           label: 'All Print Items Property-Stamped (§4.c.4)',                 unit: '1=Yes / 0=No', hint: 'Items stamped with HEI name and campus identifier' },
+    ],
+  },
+  // ── §4.c Serials (kept from original) ─────────────────────────────────────
+  {
+    section: '§4.c — Serials & Periodical Subscriptions',
     icon: '📰',
+    note: 'At least 50 periodical titles required (§4.b.7). Include local and foreign titles in print and/or electronic formats.',
     metrics: [
-      { id: 'CHED-S4C-PRINT-SUBS',  label: 'Current Print Serial Subscriptions',            unit: 'titles',          hint: 'Journals/magazines actively subscribed' },
-      { id: 'CHED-S4C-EJOURNALS',   label: 'E-Journal / Online Database Subscriptions',     unit: 'titles/packages', hint: 'Include consortium package titles' },
+      { id: 'CHED-S4C-PRINT-SUBS',         label: 'Current Print Serial / Magazine Subscriptions',            unit: 'titles',          hint: 'Print journals/magazines actively subscribed this year' },
+      { id: 'CHED-S4C-EJOURNALS',          label: 'E-Journal / Online Database Subscriptions or Access',      unit: 'titles/packages', hint: 'Include consortium packages; count individual titles if possible' },
+      { id: 'CHED-S4C-DB-SUBSCRIPTIONS',   label: 'Electronic Database Packages Subscribed (§4.b.9)',         unit: 'databases',       hint: 'e.g. JSTOR, ProQuest, ScienceDirect, EBSCO, HERDIN' },
     ],
   },
+  // ── §4.d Non-Print & Special Collections ──────────────────────────────────
   {
-    section: '§4.d — Non-Print & Special Collections',
+    section: '§4.d — Non-Print, AV & Special Collections',
     icon: '💿',
+    note: 'Non-print/AV and electronic/digital resources shall be made available (§4.b.10). Special collections include theses, dissertations, multimedia.',
     metrics: [
-      { id: 'CHED-S4D-AV-MATERIALS', label: 'Audiovisual Materials (DVDs, CDs, etc.)', unit: 'items', hint: 'Physical AV materials in collection' },
-      { id: 'CHED-S4D-MAPS',         label: 'Maps, Atlases & Geographic Materials',    unit: 'items', hint: 'Physical maps, atlases, globes' },
+      { id: 'CHED-S4D-AV-MATERIALS',       label: 'Audiovisual Materials (DVDs, CDs, Blu-rays, etc.)',        unit: 'items', hint: 'Physical AV materials in active collection' },
+      { id: 'CHED-S4D-MAPS',               label: 'Maps, Atlases & Geographic Materials',                     unit: 'items', hint: 'Physical maps, atlases, globes, charts' },
+      { id: 'CHED-S4D-MULTIMEDIA',         label: 'Multimedia / Digital Learning Objects Available',          unit: 'items', hint: 'Locally produced or licensed digital multimedia content' },
+      { id: 'CHED-S4D-DIGITAL-ARCHIVE',    label: 'Archival / Special Collections Digitized',                 unit: 'items', hint: 'Theses, dissertations, rare items digitized and available electronically' },
     ],
   },
+  // ── §4.d Preservation ─────────────────────────────────────────────────────
+  {
+    section: '§4.d — Preservation, Conservation & Disaster Preparedness',
+    icon: '🛡️',
+    note: 'Library must have security/control policies, a disaster preparedness/recovery plan, proper environmental conditions, and first-aid conservation procedures.',
+    metrics: [
+      { id: 'CHED-S4P-SECURITY-POLICY',    label: 'Collection Security & Loss-Prevention Policy Exists (§4.d.1.1)', unit: '1=Yes / 0=No', hint: 'Written policy on safeguards from damage, loss, mutilation, theft', comply: (v:number) => v === 1 },
+      { id: 'CHED-S4P-DISASTER-PLAN',      label: 'Disaster Preparedness, Response & Recovery Plan (§4.d.1.2)',     unit: '1=Yes / 0=No', hint: 'Includes microfilming/digitization of special/archival collections',  comply: (v:number) => v === 1 },
+      { id: 'CHED-S4P-ENVIRONMENT',        label: 'Proper Environmental Conditions Maintained (§4.d.1.3)',          unit: '1=Yes / 0=No', hint: 'Temperature, humidity, lighting, housekeeping practices in place' },
+      { id: 'CHED-S4P-CONSERVATION-TRNG',  label: 'Preservation/Conservation Training Attended (staff, this year)', unit: 'staff',         hint: 'Number of staff who attended preservation or disaster preparedness training' },
+    ],
+  },
+  // ── §5 Services ───────────────────────────────────────────────────────────
+  {
+    section: '§5 — Services & Utilization',
+    icon: '🛎️',
+    note: 'Library must offer reference, instruction, ILL, document delivery, SDI, remote e-resource access, and plagiarism detection. Innovative virtual/online services are required.',
+    metrics: [
+      { id: 'CHED-S5-REFERENCE',           label: 'Reference & Information Services Offered (§5.a.i)',         unit: '1=Yes / 0=No', hint: 'Face-to-face and/or online reference service active',    comply: (v:number) => v === 1 },
+      { id: 'CHED-S5-INSTRUCTION',         label: 'Library Instruction / Orientation Program (§5.a.ii)',       unit: '1=Yes / 0=No', hint: 'Regular library instruction or information literacy sessions', comply: (v:number) => v === 1 },
+      { id: 'CHED-S5-ILL',                 label: 'Inter/Intra-Library Loan Service Offered (§5.a.iii)',       unit: '1=Yes / 0=No', hint: 'Resource sharing with partner libraries active',          comply: (v:number) => v === 1 },
+      { id: 'CHED-S5-DOC-DELIVERY',        label: 'Document Delivery Service Offered (§5.a.iv)',               unit: '1=Yes / 0=No', hint: 'Physical or digital delivery of materials to users' },
+      { id: 'CHED-S5-SDI',                 label: 'Selective Dissemination of Information (SDI) (§5.a.v)',     unit: '1=Yes / 0=No', hint: 'Proactive notification of new resources to specific users' },
+      { id: 'CHED-S5-REMOTE-ACCESS',       label: 'Remote Access to Electronic Resources (§5.a.vi)',           unit: '1=Yes / 0=No', hint: 'Users can access e-resources from outside library',       comply: (v:number) => v === 1 },
+      { id: 'CHED-S5-PLAGCHECK',           label: 'Plagiarism Detection Software Available (§5.a.vii)',        unit: '1=Yes / 0=No', hint: 'e.g. Turnitin, iThenticate, Unicheck',                  comply: (v:number) => v === 1 },
+      { id: 'CHED-S5-CITATION-TOOL',       label: 'Reference Management / Citation Tool Available (§5.a.vii)', unit: '1=Yes / 0=No', hint: 'e.g. Mendeley, Zotero, EndNote, RefWorks' },
+      { id: 'CHED-S5-ONLINE-CIRC',         label: 'Online / Virtual Circulation Service (§5.b.ii)',            unit: '1=Yes / 0=No', hint: 'Book padala, pick-up/drop-off, scanning/digitization on request' },
+      { id: 'CHED-S5-INSTRUCTION-SESSIONS', label: 'Library Instruction Sessions Conducted This Year',         unit: 'sessions',      hint: 'Include orientation, database training, information literacy classes' },
+      { id: 'CHED-S5-REF-QUERIES',         label: 'Reference Queries Handled This Year',                       unit: 'queries',       hint: 'In-person and virtual reference transactions' },
+      { id: 'CHED-S5-ILL-TRANSACTIONS',    label: 'Interlibrary Loan Transactions This Year',                  unit: 'transactions',  hint: 'Borrowed + lent combined across all partner libraries' },
+    ],
+  },
+  // ── §6 Physical Facilities ────────────────────────────────────────────────
   {
     section: '§6 — Physical Facilities',
     icon: '🏢',
+    note: 'Library must accommodate ≥5% of on-site users. Dedicated learning, discussion, and creation spaces are required. PWD access is mandatory.',
     metrics: [
-      { id: 'CHED-S6-FLOOR-AREA',     label: 'Library Floor Area',                   unit: 'sq meters', hint: 'Total usable library space in sq m' },
-      { id: 'CHED-S6-SEATING',        label: 'Reader Seating Capacity',               unit: 'seats',     hint: 'CHED recommends ≥5% of enrollment' },
-      { id: 'CHED-S6-COMPUTERS',      label: 'Public-Access Computer Terminals',      unit: 'units',     hint: 'Including OPACs and research workstations' },
-      { id: 'CHED-S6-ANNUAL-VISITS',  label: 'Annual In-Person Library Visits',       unit: 'visits/yr', hint: 'Gate counter or manual headcount for the year' },
+      { id: 'CHED-S6-FLOOR-AREA',          label: 'Total Library Floor Area',                                  unit: 'sq meters',  hint: 'Total usable library space in square meters' },
+      { id: 'CHED-S6-SEATING',             label: 'Reader Seating Capacity',                                   unit: 'seats',      hint: 'CHED §6.a requires ≥5% of total on-site users' },
+      { id: 'CHED-S6-COMPUTERS',           label: 'Public-Access Computer Terminals (§7.b)',                   unit: 'units',      hint: 'All user-accessible desktops/laptops/tablets combined' },
+      { id: 'CHED-S6-ANNUAL-VISITS',       label: 'Annual In-Person Library Visits',                           unit: 'visits/yr',  hint: 'Gate counter, sign-in log, or headcount for the full year' },
+      { id: 'CHED-S6-DISCUSSION-ROOMS',    label: 'Dedicated Discussion / Group Study Spaces (§6.b)',          unit: 'rooms',      hint: 'Enclosed or semi-enclosed spaces for group work and collaboration' },
+      { id: 'CHED-S6-CREATION-SPACES',     label: 'Dedicated Creation / Innovation Spaces (§6.b)',             unit: 'spaces',     hint: 'Makerspace, recording booth, multimedia creation area, etc.' },
+      { id: 'CHED-S6-PWD-FACILITIES',      label: 'PWD-Accessible Facilities Available (§6.f)',                unit: '1=Yes / 0=No', hint: 'Ramps, railings, accessible restrooms, etc. per RA 9442',    comply: (v:number) => v === 1 },
+      { id: 'CHED-S6-EMERGENCY-EQUIPMENT', label: 'Emergency Exits, Fire Extinguishers & Emergency Lights (§6.g)', unit: '1=Yes / 0=No', hint: 'Required per National Building Code of the Philippines', comply: (v:number) => v === 1 },
     ],
   },
+  // ── §7 IT Infrastructure ──────────────────────────────────────────────────
   {
-    section: '§7 — IT Infrastructure & Services',
+    section: '§7 — Information Technology Infrastructure & Services',
     icon: '💻',
+    note: 'Library must have internet-connected computers, Wi-Fi, printers/scanners, an ILS, and an official website.',
     metrics: [
-      { id: 'CHED-S7-OPAC-TERMINALS',  label: 'OPAC Terminals Available to Users',          unit: 'units',         hint: 'Dedicated catalog search terminals' },
-      { id: 'CHED-S7-BANDWIDTH-MBPS',  label: 'Internet Bandwidth',                         unit: 'Mbps',          hint: 'Dedicated internet speed for library' },
-      { id: 'CHED-S7-ONLINE-CATALOG',  label: 'Online OPAC Available (Web-accessible)',     unit: '1=Yes / 0=No',  hint: 'Enter 1 for Yes', comply: (v:number) => v === 1 },
-      { id: 'CHED-S7-WIFI',            label: 'Wi-Fi Available to Library Users',            unit: '1=Yes / 0=No',  hint: 'Enter 1 for Yes', comply: (v:number) => v === 1 },
+      { id: 'CHED-S7-OPAC-TERMINALS',      label: 'OPAC / Catalog Search Terminals for Users',                unit: 'units',        hint: 'Dedicated catalog search terminals (may overlap with public computers)' },
+      { id: 'CHED-S7-TOTAL-DEVICES',       label: 'Total Computing Devices for Users (§7.b)',                 unit: 'units',        hint: 'Desktops + laptops + tablets accessible to library users' },
+      { id: 'CHED-S7-BANDWIDTH-MBPS',      label: 'Internet Bandwidth Dedicated to Library',                  unit: 'Mbps',         hint: 'Dedicated internet speed; include Wi-Fi capacity' },
+      { id: 'CHED-S7-ONLINE-CATALOG',      label: 'Online OPAC Web-Accessible Outside Library (§7.c)',        unit: '1=Yes / 0=No', hint: 'Users can search catalog from outside library network',   comply: (v:number) => v === 1 },
+      { id: 'CHED-S7-WIFI',                label: 'Wi-Fi Access Points Available to Library Users (§7.a)',    unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes',                                       comply: (v:number) => v === 1 },
+      { id: 'CHED-S7-ILS-MODULES',         label: 'ILS Modules Operational (§7.c)',                           unit: 'modules',      hint: 'Count: acquisitions, cataloging, circ, OPAC, serials; max 5',  comply: (v:number) => v >= 3 },
+      { id: 'CHED-S7-WEBSITE',             label: 'Official Library Website Exists (§7.d)',                   unit: '1=Yes / 0=No', hint: 'Gateway to OPAC, e-resources, and online services',      comply: (v:number) => v === 1 },
+      { id: 'CHED-S7-PRINTERS-SCANNERS',   label: 'Printers & Scanners Available to Users (§7.a)',            unit: 'units',        hint: 'Combined count of printers and scanners accessible to users' },
     ],
   },
+  // ── §8 Financial Resources ────────────────────────────────────────────────
+  {
+    section: '§8 — Financial Resources',
+    icon: '💰',
+    note: 'Head librarian prepares an annual budget. A library fee shall be set and reviewed periodically. Alternative funding sources should be explored.',
+    metrics: [
+      { id: 'CHED-S8-ANNUAL-BUDGET',       label: 'Annual Library Budget (₱)',                                unit: '₱',            hint: 'Total approved library operating budget for this fiscal year' },
+      { id: 'CHED-S8-ACQUISITION-BUDGET',  label: 'Acquisition / Materials Budget (₱)',                      unit: '₱',            hint: 'Portion of budget allocated for new books, journals, e-resources' },
+      { id: 'CHED-S8-BUDGET-PER-STUDENT',  label: 'Library Budget per Enrolled Student (₱)',                 unit: '₱/student',    hint: 'Annual budget ÷ enrolled students; higher = better resource per user' },
+      { id: 'CHED-S8-LIBRARY-FEE',         label: 'Library Fee per Student per Semester (₱)',                unit: '₱/sem',        hint: 'Collected from students for library development' },
+      { id: 'CHED-S8-OTHER-FUNDING',       label: 'Other / External Funding Sources (grants, donations)',    unit: '1=Yes / 0=No', hint: 'Enter 1 if library receives any non-institutional funding' },
+    ],
+  },
+  // ── §9 Linkages & Networking ──────────────────────────────────────────────
   {
     section: '§9 — Linkages & Networking',
     icon: '🤝',
+    note: 'Librarians must engage in local, regional, and international networking. Community service (e.g., supporting public-school reading) is expected.',
     metrics: [
-      { id: 'CHED-S9-MOA-COUNT',       label: 'Active MOAs / Formal Linkages',              unit: 'agreements', hint: 'Signed and currently active memoranda' },
-      { id: 'CHED-S9-CONSORTIUM',      label: 'Library Consortium Memberships',             unit: 'consortia',  hint: 'e.g. PAARL, PLAI, EUSEBI, ERDT' },
-      { id: 'CHED-S9-ILL-PARTNERS',   label: 'Interlibrary Loan Partner Libraries',        unit: 'libraries',  hint: 'Libraries with active resource-sharing agreements' },
+      { id: 'CHED-S9-MOA-COUNT',           label: 'Active MOAs / Formal Linkage Agreements',                  unit: 'agreements',   hint: 'Signed and currently active memoranda of agreement' },
+      { id: 'CHED-S9-CONSORTIUM',          label: 'Library Consortium Memberships',                           unit: 'consortia',    hint: 'e.g. PAARL, PLAI, EUSEBI, ERDT, DepEd consortium' },
+      { id: 'CHED-S9-ILL-PARTNERS',        label: 'Interlibrary Loan Partner Libraries',                      unit: 'libraries',    hint: 'Libraries with active resource-sharing / ILL agreements' },
+      { id: 'CHED-S9-LOCAL-LINKAGES',      label: 'Local / City / Provincial Library Linkages (§9.a)',        unit: 'agreements',   hint: 'Formal ties with city/provincial/public libraries; LUC resource sharing' },
+      { id: 'CHED-S9-INTL-LINKAGES',       label: 'International Linkages / Partnerships (§9.a)',             unit: 'agreements',   hint: 'Formal links with foreign HEIs, international library orgs, consortia' },
+      { id: 'CHED-S9-COMMUNITY-ACTIVITIES', label: 'Community Service / Outreach Activities This Year (§9.b)', unit: 'activities',  hint: 'e.g. reading programs for public schools, community library literacy' },
     ],
   },
 ] as const;
 
 type ChedMetricID = typeof CHED_MANUAL_SECTIONS[number]['metrics'][number]['id'];
 type ChedStored = Record<string, { value: number; notes: string; date: string }>;
+
+// ── CHED Compliance Summary — cross-references ILS data against CMO thresholds ──
+function ChedComplianceSummary({ chedStats }: { chedStats: Record<string,number> | null }) {
+  if (!chedStats || chedStats.error) return null;
+
+  type Check = { label: string; section: string; value: string; pass: boolean | null; note: string };
+  const checks: Check[] = [
+    {
+      label: 'Minimum Book Titles ≥ 5,000',
+      section: '§4.b.1',
+      value: `${Number(chedStats.totalTitles ?? 0).toLocaleString()} titles`,
+      pass: (chedStats.totalTitles ?? 0) >= 5000,
+      note: (chedStats.totalTitles ?? 0) >= 5000 ? 'Meets requirement' : `Deficit: ${(5000 - (chedStats.totalTitles ?? 0)).toLocaleString()} titles needed`,
+    },
+    {
+      label: 'Filipiniana ≥ 10% of collection',
+      section: '§4.b.2',
+      value: chedStats.totalItems > 0 ? `${((chedStats.filipianianaItems ?? 0) / chedStats.totalItems * 100).toFixed(1)}%` : '—',
+      pass: chedStats.totalItems > 0 ? (chedStats.filipianianaItems ?? 0) / chedStats.totalItems >= 0.10 : null,
+      note: 'Items tagged as Filipiniana in Sublocation field',
+    },
+    {
+      label: 'Active Weeding Program (withdrawals recorded)',
+      section: '§4.a.6',
+      value: `${Number(chedStats.withdrawnThisYear ?? 0).toLocaleString()} withdrawn this year`,
+      pass: (chedStats.withdrawnThisYear ?? 0) > 0,
+      note: (chedStats.withdrawnThisYear ?? 0) > 0 ? 'Deselection activity recorded in Destiny' : 'No withdrawals recorded this year — document weeding activities',
+    },
+    {
+      label: 'Items Acquired Within Last 5 Years ≥ 20% of collection',
+      section: '§4.b.4',
+      value: chedStats.totalItems > 0 ? `${((chedStats.itemsLast5Years ?? 0) / chedStats.totalItems * 100).toFixed(1)}%` : '—',
+      pass: chedStats.totalItems > 0 ? (chedStats.itemsLast5Years ?? 0) / chedStats.totalItems >= 0.20 : null,
+      note: 'Supports requirement of 5 titles per major subject published within last 5 years',
+    },
+    {
+      label: 'Collection Currency (items ≤ 10 years) ≥ 35%',
+      section: '§4.b',
+      value: chedStats.totalItems > 0 ? `${((chedStats.itemsLast10Years ?? 0) / chedStats.totalItems * 100).toFixed(1)}%` : '—',
+      pass: chedStats.totalItems > 0 ? (chedStats.itemsLast10Years ?? 0) / chedStats.totalItems >= 0.35 : null,
+      note: 'Adequate, relevant, and current resources are required for all programs',
+    },
+    {
+      label: 'ILL Service Has Transactions on Record',
+      section: '§5.a.iii',
+      value: `${Number(chedStats.totalILL ?? 0).toLocaleString()} ILL records`,
+      pass: (chedStats.totalILL ?? 0) > 0,
+      note: (chedStats.totalILL ?? 0) > 0 ? 'ILL transactions found in Destiny' : 'No ILL transactions recorded — verify if service is active in Destiny',
+    },
+  ];
+
+  const passed  = checks.filter(c => c.pass === true).length;
+  const failed  = checks.filter(c => c.pass === false).length;
+  const unknown = checks.filter(c => c.pass === null).length;
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+        <span>✅</span>ILS-Computed Compliance Checks
+      </h2>
+      <p className="text-xs text-gray-600 mb-4">Auto-verified from Destiny ILS data. Green = meets CMO threshold, Red = below requirement.</p>
+      <div className="flex gap-3 mb-3 text-xs">
+        <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">{passed} Pass</span>
+        <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full font-medium">{failed} Fail</span>
+        {unknown > 0 && <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full font-medium">{unknown} No data</span>}
+      </div>
+      <div className="flex flex-col gap-2">
+        {checks.map((c, i) => (
+          <div key={i} className={`bg-white rounded-xl shadow-sm p-4 border-l-4 ${c.pass === true ? 'border-green-500' : c.pass === false ? 'border-red-500' : 'border-gray-300'}`}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className={`text-base ${c.pass === true ? 'text-green-600' : c.pass === false ? 'text-red-600' : 'text-gray-400'}`}>
+                    {c.pass === true ? '✓' : c.pass === false ? '✗' : '—'}
+                  </span>
+                  <span className="font-semibold text-gray-800 text-sm">{c.label}</span>
+                  <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{c.section}</span>
+                </div>
+                <p className="text-xs text-gray-500 ml-6">{c.note}</p>
+              </div>
+              <div className={`shrink-0 text-sm font-bold ${c.pass === true ? 'text-green-700' : c.pass === false ? 'text-red-600' : 'text-gray-400'}`}>
+                {c.value}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ChedManualSection({ unlocked }: { unlocked: boolean }) {
   const [stored, setStored]   = useState<ChedStored>({});
@@ -1139,6 +1348,11 @@ function ChedManualSection({ unlocked }: { unlocked: boolean }) {
                 <span>{sec.icon}</span>
                 <span className="text-sm font-semibold">{sec.section}</span>
               </div>
+              {'note' in sec && sec.note && (
+                <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 text-xs text-blue-700">
+                  {sec.note as string}
+                </div>
+              )}
               <div className="divide-y divide-gray-100">
                 {sec.metrics.map(m => {
                   const sv    = stored[m.id];
@@ -2965,6 +3179,9 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
+
+              {/* ── Cross-computed Compliance Indicators ── */}
+              <ChedComplianceSummary chedStats={chedStats} />
 
               {/* Manual documentation sections */}
               <div className="mb-6 flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl print:hidden">
