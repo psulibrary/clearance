@@ -1850,16 +1850,26 @@ export default function Dashboard() {
 
           {/* ── Green Library Tab ── */}
           {activeTab === 'green' && (
-            <ErrorBoundary>
-              <GreenLibraryTab reuseRate={s && s.totalItems ? parseFloat((s.checkoutsThisYear / s.totalItems).toFixed(2)) : null} />
-            </ErrorBoundary>
+            <div>
+              <div style={{background:'green',color:'white',padding:'12px',marginBottom:'12px',borderRadius:'8px',fontWeight:'bold'}}>
+                🌿 DEBUG: Green Library tab is rendering. activeTab={activeTab}
+              </div>
+              <ErrorBoundary>
+                <GreenLibraryTab reuseRate={s && s.totalItems ? parseFloat((s.checkoutsThisYear / s.totalItems).toFixed(2)) : null} />
+              </ErrorBoundary>
+            </div>
           )}
 
           {/* ── Strategic Planning Tab ── */}
           {activeTab === 'strategic' && (
-            <ErrorBoundary>
-              <StrategicTab stats={strategicStats} mainStats={s} year={year} />
-            </ErrorBoundary>
+            <div>
+              <div style={{background:'navy',color:'white',padding:'12px',marginBottom:'12px',borderRadius:'8px',fontWeight:'bold'}}>
+                📊 DEBUG: Strategic tab is rendering. activeTab={activeTab}
+              </div>
+              <ErrorBoundary>
+                <StrategicTab stats={strategicStats} mainStats={s} year={year} />
+              </ErrorBoundary>
+            </div>
           )}
 
           {/* ── Recommended Actions ── */}
