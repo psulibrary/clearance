@@ -322,19 +322,6 @@ function buildRecommendations(
     if ((chedStats.withdrawnThisYear ?? 0) === 0)
       recs.push({ priority: 'low', category: 'CHED Compliance', title: 'No weeding recorded this year (§4.a.6)', detail: 'CHED CMO 22 §4.a.6 expects an active weeding program. Document and record withdrawals in Destiny. Even a small, systematic weeding effort satisfies this requirement and demonstrates good collection management.', metric: '0 items withdrawn this year' });
 
-    // Collection currency: items last 5 years (CHED §4.b.4 ≥ 20%)
-    const chedTotalItems = chedStats.totalItems || 1;
-    const currency5yr = chedStats.itemsLast5Years ? chedStats.itemsLast5Years / chedTotalItems : null;
-    if (currency5yr !== null && currency5yr < 0.20)
-      recs.push({ priority: 'high', category: 'CHED Compliance', title: 'Collection currency critically low — <20% acquired last 5 years (§4.b.4)', detail: `Only ${(currency5yr*100).toFixed(1)}% of the collection was acquired in the last 5 years. CHED CMO 22 §4.b.4 expects at least 20% of items to be recent. Prioritize purchasing materials published within the last 5 years, especially in rapidly changing fields.`, metric: `${(currency5yr*100).toFixed(1)}% of items acquired last 5 years (${(chedStats.itemsLast5Years ?? 0).toLocaleString()} of ${chedTotalItems.toLocaleString()})` });
-    else if (currency5yr !== null && currency5yr < 0.30)
-      recs.push({ priority: 'medium', category: 'CHED Compliance', title: 'Collection currency below 30% — boost recent acquisitions', detail: `${(currency5yr*100).toFixed(1)}% of items are from the last 5 years. Aim for ≥ 30% to demonstrate an active, current collection. Focus acquisitions on new editions and recently published research in core disciplines.`, metric: `${(currency5yr*100).toFixed(1)}% of items from last 5 years` });
-
-    // Collection currency: items last 10 years (≥ 35%)
-    const currency10yr = chedStats.itemsLast10Years ? chedStats.itemsLast10Years / chedTotalItems : null;
-    if (currency10yr !== null && currency10yr < 0.35)
-      recs.push({ priority: 'medium', category: 'CHED Compliance', title: 'Long-term collection currency below 35% (§4.b.4)', detail: `Only ${(currency10yr*100).toFixed(1)}% of the collection is from the last 10 years (target ≥ 35%). Schedule a systematic weeding program targeting materials older than 15 years, starting with science, technology, and professional subjects where currency matters most.`, metric: `${(currency10yr*100).toFixed(1)}% of items from last 10 years` });
-
     // Acquisition spend trend
     if ((chedStats.acquisitionSpendThisYear ?? 0) < (chedStats.acquisitionSpendLastYear ?? 0) * 0.8 && (chedStats.acquisitionSpendLastYear ?? 0) > 0)
       recs.push({ priority: 'medium', category: 'CHED Compliance', title: 'Acquisition budget declining year-over-year', detail: `This year's acquisition spend (₱${(chedStats.acquisitionSpendThisYear ?? 0).toLocaleString('en-PH', {minimumFractionDigits:2})}) is more than 20% below last year (₱${(chedStats.acquisitionSpendLastYear ?? 0).toLocaleString('en-PH', {minimumFractionDigits:2})}). A sustained decline will affect collection currency scores and CHED compliance ratings. Present trend data to administration to justify budget restoration.`, metric: `₱${(chedStats.acquisitionSpendThisYear ?? 0).toLocaleString('en-PH', {minimumFractionDigits:2})} this year vs ₱${(chedStats.acquisitionSpendLastYear ?? 0).toLocaleString('en-PH', {minimumFractionDigits:2})} last year` });
@@ -1479,11 +1466,11 @@ function ChedComplianceSummary({ chedStats }: { chedStats: Record<string,number>
       note: (chedStats.withdrawnThisYear ?? 0) > 0 ? 'Deselection activity recorded in Destiny' : 'No withdrawals recorded this year — document weeding activities',
     },
     {
-      label: 'Items Acquired Within Last 5 Years ≥ 20% of collection',
+      label: 'Items Acquired Within Last 5 Years (context only)',
       section: '§4.b.4',
-      value: chedStats.totalItems > 0 ? `${((chedStats.itemsLast5Years ?? 0) / chedStats.totalItems * 100).toFixed(1)}%` : '—',
-      pass: chedStats.totalItems > 0 ? (chedStats.itemsLast5Years ?? 0) / chedStats.totalItems >= 0.20 : null,
-      note: 'Supports requirement of 5 titles per major subject published within last 5 years',
+      value: chedStats.totalItems > 0 ? `${(chedStats.itemsLast5Years ?? 0).toLocaleString()} items` : '—',
+      pass: null,
+      note: `§4.b.4 requires 5 titles per major subject from the last 5 years — this is per-subject, not a total percentage. Enter compliance status manually in the CHED manual fields section below.`,
     },
     {
       label: 'Collection Currency (items ≤ 10 years) ≥ 35%',
@@ -4151,7 +4138,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <Card label="Total Volumes (Items)" value={Number(chedStats.totalItems ?? 0).toLocaleString()} sub="§4.b — total physical copies in active collection" />
-                <Card label="Items Acquired ≤ 5 Years" value={Number(chedStats.itemsLast5Years ?? 0).toLocaleString()} sub={`§4.b.4 — ${pct(chedStats.itemsLast5Years, chedStats.totalItems)} of collection current`} color="text-indigo-700" />
+                <Card label="Items Acquired ≤ 5 Years" value={Number(chedStats.itemsLast5Years ?? 0).toLocaleString()} sub={`§4.b.4 context — per-subject compliance entered manually below`} color="text-indigo-700" />
                 <Card label="Items Acquired ≤ 10 Years" value={Number(chedStats.itemsLast10Years ?? 0).toLocaleString()} sub={`§4.b — ${pct(chedStats.itemsLast10Years, chedStats.totalItems)} of collection within 10 years`} color="text-indigo-700" />
               </Section>
 
