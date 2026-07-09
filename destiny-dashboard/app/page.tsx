@@ -2275,7 +2275,7 @@ export default function Dashboard() {
   const [yoyLoaded, setYoyLoaded]         = useState(false);
 
   type RoomUseData = {
-    source: 'transaction_table' | 'copy_transaction' | 'copy_column' | 'none';
+    source: 'audit' | 'transaction_table' | 'copy_transaction' | 'copy_column' | 'none';
     year: number;
     totalThisYear?: number;
     totalAllTime?: number;
