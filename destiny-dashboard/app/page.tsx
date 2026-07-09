@@ -2284,6 +2284,7 @@ export default function Dashboard() {
     topTitles?: { Title: string; Author: string; inLibraryUses: number; copies: number }[];
     byMonth?: { mo: number; uses: number }[];
     message?: string;
+    debug?: { copyCols: string[]; allTables: string[]; patternsSearched?: string[] };
   };
   const [roomUse, setRoomUse]             = useState<RoomUseData | null>(null);
   const [roomUseLoaded, setRoomUseLoaded] = useState(false);
@@ -3195,18 +3196,26 @@ export default function Dashboard() {
 
             {roomUse && roomUse.source === 'none' && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-                <div className="font-semibold text-amber-800 mb-1">⚠ No in-library use data found in Destiny</div>
-                <p className="text-sm text-amber-700">{roomUse.message}</p>
-                <div className="mt-3 bg-white border border-amber-200 rounded-lg p-4 text-sm text-gray-700">
-                  <p className="font-semibold mb-2">How to start tracking:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-gray-600">
-                    <li>At the end of each day, collect all items left on tables and reading areas</li>
-                    <li>Go to <strong>Destiny → Circulation → Check In</strong></li>
-                    <li>Make sure <strong>"Record in-library use"</strong> ✓ is checked (as shown in your screenshot)</li>
-                    <li>Scan each item barcode before re-shelving it</li>
-                    <li>Data will appear here once scanning begins</li>
-                  </ol>
-                </div>
+                <div className="font-semibold text-amber-800 mb-1">⚠ Column name not yet identified</div>
+                <p className="text-sm text-amber-700 mb-3">Destiny stores room/in-library use data but under a different column name in this version. Column names found on the Copy table:</p>
+                {roomUse.debug?.copyCols && (
+                  <div className="bg-white border border-amber-200 rounded-lg p-3 mb-3 font-mono text-xs text-gray-700 max-h-48 overflow-y-auto">
+                    {roomUse.debug.copyCols.map((col, i) => (
+                      <span key={i} className="inline-block bg-gray-100 rounded px-1.5 py-0.5 m-0.5">{col}</span>
+                    ))}
+                  </div>
+                )}
+                {roomUse.debug?.allTables && (
+                  <>
+                    <p className="text-sm text-amber-700 mb-2">Tables in this Destiny schema:</p>
+                    <div className="bg-white border border-amber-200 rounded-lg p-3 font-mono text-xs text-gray-700 max-h-48 overflow-y-auto">
+                      {roomUse.debug.allTables.map((tbl, i) => (
+                        <span key={i} className="inline-block bg-gray-100 rounded px-1.5 py-0.5 m-0.5">{tbl}</span>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <p className="text-xs text-gray-500 mt-3">Share these column/table names with your developer to wire up the correct query.</p>
               </div>
             )}
 
