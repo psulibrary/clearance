@@ -186,8 +186,10 @@ function buildRecommendations(
   year: number,
   patronTiers?: PatronTiers | null,
   retention?: RetentionStats | null,
+  roomUseThisYear?: number | null,
 ): Recommendation[] {
   const recs: Recommendation[] = [];
+  const totalUseThisYear = s.checkoutsThisYear + (roomUseThisYear ?? 0);
   const totalItems = s.totalItems || 1;
   const totalPatrons = s.totalPatrons || 1;
   const checkedOut = s.checkedOut || 0;
@@ -227,14 +229,15 @@ function buildRecommendations(
   if (netGrowth < 0)
     recs.push({ priority: 'high', category: 'Collection Development', title: 'Collection is shrinking — net loss this year', detail: `Withdrawals (${s.withdrawnItems.toLocaleString()}) exceed new acquisitions (${s.newItemsThisYear.toLocaleString()}) by ${Math.abs(netGrowth).toLocaleString()} items. Increase acquisition budget or reduce weeding pace to stabilize collection size.`, metric: `Net growth: ${netGrowth.toLocaleString()} items` });
 
-  // Monthly checkout velocity
+  // Monthly checkout velocity (checkout only — room use not counted in 30-day window)
   const monthlyVelocity = totalItems > 0 ? (s.checkoutsLast30Days / totalItems * 100) : 0;
-  if (monthlyVelocity < 1)
-    recs.push({ priority: 'medium', category: 'Circulation', title: 'Very low monthly checkout velocity', detail: `Only ${monthlyVelocity.toFixed(2)}% of the collection circulated in the last 30 days. Run targeted promotions: new arrivals shelf, thematic book displays, and faculty reserve lists to drive checkouts.`, metric: `${s.checkoutsLast30Days.toLocaleString()} checkouts / ${totalItems.toLocaleString()} items = ${monthlyVelocity.toFixed(2)}%` });
+  if (monthlyVelocity < 1 && (roomUseThisYear ?? 0) < s.checkoutsThisYear * 0.1)
+    recs.push({ priority: 'medium', category: 'Circulation', title: 'Very low monthly checkout velocity', detail: `Only ${monthlyVelocity.toFixed(2)}% of the collection was checked out in the last 30 days. If room use is not yet recorded in Destiny, enable "Record in-library use" in Circulation settings to capture full usage. Otherwise run targeted promotions: new arrivals shelf, thematic displays, faculty reserve lists.`, metric: `${s.checkoutsLast30Days.toLocaleString()} checkouts / ${totalItems.toLocaleString()} items = ${monthlyVelocity.toFixed(2)}%` });
 
-  const turnover = s.checkoutsThisYear / totalItems;
+  const turnover = totalUseThisYear / totalItems;
+  const checkoutTurnover = s.checkoutsThisYear / totalItems;
   if (turnover < 0.5)
-    recs.push({ priority: 'medium', category: 'Circulation', title: 'Low collection turnover — promote underused materials', detail: 'Less than half an item per item was borrowed this year. Run book displays, subject guides, and faculty reading list integrations to drive discovery of the collection.', metric: `${turnover.toFixed(2)}x turnover (checkouts ÷ items)` });
+    recs.push({ priority: 'medium', category: 'Circulation', title: 'Low total use turnover — promote collection more broadly', detail: `Combined use (checkouts + room use) is ${turnover.toFixed(2)}x this year — less than half an item used per item in collection. Consider book displays, subject guides, and faculty reading list integrations to drive discovery.`, metric: `${turnover.toFixed(2)}x total use turnover · checkout only: ${checkoutTurnover.toFixed(2)}x` });
 
   // Demand gap: holds vs collection size
   if (s.pendingHolds > 50 && s.pendingHolds > s.readyHolds * 2)
@@ -363,8 +366,8 @@ const PRIORITY_STYLE: Record<string, { badge: string; border: string; icon: stri
   low:    { badge: 'bg-blue-100 text-blue-700',   border: 'border-l-4 border-blue-400',  icon: '🔵' },
 };
 
-function RecommendedActions({ stats, chedStats, year, patronTiers, retention }: { stats: Stats; chedStats: Record<string,number> | null; year: number; patronTiers?: PatronTiers | null; retention?: RetentionStats | null }) {
-  const recs = buildRecommendations(stats, chedStats, year, patronTiers, retention);
+function RecommendedActions({ stats, chedStats, year, patronTiers, retention, roomUseThisYear }: { stats: Stats; chedStats: Record<string,number> | null; year: number; patronTiers?: PatronTiers | null; retention?: RetentionStats | null; roomUseThisYear?: number | null }) {
+  const recs = buildRecommendations(stats, chedStats, year, patronTiers, retention, roomUseThisYear);
   const high   = recs.filter(r => r.priority === 'high');
   const medium = recs.filter(r => r.priority === 'medium');
   const low    = recs.filter(r => r.priority === 'low');
@@ -3330,16 +3333,24 @@ export default function Dashboard() {
         <div className={activeTab === 'collection' ? 'block' : 'hidden print:block'}>
 
           {/* ── Section 1: Collection Health KPIs ── */}
-          <Section title="Collection Health KPIs" icon="🏥">
-            <Card label="Collection Refresh Rate"   value={pct(s?.newItemsThisYear ?? 0, s?.totalItems ?? 0)}    sub={`new items ÷ total items — ${year} (target ≥ 5%)`}       color={(s?.newItemsThisYear ?? 0) / (s?.totalItems || 1) >= 0.05 ? 'text-green-700' : 'text-amber-600'} />
-            <Card label="Utilization Rate"          value={pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)}          sub="items checked out ÷ total items right now"                color="text-blue-700" />
-            <Card label="Dead Stock Rate"           value={pct(s?.neverCheckedOut ?? 0, s?.totalItems ?? 0)}     sub="items never borrowed — weeding candidates"               color={(s?.neverCheckedOut ?? 0) / (s?.totalItems || 1) > 0.3 ? 'text-red-600' : 'text-amber-600'} />
-            <Card label="Weeding Intensity"         value={pct(s?.withdrawnItems ?? 0, s?.totalItems ?? 0)}      sub="withdrawn ÷ active collection — collection maintenance"   color="text-gray-600" />
-            <Card label="Collection Turnover"       value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—'} sub={`loans ÷ total items — ${periodLabel}`} color="text-indigo-700" />
-            <Card label="Overdue Rate"              value={s?.checkedOut ? pct(s.overdue, s.checkedOut) : '—'}   sub="overdue ÷ all checked-out items"                         color="text-red-600" />
-            <Card label="Severe Overdue Ratio"      value={s?.overdue ? pct(s.overdueOver30Days, s.overdue) : '—'} sub=">30 days overdue ÷ all overdue — non-return risk"      color="text-red-700" />
-            <Card label="Hold Fill Rate"            value={((s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) > 0 ? pct(s?.readyHolds ?? 0, (s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) : '—'} sub="ready holds ÷ total active holds" color="text-teal-700" />
-          </Section>
+          {(() => {
+            const roomUseThisYear = roomUse?.totalThisYear ?? 0;
+            const totalUseThisYear = (s?.checkoutsThisYear ?? 0) + roomUseThisYear;
+            const combinedTurnover = s?.totalItems ? (totalUseThisYear / s.totalItems).toFixed(2) + 'x' : '—';
+            return (
+              <Section title="Collection Health KPIs" icon="🏥">
+                <Card label="Collection Refresh Rate"   value={pct(s?.newItemsThisYear ?? 0, s?.totalItems ?? 0)}    sub={`new items ÷ total items — ${year} (target ≥ 5%)`}       color={(s?.newItemsThisYear ?? 0) / (s?.totalItems || 1) >= 0.05 ? 'text-green-700' : 'text-amber-600'} />
+                <Card label="Checkouts (Snapshot)"      value={pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)}          sub="items currently checked out ÷ total items"               color="text-blue-700" />
+                <Card label="Annual Room Use"           value={roomUseThisYear > 0 ? roomUseThisYear.toLocaleString() : (roomUseLoaded ? '0' : '…')} sub={`in-library reads recorded in ${year} (no checkout)`} color="text-violet-700" />
+                <Card label="Total Annual Use"          value={totalUseThisYear.toLocaleString()}                    sub={`checkouts + room use — ${year}`}                        color="text-emerald-700" />
+                <Card label="Combined Use Turnover"     value={combinedTurnover}                                     sub={`(checkouts + room use) ÷ total items — ${year}`}        color="text-indigo-700" />
+                <Card label="Never Checked Out"         value={pct(s?.neverCheckedOut ?? 0, s?.totalItems ?? 0)}     sub="checkout only — some may have room use; see Weeding tab" color={(s?.neverCheckedOut ?? 0) / (s?.totalItems || 1) > 0.3 ? 'text-red-600' : 'text-amber-600'} />
+                <Card label="Weeding Intensity"         value={pct(s?.withdrawnItems ?? 0, s?.totalItems ?? 0)}      sub="withdrawn ÷ active collection — collection maintenance"   color="text-gray-600" />
+                <Card label="Overdue Rate"              value={s?.checkedOut ? pct(s.overdue, s.checkedOut) : '—'}   sub="overdue ÷ all checked-out items"                         color="text-red-600" />
+                <Card label="Hold Fill Rate"            value={((s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) > 0 ? pct(s?.readyHolds ?? 0, (s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) : '—'} sub="ready holds ÷ total active holds" color="text-teal-700" />
+              </Section>
+            );
+          })()}
 
           {/* ── Collection Decision Metrics ── */}
           {s && (
@@ -3388,13 +3399,26 @@ export default function Dashboard() {
                 <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
                   <div className="text-3xl font-bold text-indigo-700">{s.totalItems > 0 ? ((s.checkoutsLast30Days / s.totalItems) * 100).toFixed(1) + '%' : '—'}</div>
                   <div className="text-sm font-medium text-gray-600">Monthly Checkout Velocity</div>
-                  <div className="text-xs text-gray-500">% of collection borrowed in last 30 days · {fmt(s.checkoutsLast30Days)} loans from {fmt(s.totalItems)} items</div>
+                  <div className="text-xs text-gray-500">% of collection checked out in last 30 days · {fmt(s.checkoutsLast30Days)} loans · does not include room use</div>
                 </div>
+                {/* Combined annual use per item */}
+                {(() => {
+                  const roomThisYear = roomUse?.totalThisYear ?? 0;
+                  const totalUse = s.checkoutsThisYear + roomThisYear;
+                  const usePerItem = s.totalItems > 0 ? (totalUse / s.totalItems).toFixed(2) : '—';
+                  return (
+                    <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${s.totalItems > 0 && totalUse / s.totalItems >= 1 ? 'border-green-400' : s.totalItems > 0 && totalUse / s.totalItems >= 0.5 ? 'border-amber-400' : 'border-red-400'}`}>
+                      <div className="text-3xl font-bold text-emerald-700">{usePerItem}x</div>
+                      <div className="text-sm font-medium text-gray-600">Total Use per Item</div>
+                      <div className="text-xs text-gray-500">(checkouts {fmt(s.checkoutsThisYear)} + room use {fmt(roomThisYear)}) ÷ {fmt(s.totalItems)} items · {year}</div>
+                    </div>
+                  );
+                })()}
                 {/* Non-circulating ratio */}
                 <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
                   <div className="text-3xl font-bold text-gray-600">{s.totalItems > 0 ? pct(s.neverCheckedOut, s.totalItems) : '—'}</div>
-                  <div className="text-sm font-medium text-gray-600">Idle Stock Rate</div>
-                  <div className="text-xs text-gray-500">{fmt(s.neverCheckedOut)} items never checked out — cross-check room use before weeding</div>
+                  <div className="text-sm font-medium text-gray-600">Never Checked Out Rate</div>
+                  <div className="text-xs text-gray-500">{fmt(s.neverCheckedOut)} items without a checkout — some may have room use; Weeding tab excludes those</div>
                 </div>
                 {/* Return speed proxy */}
                 <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${s.avgLoanDays !== undefined && s.avgLoanDays <= 14 ? 'border-green-400' : s.avgLoanDays !== undefined && s.avgLoanDays <= 21 ? 'border-amber-400' : 'border-red-400'}`}>
@@ -4163,11 +4187,11 @@ export default function Dashboard() {
                     action: s.totalPatrons > 0 && (s.totalPatrons - s.activePatronsThisYear) / s.totalPatrons >= 0.30 ? `${fmt(s.totalPatrons - s.activePatronsThisYear)} non-active patrons — target with re-engagement outreach, email lists, or library orientation` : 'Most patrons are active — focus on deepening borrowing frequency',
                   },
                   {
-                    label: 'Idle Stock Rate (Never-Borrowed Items %)',
+                    label: 'Never Checked Out Rate (checkout only — some may have room use)',
                     value: s.totalItems > 0 ? pct(s.neverCheckedOut, s.totalItems) : '—',
-                    benchmark: '< 20% idle stock = healthy circulation (ISO 11620 B.2.1.3)',
+                    benchmark: '< 20% never checked out = healthy use (ISO 11620 B.2.1.3) — items with room use only are still actively used',
                     pass: s.totalItems > 0 ? s.neverCheckedOut / s.totalItems < 0.20 : null,
-                    action: s.totalItems > 0 && s.neverCheckedOut / s.totalItems >= 0.20 ? `${fmt(s.neverCheckedOut)} idle items — review by subject for weeding or relocation to visible displays` : 'Good circulation spread — items are being discovered',
+                    action: s.totalItems > 0 && s.neverCheckedOut / s.totalItems >= 0.20 ? `${fmt(s.neverCheckedOut)} items never checked out — cross-check room use in Weeding Candidates tab before withdrawing; items with room use should be retained` : 'Most items have been checked out — also confirm room use is recorded for reference/reserve materials',
                   },
                   {
                     label: 'Collection Refresh Rate',
@@ -4901,7 +4925,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Recommended Actions ── */}
-          {s && !s.error && <RecommendedActions stats={s} chedStats={chedStats} year={year} patronTiers={patronTiers} retention={retention} />}
+          {s && !s.error && <RecommendedActions stats={s} chedStats={chedStats} year={year} patronTiers={patronTiers} retention={retention} roomUseThisYear={roomUse?.totalThisYear} />}
         </div>
 
         {/* Tab: Trends */}
