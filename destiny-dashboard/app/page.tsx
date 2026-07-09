@@ -1470,7 +1470,7 @@ export default function Dashboard() {
   const [genderActivity, setGenderActivity]       = useState<ActivityRow[]>([]);
   const [patronTypeActivity, setPatronTypeActivity] = useState<ActivityRow[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'|'insights'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'|'insights'|'trends'>('overview');
   const [chartsLoaded, setChartsLoaded] = useState({ patrons: false, collection: false, insights: false });
   const [chedStats, setChedStats] = useState<Record<string,number> | null>(null);
   const [strategicStats, setStrategicStats] = useState<Record<string,number> | null>(null);
@@ -1515,6 +1515,16 @@ export default function Dashboard() {
   const [yoyData, setYoyData]             = useState<{year:number;checkouts:number;newPatrons:number;newItems:number}[]>([]);
   const [patronTiers, setPatronTiers]     = useState<{totalPatrons:number;activeThisYear:number;lapsed:number;neverBorrowed:number;newThisYear:number;year:number}|null>(null);
   const [yoyLoaded, setYoyLoaded]         = useState(false);
+
+  type MonthlyRow = { year: number; month: number; checkouts: number; checkins: number; active_patrons: number; new_patrons: number; new_items: number };
+  type DailySnap  = { snapshot_date: string; total_items: number; checked_out: number; active_patrons_30d: number; checkouts_30d: number; total_patrons: number };
+  const [trendsLoaded,    setTrendsLoaded]    = useState(false);
+  const [monthlyData,     setMonthlyData]     = useState<MonthlyRow[]>([]);
+  const [dailySnaps,      setDailySnaps]      = useState<DailySnap[]>([]);
+  const [syncDailyStatus, setSyncDailyStatus] = useState<string | null>(null);
+  const [syncMonthStatus, setSyncMonthStatus] = useState<string | null>(null);
+  const [syncingDaily,    setSyncingDaily]    = useState(false);
+  const [syncingMonthly,  setSyncingMonthly]  = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1618,7 +1628,19 @@ export default function Dashboard() {
       fetch('/api/ched/stats').then(r=>r.json()).then(d=>{ setChedStats(d); }).catch(() => {});
       fetch('/api/ched/acquisition-by-year').then(r=>r.json()).then(d=>{ if(d.data) setAcqData(d.data); }).catch(() => {});
     }
-  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers]);
+    if (activeTab === 'trends' && !trendsLoaded) {
+      setTrendsLoaded(true);
+      (async () => {
+        const { supabase } = await import('@/lib/supabase');
+        supabase.from('monthly_circulation').select('*').order('year').order('month').then(({ data }) => {
+          if (data) setMonthlyData(data as MonthlyRow[]);
+        });
+        supabase.from('daily_snapshots').select('snapshot_date,total_items,checked_out,active_patrons_30d,checkouts_30d,total_patrons').order('snapshot_date', { ascending: false }).limit(30).then(({ data }) => {
+          if (data) setDailySnaps(data as DailySnap[]);
+        });
+      })();
+    }
+  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded]);
 
   const s = stats;
   const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
@@ -1795,7 +1817,7 @@ export default function Dashboard() {
 
         {/* Tab bar */}
         <div className="flex gap-2 mb-6 border-b border-gray-200 print:hidden">
-          {(['overview','patrons','collection','iso','ched','insights'] as const).map(tab => (
+          {(['overview','patrons','collection','iso','ched','insights','trends'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1805,7 +1827,7 @@ export default function Dashboard() {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'insights' ? '💡 Insights' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'insights' ? '💡 Insights' : tab === 'trends' ? '📈 Trends' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
@@ -3602,6 +3624,213 @@ export default function Dashboard() {
 
           {/* ── Recommended Actions ── */}
           {s && !s.error && <RecommendedActions stats={s} chedStats={chedStats} year={year} />}
+        </div>
+
+        {/* Tab: Trends */}
+        <div className={activeTab === 'trends' ? 'block' : 'hidden print:block'}>
+          {/* ── Sync Controls ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <span>🔄</span>Sync Destiny → Supabase
+            </h2>
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <p className="text-xs text-gray-600 mb-4">
+                Push a fresh snapshot from your Destiny ILS into Supabase so historical trend charts update. Run the daily sync once per day and the monthly sync after each month closes (or use a cron job to automate).
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  disabled={syncingDaily}
+                  onClick={async () => {
+                    setSyncingDaily(true);
+                    setSyncDailyStatus(null);
+                    try {
+                      const res = await fetch('/api/sync/daily', { method: 'POST' });
+                      const d = await res.json();
+                      setSyncDailyStatus(d.ok ? `✅ Saved snapshot for ${d.snapshot_date}` : `❌ ${d.error}`);
+                      if (d.ok) {
+                        const { supabase } = await import('@/lib/supabase');
+                        const { data } = await supabase.from('daily_snapshots').select('snapshot_date,total_items,checked_out,active_patrons_30d,checkouts_30d,total_patrons').order('snapshot_date', { ascending: false }).limit(30);
+                        if (data) setDailySnaps(data as DailySnap[]);
+                      }
+                    } catch { setSyncDailyStatus('❌ Network error'); }
+                    setSyncingDaily(false);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  {syncingDaily ? 'Syncing…' : '📅 Sync Today\'s Snapshot'}
+                </button>
+                <button
+                  disabled={syncingMonthly}
+                  onClick={async () => {
+                    setSyncingMonthly(true);
+                    setSyncMonthStatus(null);
+                    try {
+                      const res = await fetch('/api/sync/monthly', { method: 'POST' });
+                      const d = await res.json();
+                      setSyncMonthStatus(d.ok ? `✅ Upserted ${d.rows} month rows` : `❌ ${d.error}`);
+                      if (d.ok) {
+                        const { supabase } = await import('@/lib/supabase');
+                        const { data } = await supabase.from('monthly_circulation').select('*').order('year').order('month');
+                        if (data) setMonthlyData(data as MonthlyRow[]);
+                      }
+                    } catch { setSyncMonthStatus('❌ Network error'); }
+                    setSyncingMonthly(false);
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  {syncingMonthly ? 'Syncing…' : '📆 Sync Monthly Data (24 mo)'}
+                </button>
+                <button
+                  disabled={syncingMonthly}
+                  onClick={async () => {
+                    setSyncingMonthly(true);
+                    setSyncMonthStatus(null);
+                    try {
+                      const res = await fetch('/api/sync/monthly?months=60', { method: 'POST' });
+                      const d = await res.json();
+                      setSyncMonthStatus(d.ok ? `✅ Backfilled ${d.rows} month rows (5 years)` : `❌ ${d.error}`);
+                      if (d.ok) {
+                        const { supabase } = await import('@/lib/supabase');
+                        const { data } = await supabase.from('monthly_circulation').select('*').order('year').order('month');
+                        if (data) setMonthlyData(data as MonthlyRow[]);
+                      }
+                    } catch { setSyncMonthStatus('❌ Network error'); }
+                    setSyncingMonthly(false);
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  {syncingMonthly ? 'Syncing…' : '🗃️ Backfill 5 Years'}
+                </button>
+              </div>
+              {syncDailyStatus && <p className="mt-3 text-sm">{syncDailyStatus}</p>}
+              {syncMonthStatus && <p className="mt-2 text-sm">{syncMonthStatus}</p>}
+            </div>
+          </div>
+
+          {/* ── Monthly Circulation Chart ── */}
+          {monthlyData.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <span>📊</span>Monthly Circulation Trend
+              </h2>
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <p className="text-xs text-gray-600 mb-4">Checkouts, check-ins, new patrons, and new items per calendar month stored in Supabase.</p>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={monthlyData.map(r => ({ ...r, label: `${r.year}-${String(r.month).padStart(2,'0')}` }))} margin={{ left: 10, right: 10, top: 4, bottom: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
+                    <Legend />
+                    <Bar dataKey="checkouts"  name="Checkouts"   fill="#3b82f6" />
+                    <Bar dataKey="checkins"   name="Check-ins"   fill="#10b981" />
+                    <Bar dataKey="new_patrons" name="New Patrons" fill="#f59e0b" />
+                    <Bar dataKey="new_items"  name="New Items"   fill="#8b5cf6" />
+                  </BarChart>
+                </ResponsiveContainer>
+
+                {/* Annual totals table */}
+                <div className="mt-6 overflow-x-auto">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Annual Totals</p>
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                        <th className="text-left p-2 border border-gray-200">Year</th>
+                        <th className="text-right p-2 border border-gray-200">Checkouts</th>
+                        <th className="text-right p-2 border border-gray-200">Check-ins</th>
+                        <th className="text-right p-2 border border-gray-200">New Patrons</th>
+                        <th className="text-right p-2 border border-gray-200">New Items</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const byYear: Record<number, { checkouts: number; checkins: number; new_patrons: number; new_items: number }> = {};
+                        for (const r of monthlyData) {
+                          if (!byYear[r.year]) byYear[r.year] = { checkouts: 0, checkins: 0, new_patrons: 0, new_items: 0 };
+                          byYear[r.year].checkouts  += r.checkouts;
+                          byYear[r.year].checkins   += r.checkins;
+                          byYear[r.year].new_patrons += r.new_patrons;
+                          byYear[r.year].new_items  += r.new_items;
+                        }
+                        return Object.entries(byYear).sort(([a],[b]) => Number(a)-Number(b)).map(([yr, t]) => (
+                          <tr key={yr} className="hover:bg-blue-50">
+                            <td className="p-2 border border-gray-200 font-semibold text-gray-900">{yr}</td>
+                            <td className="p-2 border border-gray-200 text-right text-blue-700 font-semibold">{t.checkouts.toLocaleString()}</td>
+                            <td className="p-2 border border-gray-200 text-right text-green-700">{t.checkins.toLocaleString()}</td>
+                            <td className="p-2 border border-gray-200 text-right text-amber-700">{t.new_patrons.toLocaleString()}</td>
+                            <td className="p-2 border border-gray-200 text-right text-purple-700">{t.new_items.toLocaleString()}</td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {monthlyData.length === 0 && (
+            <div className="mb-8 bg-amber-50 border border-amber-200 rounded-xl p-6 text-amber-800 text-sm">
+              <strong>No monthly data yet.</strong> Click <em>Sync Monthly Data</em> above to pull circulation history from Destiny into Supabase. Run <em>Backfill 5 Years</em> once to populate historical data.
+            </div>
+          )}
+
+          {/* ── Daily Snapshots ── */}
+          {dailySnaps.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <span>📅</span>Daily Snapshots (last 30 days)
+              </h2>
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <p className="text-xs text-gray-600 mb-4">Each row is a point-in-time capture pushed by the daily sync. Use these to spot sudden spikes or drops in collection availability.</p>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={[...dailySnaps].reverse()} margin={{ left: 10, right: 10, top: 4, bottom: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="snapshot_date" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" interval={0} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
+                    <Legend />
+                    <Bar dataKey="checked_out"       name="Checked Out"       fill="#f59e0b" />
+                    <Bar dataKey="active_patrons_30d" name="Active (30d)"     fill="#10b981" />
+                    <Bar dataKey="checkouts_30d"     name="Checkouts (30d)"  fill="#3b82f6" />
+                  </BarChart>
+                </ResponsiveContainer>
+
+                <div className="overflow-x-auto mt-4">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                        <th className="text-left p-2 border border-gray-200">Date</th>
+                        <th className="text-right p-2 border border-gray-200">Total Items</th>
+                        <th className="text-right p-2 border border-gray-200">Checked Out</th>
+                        <th className="text-right p-2 border border-gray-200">Total Patrons</th>
+                        <th className="text-right p-2 border border-gray-200">Active (30d)</th>
+                        <th className="text-right p-2 border border-gray-200">Checkouts (30d)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dailySnaps.map((r, i) => (
+                        <tr key={i} className="hover:bg-blue-50">
+                          <td className="p-2 border border-gray-200 font-mono text-gray-800">{r.snapshot_date}</td>
+                          <td className="p-2 border border-gray-200 text-right text-gray-800">{r.total_items.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-amber-700 font-semibold">{r.checked_out.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-gray-800">{r.total_patrons.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-green-700">{r.active_patrons_30d.toLocaleString()}</td>
+                          <td className="p-2 border border-gray-200 text-right text-blue-700 font-semibold">{r.checkouts_30d.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {dailySnaps.length === 0 && trendsLoaded && (
+            <div className="mb-8 bg-blue-50 border border-blue-200 rounded-xl p-6 text-blue-800 text-sm">
+              <strong>No daily snapshots yet.</strong> Click <em>Sync Today&apos;s Snapshot</em> above to capture today&apos;s stats. Schedule this to run daily (e.g. via a cron job hitting <code className="bg-blue-100 px-1 rounded">/api/sync/daily</code>) to build a historical trend.
+            </div>
+          )}
         </div>
       </main>
     </div>
