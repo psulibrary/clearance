@@ -2252,6 +2252,8 @@ export default function Dashboard() {
   type OverdueItem    = { CopyBarcode: string; Title: string; Author: string; PatronBarcode: string; PatronType: string; DateDue: string; DaysOverdue: number; ReplacementCost: number };
   type CallNumRow     = { range: string; firstDigit: string; items: number; titles: number; checkouts: number; roomUse?: number; totalUse?: number; utilRate: number };
   type PeakDayRow    = { day: string; checkouts: number; roomUse: number; totalUse: number };
+  type PeakPeriodRow = { period: string; checkouts: number; roomUse: number; totalUse: number };
+  type PeakHourRow   = { hour: number; label: string; checkouts: number; roomUse: number; totalUse: number };
   type LoanDurRow    = { patronType: string; currentlyOut: number; avgDaysOut: number; avgLoanPeriod: number; overdueCount: number };
   type WeedItem      = { Title: string; Author: string; CallNumber: string; CopyBarcode: string; Acquired: string; LastBorrowed: string; daysSinceActivity: number; Price: number };
   type NeverBorrowedRow = { firstDigit: string; neverUsedTitles: number; neverUsedItems: number };
@@ -2269,6 +2271,8 @@ export default function Dashboard() {
   const [extraLoaded, setExtraLoaded]     = useState({ collection: false, patrons: false });
 
   const [peakDays, setPeakDays]           = useState<PeakDayRow[]>([]);
+  const [peakPeriods, setPeakPeriods]     = useState<PeakPeriodRow[]>([]);
+  const [peakHours, setPeakHours]         = useState<PeakHourRow[]>([]);
   const [loanDur, setLoanDur]             = useState<{ byPatronType: LoanDurRow[]; overall: { avgDaysOut: number; avgLoanPeriod: number; currentlyOut: number; overdueCount: number }; note: string } | null>(null);
   const [weedData, setWeedData]           = useState<{ items: WeedItem[]; summary: { candidateCount: number; totalValue: number }; yearsThreshold: number } | null>(null);
   const [neverBorrowed, setNeverBorrowed] = useState<{ byDewey: NeverBorrowedRow[]; totals: { totalTitles: number; totalItems: number; neverUsedItems: number; neverUsedTitles: number; roomUseOnlyItems: number }; roomUseAware: boolean } | null>(null);
@@ -2388,7 +2392,15 @@ export default function Dashboard() {
       const mkDone = (key: string) => setExtra2Loading(p => ({ ...p, [key]: false }));
       const mkErr  = (key: string, msg: string) => { setExtra2Errors(p => ({ ...p, [key]: msg })); setExtra2Loading(p => ({ ...p, [key]: false })); };
       mkLoad('peakDays');
-      fetch('/api/charts/peak-checkout-days').then(r=>r.json()).then(d=>{ const arr = d?.rows ?? d; if(Array.isArray(arr) && arr.length) { setPeakDays(arr); mkDone('peakDays'); } else mkErr('peakDays', d?.error ?? 'No data'); }).catch(e=>mkErr('peakDays', String(e)));
+      fetch('/api/charts/peak-checkout-days').then(r=>r.json()).then(d=>{
+        const arr = d?.rows ?? d;
+        if(Array.isArray(arr) && arr.length) {
+          setPeakDays(arr);
+          if(Array.isArray(d?.byPeriod)) setPeakPeriods(d.byPeriod);
+          if(Array.isArray(d?.byHour)) setPeakHours(d.byHour);
+          mkDone('peakDays');
+        } else mkErr('peakDays', d?.error ?? 'No data');
+      }).catch(e=>mkErr('peakDays', String(e)));
       mkLoad('loanDur');
       fetch('/api/charts/avg-loan-duration').then(r=>r.json()).then(d=>{ if(d && !d.error) { setLoanDur(d); mkDone('loanDur'); } else mkErr('loanDur', d?.error ?? 'No data'); }).catch(e=>mkErr('loanDur', String(e)));
       mkLoad('lapsed');
@@ -3096,34 +3108,83 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* ── Peak Checkout Days ── */}
+          {/* ── Peak Use Days & Time-of-Day ── */}
           <div className="mb-8">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-              <span>📅</span>Peak Use Days (All-Time)
+              <span>📅</span>Peak Use — Days &amp; Times (All-Time)
             </h2>
-            <p className="text-xs text-gray-600 mb-4">Which days of the week see the most library use (checkouts + in-library visits) — use this for staffing decisions.</p>
+            <p className="text-xs text-gray-600 mb-4">Which days and time periods see the most library use (checkouts + in-library visits). Use this to plan staffing and opening hours.</p>
             {extra2Loading.peakDays ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.peakDays ? (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.peakDays}</div>
             ) : peakDays.length > 0 ? (
-              <div className="bg-white rounded-xl shadow-sm p-4">
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={peakDays} margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={n => n.toLocaleString()} />
-                    <Tooltip formatter={(v) => typeof v === "number" ? v.toLocaleString() : String(v)} />
-                    <Bar dataKey="checkouts" name="Checkouts" fill="#6366f1" radius={[4,4,0,0]} stackId="a" />
-                    {peakDays.some(d => d.roomUse > 0) && (
-                      <Bar dataKey="roomUse" name="Room Use" fill="#a855f7" radius={[4,4,0,0]} stackId="a" />
-                    )}
-                  </BarChart>
-                </ResponsiveContainer>
-                {peakDays.some(d => d.roomUse > 0) && (
-                  <p className="text-xs text-gray-500 mt-1 text-center">Stacked: checkouts + in-library room use</p>
+              <>
+                {/* Day-of-week chart */}
+                <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">By Day of Week</div>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={peakDays} margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={n => n.toLocaleString()} />
+                      <Tooltip formatter={(v) => typeof v === "number" ? v.toLocaleString() : String(v)} />
+                      <Bar dataKey="checkouts" name="Checkouts" fill="#6366f1" radius={[4,4,0,0]} stackId="a" />
+                      {peakDays.some(d => d.roomUse > 0) && (
+                        <Bar dataKey="roomUse" name="Room Use" fill="#a855f7" radius={[4,4,0,0]} stackId="a" />
+                      )}
+                    </BarChart>
+                  </ResponsiveContainer>
+                  {peakDays.some(d => d.roomUse > 0) && (
+                    <p className="text-xs text-gray-500 mt-1 text-center">Stacked: checkouts (indigo) + in-library room use (purple)</p>
+                  )}
+                </div>
+
+                {/* Time-of-day period chart */}
+                {peakPeriods.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">By Time Period</div>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={peakPeriods} layout="vertical" margin={{ left: 160, right: 60, top: 4, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={n => n.toLocaleString()} />
+                        <YAxis type="category" dataKey="period" tick={{ fontSize: 10 }} width={155} />
+                        <Tooltip formatter={(v) => typeof v === "number" ? v.toLocaleString() : String(v)} />
+                        <Bar dataKey="checkouts" name="Checkouts" fill="#6366f1" stackId="b" />
+                        {peakPeriods.some(d => d.roomUse > 0) && (
+                          <Bar dataKey="roomUse" name="Room Use" fill="#a855f7" stackId="b" radius={[0,4,4,0]} />
+                        )}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 )}
-              </div>
+
+                {/* Hourly heatmap row */}
+                {peakHours.length > 0 && (() => {
+                  const maxUse = Math.max(...peakHours.map(h => h.totalUse), 1);
+                  return (
+                    <div className="bg-white rounded-xl shadow-sm p-4">
+                      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Hourly Heatmap (all activity)</div>
+                      <div className="flex gap-1 flex-wrap">
+                        {peakHours.map(h => {
+                          const intensity = h.totalUse / maxUse;
+                          const bg = intensity > 0.75 ? '#4338ca' : intensity > 0.5 ? '#6366f1' : intensity > 0.25 ? '#a5b4fc' : '#e0e7ff';
+                          const fg = intensity > 0.5 ? '#fff' : '#374151';
+                          return (
+                            <div key={h.hour} title={`${h.label}: ${h.totalUse.toLocaleString()} total (${h.checkouts.toLocaleString()} checkouts${h.roomUse > 0 ? ` + ${h.roomUse.toLocaleString()} room use` : ''})`}
+                              style={{ background: bg, color: fg, minWidth: 44 }}
+                              className="rounded p-2 text-center cursor-default transition-colors">
+                              <div className="text-xs font-bold">{h.label}</div>
+                              <div className="text-xs mt-0.5">{h.totalUse.toLocaleString()}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">Colour intensity = relative volume. Hover a cell for breakdown.</p>
+                    </div>
+                  );
+                })()}
+              </>
             ) : extraLoaded2.patrons ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available</div>
             ) : null}
