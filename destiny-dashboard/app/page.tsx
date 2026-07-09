@@ -1250,6 +1250,367 @@ function ChedComplianceSummary({ chedStats }: { chedStats: Record<string,number>
   );
 }
 
+// ══════════════════════════════════════════════════════════════════
+// AACCUP Area VII — Library Self-Survey Instrument
+// ══════════════════════════════════════════════════════════════════
+const AACCUP_SECTIONS = [
+  {
+    section: 'A — Administration',
+    icon: '🏛️',
+    note: 'Library must be administered by a full-time, licensed librarian with a Master\'s in LIS. An organisational chart, policy manual, and Library Board/Committee are required.',
+    metrics: [
+      { id: 'AACCUP-A1-ORG-STRUCTURE',    label: 'A.1 Organizational Structure of Library Well-Defined',              unit: '1=Yes / 0=No', hint: 'Clearly drawn org chart filed and disseminated',               comply: (v:number) => v === 1 },
+      { id: 'AACCUP-A2-LICENSED-LIB',     label: 'A.2 Library Managed by Licensed & Educationally Qualified Librarian', unit: '1=Yes / 0=No', hint: 'PRC-licensed, with Master\'s in LIS',                        comply: (v:number) => v === 1 },
+      { id: 'AACCUP-A3-HEAD-SUPERVISES',  label: 'A.3 Head Librarian Directs & Supervises Total Library Operation',  unit: '1=Yes / 0=No', hint: 'Responsible for administration of all resources and services',  comply: (v:number) => v === 1 },
+      { id: 'AACCUP-A4-ACADEMIC-RANK',    label: 'A.4 Head Librarian Has Academic Rank & Participates in Academic Activities', unit: '1=Yes / 0=No', hint: 'Academic non-teaching rank; participates in curriculum/research', comply: (v:number) => v === 1 },
+      { id: 'AACCUP-A5-LIB-COMMITTEE',   label: 'A.5 Library Board / Committee Sets Policies & Periodically Reviews Them', unit: '1=Yes / 0=No', hint: 'Committee with board resolution, active and meeting regularly', comply: (v:number) => v === 1 },
+      { id: 'AACCUP-A6-REPORTS',          label: 'A.6 Annual & Accomplishment Reports Promptly Submitted',             unit: '1=Yes / 0=No', hint: 'Reports submitted to relevant higher offices on schedule' },
+      { id: 'AACCUP-A7-POLICY-MANUAL',    label: 'A.7 Approved & Disseminated Library Manual / Written Policies',      unit: '1=Yes / 0=No', hint: 'Covers internal admin, operations, and user services',          comply: (v:number) => v === 1 },
+    ],
+  },
+  {
+    section: 'B — Staff / Personnel',
+    icon: '👥',
+    note: 'Staffing must be sufficient for the school population, curricular offerings, collection size, and circulation rate. A staff development program is required.',
+    metrics: [
+      { id: 'AACCUP-B1-QUALIFIED-STAFF',  label: 'B.1 Library Staffed with Qualified Personnel',                      unit: '1=Yes / 0=No', hint: 'All staff meet educational and professional qualifications',     comply: (v:number) => v === 1 },
+      { id: 'AACCUP-B2-STAFF-COUNT',      label: 'B.2 Library Meets Required Number of Librarians & Support Staff',   unit: '1=Yes / 0=No', hint: 'Ratio meets school population + collection + circ rate requirements', comply: (v:number) => v === 1 },
+      { id: 'AACCUP-B2-LIBRARIANS',       label: 'B.2a Total Professional Librarians (PRC-licensed)',                  unit: 'persons',      hint: 'Full-time, licensed librarians in active service' },
+      { id: 'AACCUP-B2-SUPPORT-STAFF',   label: 'B.2b Total Support / Para-professional Staff',                      unit: 'persons',      hint: 'Library assistants, clerks, encoders' },
+      { id: 'AACCUP-B3-DEV-PROGRAM',     label: 'B.3 Sustainable & Functional Staff Development Program',             unit: '1=Yes / 0=No', hint: 'Formal program for continuing education, trainings, CPD',        comply: (v:number) => v === 1 },
+      { id: 'AACCUP-B3-TRAININGS-YR',    label: 'B.3a Staff Development Trainings Attended This Year',                unit: 'events',       hint: 'Total training events attended by all library personnel combined' },
+      { id: 'AACCUP-B4-BENEFITS',         label: 'B.4 Compensation, Retirement & Benefits Per Government Laws',       unit: '1=Yes / 0=No', hint: 'Personnel benefits comply with RA 7722, CSC, and institutional policies' },
+    ],
+  },
+  {
+    section: 'C — Collection Development, Organization & Preservation',
+    icon: '📚',
+    note: 'Core collection ≥ 5,000 titles (college) or ≥ 10,000 (university). At least 30% of holdings should be current editions (within last 10 years). An ILS is required.',
+    metrics: [
+      { id: 'AACCUP-C1-DEV-POLICY',       label: 'C.1 Written Collection Development Policy (reviewed regularly)',     unit: '1=Yes / 0=No', hint: 'Policy reviewed and evaluated by the Library Board/Committee',  comply: (v:number) => v === 1 },
+      { id: 'AACCUP-C2-COMMITTEE-SELECTS',label: 'C.2 Library Committee & Officials Participate in Selection/Acquisition', unit: '1=Yes / 0=No', hint: 'Faculty, officials, and librarians involved in selection',  comply: (v:number) => v === 1 },
+      { id: 'AACCUP-C3-SUPPORTS-MISSION', label: 'C.3 Collection Supports Institution\'s Mission, Goals & Programs',  unit: '1=Yes / 0=No', hint: 'Collection assessed against institutional curricular objectives', comply: (v:number) => v === 1 },
+      { id: 'AACCUP-C4-CORE-TITLES',      label: 'C.4 Core Collection Titles (≥5,000 college / ≥10,000 university)',  unit: 'titles',       hint: 'Count unique bibliographic titles in ILS',                     comply: (v:number) => v >= 5000 },
+      { id: 'AACCUP-C5-CURRENT-30PCT',    label: 'C.5 ≥30% of Holdings are Current Editions (copyright ≤10 years)',  unit: '% (0–100)',    hint: 'Items published within last 10 years as % of total collection', comply: (v:number) => v >= 30 },
+      { id: 'AACCUP-C6-NONPRINT-DIGITAL', label: 'C.6 Non-Print, Digital & Electronic Resources Available',           unit: '1=Yes / 0=No', hint: 'With sufficient hardware/equipment to access them',             comply: (v:number) => v === 1 },
+      { id: 'AACCUP-C7-RESEARCH-BOOKS',   label: 'C.7 Sufficient Research Books & Materials for Curricular Needs',    unit: '1=Yes / 0=No', hint: 'Research books adequately supplement clients\' academic programs' },
+      { id: 'AACCUP-C8-FILIPINIANA',      label: 'C.8 Extensive Filipiniana Collection Maintained',                   unit: '1=Yes / 0=No', hint: 'Philippine-authored and Philippine-subject materials well-represented', comply: (v:number) => v === 1 },
+      { id: 'AACCUP-C9-PROFESSIONAL-TTLS',label: 'C.9 Book / Journal Titles per Professional Subject Field',          unit: 'titles/field', hint: '3–5 titles per major field of specialization (per AACCUP)',     comply: (v:number) => v >= 3 },
+      { id: 'AACCUP-C10-CATALOGUED',      label: 'C.10 Collection Organized per Accepted Classification & Cataloguing', unit: '1=Yes / 0=No', hint: 'Follows DDC or LC + AACR2/RDA standards',                   comply: (v:number) => v === 1 },
+      { id: 'AACCUP-C11-ILS',             label: 'C.11 Integrated Library System Available',                           unit: '1=Yes / 0=No', hint: 'ILS facilitates organization of library resources',             comply: (v:number) => v === 1 },
+      { id: 'AACCUP-C12-PRESERVATION',    label: 'C.12 Provisions for Preservation, General Care & Upkeep of Resources', unit: '1=Yes / 0=No', hint: 'Written preservation policy + environmental controls',       comply: (v:number) => v === 1 },
+      { id: 'AACCUP-C13-WEEDING',         label: 'C.13 Regular Weeding-Out Program Conducted',                         unit: '1=Yes / 0=No', hint: 'Active, documented deselection program to maintain relevance',  comply: (v:number) => v === 1 },
+      { id: 'AACCUP-C14-QUALITY-CONFORMS',label: 'C.14 Quality & Quantity of Materials Conform with Program Standards', unit: '1=Yes / 0=No', hint: 'Collection assessed against standards for each academic program' },
+    ],
+  },
+  {
+    section: 'D — Services and Utilization',
+    icon: '🛎️',
+    note: 'Library open ≥54 hrs/week (college) or ≥60 hrs/week (university). An ILS with OPAC, circulation, cataloguing, and statistical data on utilization are required.',
+    metrics: [
+      { id: 'AACCUP-D1-HOURS-WEEK',       label: 'D.1 Library Open Hours per Week',                                   unit: 'hours/week',   hint: 'College: ≥54 hours; University: ≥60 hours per week',           comply: (v:number) => v >= 54 },
+      { id: 'AACCUP-D2-ACCESS-SYSTEM',    label: 'D.2 System Providing Faculty & Students Greater Access',            unit: '1=Yes / 0=No', hint: 'e.g. OPAC, borrower card, online reservation, extended loans',  comply: (v:number) => v === 1 },
+      { id: 'AACCUP-D3-DISSEMINATION',    label: 'D.3 Library Promotes New Acquisitions, Resources & Services',       unit: '1=Yes / 0=No', hint: 'Regular announcements via bulletin board, website, social media' },
+      { id: 'AACCUP-D4-STAFF-AVAILABLE',  label: 'D.4 Librarians / Staff Available During All Library Hours',        unit: '1=Yes / 0=No', hint: 'Desk service available for the entire open period',             comply: (v:number) => v === 1 },
+      { id: 'AACCUP-D5-1-WEBPAGE',        label: 'D.5.1 Functional & Interactive Library Web Page',                   unit: '1=Yes / 0=No', hint: 'Active library website with current content and resources' },
+      { id: 'AACCUP-D5-2-ILS',            label: 'D.5.2 Integrated Library System Available',                         unit: '1=Yes / 0=No', hint: 'Covers OPAC, circulation, cataloguing, inventory',              comply: (v:number) => v === 1 },
+      { id: 'AACCUP-D5-OPAC',             label: 'D.5.2.1 OPAC (Online Public Access Catalog)',                       unit: '1=Yes / 0=No', hint: 'Users can search catalog online',                               comply: (v:number) => v === 1 },
+      { id: 'AACCUP-D5-CIRC-ONLINE',      label: 'D.5.2.2 Online / Computerized Circulation',                         unit: '1=Yes / 0=No', hint: 'Borrowing and returning processed through the ILS' },
+      { id: 'AACCUP-D5-CAT-COMPUTER',     label: 'D.5.2.3 Computerized Cataloguing',                                  unit: '1=Yes / 0=No', hint: 'Bibliographic records created/maintained in the ILS' },
+      { id: 'AACCUP-D5-INVENTORY',        label: 'D.5.2.4 Inventory / Stock-Taking Reporting via ILS',                unit: '1=Yes / 0=No', hint: 'ILS used for annual or periodic inventory reporting' },
+      { id: 'AACCUP-D5-SERIALS',          label: 'D.5.2.5 Serials Control Module',                                    unit: '1=Yes / 0=No', hint: 'Tracking receipt, routing, and claiming of serial titles' },
+      { id: 'AACCUP-D5-INTERNET',         label: 'D.5.2.6 Internet Searching Available to Users',                     unit: '1=Yes / 0=No', hint: 'Library provides internet-connected terminals for users' },
+      { id: 'AACCUP-D5-CDROM',            label: 'D.5.2.7 CD-ROM / Optical Media Services',                           unit: '1=Yes / 0=No', hint: 'CD-ROM databases or optical disc resources available' },
+      { id: 'AACCUP-D5-ONLINE-DB',        label: 'D.5.2.8 Online Database Access',                                    unit: '1=Yes / 0=No', hint: 'Subscribed or free online databases accessible to users',        comply: (v:number) => v === 1 },
+      { id: 'AACCUP-D5-PHOTOCOPYING',     label: 'D.5.2.9 Photocopying / Reproduction Services',                      unit: '1=Yes / 0=No', hint: 'Photocopier or scanner available for user reproduction needs' },
+      { id: 'AACCUP-D5-BARCODING',        label: 'D.5.2.10 Bar Coding of Library Materials',                          unit: '1=Yes / 0=No', hint: 'Items and patron cards barcoded for ILS circulation' },
+      { id: 'AACCUP-D6-STATISTICS',       label: 'D.6 Statistical Data on Resource/Service Utilization Compiled & Used', unit: '1=Yes / 0=No', hint: 'Regular statistical reports inform collection & operations decisions', comply: (v:number) => v === 1 },
+    ],
+  },
+  {
+    section: 'E — Physical Set-up and Facilities',
+    icon: '🏢',
+    note: 'Reading room must accommodate ≥10% of school enrollment. PWD ramps, fire safety equipment, security systems, and IT/multimedia provisions are required.',
+    metrics: [
+      { id: 'AACCUP-E1-1-LOCATION',       label: 'E.1.1 Library Strategically Located & Accessible to All Users',    unit: '1=Yes / 0=No', hint: 'Accessible to students, faculty, and other clientele',           comply: (v:number) => v === 1 },
+      { id: 'AACCUP-E1-2-EXPANSION',      label: 'E.1.2 Library Planned & Structured to Allow Future Expansion',     unit: '1=Yes / 0=No', hint: 'Floor plan provides for rearrangement and future growth' },
+      { id: 'AACCUP-E2-1-SIZE',           label: 'E.2.1 Library Size Meets Standard Requirements',                    unit: '1=Yes / 0=No', hint: 'Considering present enrollment and planned future expansion',    comply: (v:number) => v === 1 },
+      { id: 'AACCUP-E2-1-FLOOR-AREA',     label: 'E.2.1a Total Library Floor Area (sq m)',                            unit: 'sq meters',    hint: 'Gross usable floor area in square metres' },
+      { id: 'AACCUP-E2-2-READING-CAP',    label: 'E.2.2 Reading Room Accommodates ≥10% of School Enrollment',        unit: '% (0–100)',    hint: '(Reading room seats ÷ total enrollment) × 100; target ≥10%',    comply: (v:number) => v >= 10 },
+      { id: 'AACCUP-E2-2-SEATS',          label: 'E.2.2a Reader Seating Capacity (seats)',                            unit: 'seats',        hint: 'Total chairs/carrels in main reading room(s)' },
+      { id: 'AACCUP-E2-3-WORKSTATIONS',   label: 'E.2.3 Space Provided for Print Resources & Electronic Workstations', unit: '1=Yes / 0=No', hint: 'Dedicated areas for stacks and computer terminals' },
+      { id: 'AACCUP-E2-4-ADMIN-SPACE',    label: 'E.2.4 Space for Librarians\' Office, Staff Room & Technical Room', unit: '1=Yes / 0=No', hint: 'Separate functional areas for staff and technical services' },
+      { id: 'AACCUP-E2-5-PWD-RAMPS',      label: 'E.2.5 Ramps / Facilities for Physically Disabled (PWD) Provided', unit: '1=Yes / 0=No', hint: 'Where feasible; required under RA 7277 / RA 9442',               comply: (v:number) => v === 1 },
+      { id: 'AACCUP-E3-1-FURNITURE',      label: 'E.3.1 Library Meets Required Standard-Sized Furniture & Equipment', unit: '1=Yes / 0=No', hint: 'Tables, chairs, shelves, etc. meet standard dimensions and count' },
+      { id: 'AACCUP-E3-SHELVES',          label: 'E.3.2 Adjustable / Movable Shelves (units)',                        unit: 'units',        hint: 'Count of adjustable shelving units in active use' },
+      { id: 'AACCUP-E3-COMPUTERS',        label: 'E.3.2 Computers with Printers (units)',                             unit: 'units',        hint: 'Desktops/laptops with printers for staff and public use' },
+      { id: 'AACCUP-E3-CARRELS',          label: 'E.3.2 Individual Study Carrels (units)',                            unit: 'units',        hint: 'Enclosed or semi-enclosed individual study stations' },
+      { id: 'AACCUP-E4-1-LIGHTING',       label: 'E.4.1 Library is Well Lighted',                                    unit: '1=Yes / 0=No', hint: 'Adequate natural and/or artificial lighting throughout',          comply: (v:number) => v === 1 },
+      { id: 'AACCUP-E4-2-VENTILATION',    label: 'E.4.2 Library is Well-Ventilated',                                  unit: '1=Yes / 0=No', hint: 'Adequate air circulation, AC, or natural ventilation',           comply: (v:number) => v === 1 },
+      { id: 'AACCUP-E4-3-ATMOSPHERE',     label: 'E.4.3 Atmosphere is Conducive to Learning',                        unit: '1=Yes / 0=No', hint: 'Quiet, orderly, comfortable environment for study',             comply: (v:number) => v === 1 },
+      { id: 'AACCUP-E5-1-FIRE-SAFETY',    label: 'E.5.1 Fire Extinguishers & Local Fire Alarm System Available',     unit: '1=Yes / 0=No', hint: 'Fire safety equipment regularly inspected and operational',       comply: (v:number) => v === 1 },
+      { id: 'AACCUP-E5-2-SECURITY',       label: 'E.5.2 System for Security & Control of Library Resources',         unit: '1=Yes / 0=No', hint: 'e.g. RFID, tattle-tape, CCTV, bag inspection',                  comply: (v:number) => v === 1 },
+      { id: 'AACCUP-E6-IT-MULTIMEDIA',    label: 'E.6 Provision for Latest IT Software & Multimedia Equipment',      unit: '1=Yes / 0=No', hint: 'Budget and plan for acquiring and updating IT and AV equipment' },
+    ],
+  },
+  {
+    section: 'F — Financial Support',
+    icon: '💰',
+    note: 'The library must have a separate, realistic, and adequate budget. The head librarian leads budget preparation in coordination with the Library Committee.',
+    metrics: [
+      { id: 'AACCUP-F1-REG-BUDGET',       label: 'F.1 Institution Allocates Regular & Realistic Library Budget',     unit: '1=Yes / 0=No', hint: 'Separate line item in institutional budget for library',          comply: (v:number) => v === 1 },
+      { id: 'AACCUP-F1-ANNUAL-BUDGET',    label: 'F.1a Annual Library Budget (₱)',                                   unit: '₱',            hint: 'Total approved library operating budget for the fiscal year' },
+      { id: 'AACCUP-F2-BUDGET-PROCESS',   label: 'F.2 Head Librarian & Staff Prepare & Manage Annual Budget',       unit: '1=Yes / 0=No', hint: 'Budget prepared in coordination with institutional administration' },
+      { id: 'AACCUP-F3-AUDITED-PROPERLY', label: 'F.3 Library Funds Utilized Solely for Library Purposes & Audited', unit: '1=Yes / 0=No', hint: 'All fees and allocated funds properly accounted and audited',     comply: (v:number) => v === 1 },
+      { id: 'AACCUP-F4-OTHER-SOURCES',    label: 'F.4 Other Sources of Financial Assistance Sought',                 unit: '1=Yes / 0=No', hint: 'e.g. grants, donations, alumni, foundation funding' },
+      { id: 'AACCUP-F4-EXTERNAL-AMT',     label: 'F.4a External / Additional Funding Received This Year (₱)',        unit: '₱',            hint: 'Total from grants, donations, and external sources combined' },
+    ],
+  },
+  {
+    section: 'G — Linkages',
+    icon: '🤝',
+    note: 'Library must explore and establish linkages with other institutions and funding agencies, participate in consortia, and engage in resource sharing.',
+    metrics: [
+      { id: 'AACCUP-G1-LINKAGES',         label: 'G.1 Linkages with Other Institutions & Funding Agencies Established', unit: '1=Yes / 0=No', hint: 'MOAs or formal agreements with partner institutions or funders',  comply: (v:number) => v === 1 },
+      { id: 'AACCUP-G1-MOA-COUNT',        label: 'G.1a Number of Active MOAs / Formal Linkage Agreements',            unit: 'agreements',   hint: 'Count of signed and currently active MOAs' },
+      { id: 'AACCUP-G2-MAILING-LIST',     label: 'G.2 Library on Mailing List of Agencies for Exchange / Donations',  unit: '1=Yes / 0=No', hint: 'Subscribed to agency mailing lists for book exchange or donations' },
+      { id: 'AACCUP-G3-CONSORTIA',        label: 'G.3 Consortia, Networking & Resource Sharing Practiced',            unit: '1=Yes / 0=No', hint: 'Active participation in library consortium or cooperative programs', comply: (v:number) => v === 1 },
+      { id: 'AACCUP-G3-PARTNERS',         label: 'G.3a Number of Resource-Sharing Partner Libraries',                  unit: 'libraries',    hint: 'Libraries with active ILL, consortium, or cooperative agreements' },
+    ],
+  },
+] as const;
+
+type AaccupMetricID = typeof AACCUP_SECTIONS[number]['metrics'][number]['id'];
+type AaccupStored = Record<string, { value: number; notes: string; date: string }>;
+
+function AaccupManualSection({ unlocked }: { unlocked: boolean }) {
+  const [stored, setStored]   = useState<AaccupStored>({});
+  const [loading, setLoading] = useState(true);
+  const [sbError, setSbError] = useState<string | null>(null);
+  const [saving, setSaving]   = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft]     = useState({ value: '', notes: '' });
+
+  const allIds = AACCUP_SECTIONS.flatMap(s => s.metrics.map(m => m.id));
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const { data, error } = await supabase
+          .from('green_metrics')
+          .select('metric_id, value, notes, recorded_on')
+          .in('metric_id', allIds)
+          .order('recorded_on', { ascending: false });
+        if (error) { setSbError(error.message); return; }
+        const map: AaccupStored = {};
+        for (const row of data ?? []) {
+          if (!map[row.metric_id]) {
+            map[row.metric_id] = { value: Number(row.value), notes: row.notes ?? '', date: row.recorded_on };
+          }
+        }
+        setStored(map);
+      } catch (err) {
+        setSbError(err instanceof Error ? err.message : 'Supabase not configured');
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function saveEntry(id: string) {
+    const num = parseFloat(draft.value);
+    if (isNaN(num)) { setEditing(null); return; }
+    setSaving(id);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const today = new Date().toISOString().slice(0, 10);
+      await supabase.from('green_metrics').upsert(
+        { metric_id: id, recorded_on: today, value: num, notes: draft.notes || null },
+        { onConflict: 'metric_id,recorded_on' },
+      );
+      setStored(prev => ({ ...prev, [id]: { value: num, notes: draft.notes, date: today } }));
+      setEditing(null);
+    } catch { /* ignore */ } finally { setSaving(null); }
+  }
+
+  function startEdit(id: string) {
+    const sv = stored[id];
+    setDraft({ value: sv ? String(sv.value) : '', notes: sv?.notes ?? '' });
+    setEditing(id);
+  }
+
+  function fmtValue(v: number, unit: string) {
+    if (unit === '1=Yes / 0=No') return v === 1 ? '✓ Yes' : v === 0 ? '✗ No' : String(v);
+    if (unit === '% (0–100)') return v.toFixed(1) + '%';
+    return v % 1 === 0 ? v.toLocaleString() : v.toFixed(1);
+  }
+
+  const recordedCount = Object.keys(stored).length;
+  const totalCount = allIds.length;
+
+  // compliance summary
+  const sections = AACCUP_SECTIONS.map(sec => {
+    let pass = 0, fail = 0, na = 0;
+    for (const m of sec.metrics) {
+      const sv = stored[m.id];
+      const val = sv?.value ?? null;
+      const complyFn = 'comply' in m ? (m as {comply?: (v:number)=>boolean}).comply : undefined;
+      if (!complyFn) { na++; continue; }
+      if (val === null) { na++; continue; }
+      complyFn(val) ? pass++ : fail++;
+    }
+    return { section: sec.section, icon: sec.icon, pass, fail, na, total: sec.metrics.length };
+  });
+  const totalPass = sections.reduce((a, s) => a + s.pass, 0);
+  const totalFail = sections.reduce((a, s) => a + s.fail, 0);
+  const scored = totalPass + totalFail;
+
+  return (
+    <div className="mt-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+          📝 AACCUP Area VII — Manual Documentation Metrics
+        </h2>
+        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+          {recordedCount}/{totalCount} fields recorded
+        </span>
+      </div>
+
+      {/* quick compliance summary grid */}
+      {scored > 0 && (
+        <div className="mb-6 bg-white rounded-xl shadow-sm p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Compliance at a Glance</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+            {sections.map(s => (
+              <div key={s.section} className="border rounded-lg p-3 text-xs">
+                <div className="font-semibold text-gray-700 mb-1">{s.icon} {s.section.split(' — ')[0]}</div>
+                <div className="flex gap-2">
+                  <span className="text-green-700 font-bold">{s.pass} ✓</span>
+                  <span className="text-red-600 font-bold">{s.fail} ✗</span>
+                  {s.na > 0 && <span className="text-gray-400">{s.na} —</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-green-700 font-semibold">{totalPass} compliant</span>
+            <span className="text-red-600 font-semibold">{totalFail} non-compliant</span>
+            <span className="text-gray-500">of {scored} rated indicators</span>
+            <div className="flex-1 bg-gray-100 rounded-full h-2 ml-2">
+              <div className="bg-green-500 h-2 rounded-full" style={{ width: `${scored ? (totalPass/scored*100) : 0}%` }} />
+            </div>
+            <span className="text-gray-700 font-bold">{scored ? (totalPass/scored*100).toFixed(0) : 0}%</span>
+          </div>
+        </div>
+      )}
+
+      {sbError && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+          ⚠️ {sbError} — values cannot be saved until Supabase is configured.
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-center py-8 text-gray-400 text-sm">Loading saved values…</div>
+      ) : (
+        <div className="space-y-6">
+          {AACCUP_SECTIONS.map(sec => (
+            <div key={sec.section} className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 bg-green-800 text-white">
+                <span>{sec.icon}</span>
+                <span className="text-sm font-semibold">{sec.section}</span>
+              </div>
+              {'note' in sec && sec.note && (
+                <div className="px-4 py-2 bg-green-50 border-b border-green-100 text-xs text-green-800">
+                  {sec.note as string}
+                </div>
+              )}
+              <div className="divide-y divide-gray-100">
+                {sec.metrics.map(m => {
+                  const sv    = stored[m.id];
+                  const val   = sv?.value ?? null;
+                  const isEd  = editing === m.id;
+                  const isSav = saving === m.id;
+                  const complyFn = 'comply' in m ? (m as {comply?: (v:number)=>boolean}).comply : undefined;
+                  const comply = complyFn && val !== null ? complyFn(val) : null;
+
+                  return (
+                    <div key={m.id} className="px-4 py-3 flex items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-mono text-gray-400 mb-0.5">{m.id}</div>
+                        <div className="text-sm font-medium text-gray-800">{m.label}</div>
+                        {sv?.notes && <div className="text-xs text-gray-500 mt-0.5 italic">Note: {sv.notes}</div>}
+                        {sv?.date  && <div className="text-xs text-gray-400 mt-0.5">Updated: {sv.date}</div>}
+                      </div>
+
+                      {isEd ? (
+                        <div className="flex flex-col gap-2 shrink-0 min-w-[220px]">
+                          <div className="flex gap-2">
+                            <input
+                              type="number" step="any"
+                              value={draft.value}
+                              onChange={e => setDraft(d => ({ ...d, value: e.target.value }))}
+                              placeholder={m.hint}
+                              className="w-28 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                              autoFocus
+                            />
+                            <input
+                              type="text"
+                              value={draft.notes}
+                              onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))}
+                              placeholder="Notes (optional)"
+                              className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => saveEntry(m.id)} disabled={isSav} className="bg-green-700 hover:bg-green-800 disabled:opacity-60 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
+                              {isSav ? 'Saving…' : 'Save'}
+                            </button>
+                            <button onClick={() => setEditing(null)} className="text-xs text-gray-500 hover:text-gray-700 px-2">Cancel</button>
+                          </div>
+                          <div className="text-xs text-gray-400">{m.hint}</div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-right">
+                            {val !== null ? (
+                              <>
+                                <div className={`text-lg font-bold ${comply === true ? 'text-green-700' : comply === false ? 'text-red-600' : 'text-gray-800'}`}>
+                                  {fmtValue(val, m.unit)}
+                                </div>
+                                <div className="text-xs text-gray-500">{m.unit}</div>
+                                {comply === true  && <div className="text-xs text-green-600 font-medium">✓ Compliant</div>}
+                                {comply === false && <div className="text-xs text-red-500 font-medium">✗ Non-compliant</div>}
+                              </>
+                            ) : (
+                              <div className="text-sm text-gray-400 italic">Not recorded</div>
+                            )}
+                          </div>
+                          {unlocked && (
+                            <button
+                              onClick={() => startEdit(m.id as AaccupMetricID)}
+                              className="bg-white border border-gray-300 hover:border-green-500 hover:text-green-700 text-gray-600 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              {val !== null ? '✏️ Edit' : '+ Enter'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChedManualSection({ unlocked }: { unlocked: boolean }) {
   const [stored, setStored]   = useState<ChedStored>({});
   const [loading, setLoading] = useState(true);
@@ -1470,7 +1831,7 @@ export default function Dashboard() {
   const [genderActivity, setGenderActivity]       = useState<ActivityRow[]>([]);
   const [patronTypeActivity, setPatronTypeActivity] = useState<ActivityRow[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'|'insights'|'trends'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'|'aaccup'|'insights'|'trends'>('overview');
   const [chartsLoaded, setChartsLoaded] = useState({ patrons: false, collection: false, insights: false });
   const [chedStats, setChedStats] = useState<Record<string,number> | null>(null);
   const [strategicStats, setStrategicStats] = useState<Record<string,number> | null>(null);
@@ -1817,7 +2178,7 @@ export default function Dashboard() {
 
         {/* Tab bar */}
         <div className="flex gap-2 mb-6 border-b border-gray-200 print:hidden">
-          {(['overview','patrons','collection','iso','ched','insights','trends'] as const).map(tab => (
+          {(['overview','patrons','collection','iso','ched','aaccup','insights','trends'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1827,7 +2188,7 @@ export default function Dashboard() {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'insights' ? '💡 Insights' : tab === 'trends' ? '📈 Trends' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'iso' ? 'ISO Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'aaccup' ? 'AACCUP Area VII' : tab === 'insights' ? '💡 Insights' : tab === 'trends' ? '📈 Trends' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
@@ -3226,6 +3587,39 @@ export default function Dashboard() {
               <ChedManualSection unlocked={insightsUnlocked} />
             </>
           )}
+        </div>
+
+        {/* Tab: AACCUP Area VII */}
+        <div className={activeTab === 'aaccup' ? 'block' : 'hidden print:block'}>
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4 text-green-900 text-sm">
+            <strong>AACCUP Area VII — Library Self-Survey Instrument</strong>
+            <p className="mt-1 text-xs text-green-800">
+              Covers sections A (Administration) through G (Linkages). Enter values for each indicator using the fields below. Items marked <strong>✓ Compliant / ✗ Non-compliant</strong> have defined thresholds per the AACCUP instrument. Unlock editing with the dashboard password.
+            </p>
+          </div>
+
+          {/* Password gate — reuses same insightsUnlocked state */}
+          {!insightsUnlocked && (
+            <div className="mb-6 bg-white rounded-xl shadow-sm p-5">
+              <p className="text-sm text-gray-600 mb-3">Enter the dashboard password to record or edit AACCUP metrics.</p>
+              <form onSubmit={(e) => { e.target; }} className="flex gap-2 items-center">
+                <input
+                  type="password"
+                  placeholder="Password"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const v = (e.target as HTMLInputElement).value;
+                      if (v === 'palstateu') setInsightsUnlocked(true);
+                    }
+                  }}
+                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-green-400"
+                />
+                <span className="text-xs text-gray-400">Press Enter to unlock</span>
+              </form>
+            </div>
+          )}
+
+          <AaccupManualSection unlocked={insightsUnlocked} />
         </div>
 
         {/* Tab: Insights */}
