@@ -952,6 +952,276 @@ function GreenLibraryTab({ reuseRate, unlocked }: { reuseRate: number | null; un
   );
 }
 
+// ── CHED CMO 22 Manual Metrics ──────────────────────────────────────────────
+
+const CHED_MANUAL_SECTIONS = [
+  {
+    section: '§1 — Vision, Mission, Goals & Objectives (VMGO)',
+    icon: '🎯',
+    metrics: [
+      { id: 'CHED-S1-VMGO-APPROVED',    label: 'VMGO Document Formally Approved',               unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes, 0 for No',                comply: (v:number) => v === 1 },
+      { id: 'CHED-S1-VMGO-REVIEW-YEAR', label: 'Year VMGO Last Reviewed',                        unit: 'year',          hint: 'e.g. 2024',                                comply: (v:number) => v >= new Date().getFullYear() - 3 },
+      { id: 'CHED-S1-LIB-ALIGNMENT',    label: 'Library Mission Aligned with Institutional VMGO', unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes',                           comply: (v:number) => v === 1 },
+    ],
+  },
+  {
+    section: '§2 — Administration & Organization',
+    icon: '🏛️',
+    metrics: [
+      { id: 'CHED-S2-LICENSED-LIBRARIANS', label: 'Licensed Professional Librarians (PRC)',          unit: 'persons', hint: 'Staff with active PRC license' },
+      { id: 'CHED-S2-DIRECTOR-EDUC',       label: "Director's Highest Degree (1=BS 2=MA 3=PhD)",    unit: 'level',   hint: '1=BS/AB, 2=Masters, 3=Doctorate',     comply: (v:number) => v >= 2 },
+      { id: 'CHED-S2-ORG-CHART',           label: 'Organizational Chart Documented & Filed',          unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes',                   comply: (v:number) => v === 1 },
+    ],
+  },
+  {
+    section: '§3 — Staff Ratios & Human Resources',
+    icon: '👥',
+    metrics: [
+      { id: 'CHED-S3-FULL-TIME-STAFF',      label: 'Total Full-Time Library Staff',                          unit: 'persons',            hint: 'Librarians + assistants + clerks combined' },
+      { id: 'CHED-S3-LIBRARIANS',           label: 'Professional Librarians (PRC-licensed)',                  unit: 'persons',            hint: 'PRC-licensed librarians only' },
+      { id: 'CHED-S3-ASSISTANTS',           label: 'Library Assistants & Clerks',                             unit: 'persons',            hint: 'Non-librarian support staff' },
+      { id: 'CHED-S3-STUDENTS-PER-LIB',    label: 'Students per Professional Librarian',                     unit: 'students/librarian', hint: 'Enrollment ÷ librarian count; CHED recommends ≤500', comply: (v:number) => v <= 500 },
+    ],
+  },
+  {
+    section: '§4.a — Collection Development Policy',
+    icon: '📋',
+    metrics: [
+      { id: 'CHED-S4A-POLICY-EXISTS',  label: 'Written Collection Development Policy Exists',    unit: '1=Yes / 0=No', hint: 'Enter 1 for Yes', comply: (v:number) => v === 1 },
+      { id: 'CHED-S4A-POLICY-YEAR',   label: 'Year Policy Last Reviewed / Updated',              unit: 'year',          hint: 'e.g. 2023',       comply: (v:number) => v >= new Date().getFullYear() - 5 },
+    ],
+  },
+  {
+    section: '§4.c — Serials & Periodicals',
+    icon: '📰',
+    metrics: [
+      { id: 'CHED-S4C-PRINT-SUBS',  label: 'Current Print Serial Subscriptions',            unit: 'titles',          hint: 'Journals/magazines actively subscribed' },
+      { id: 'CHED-S4C-EJOURNALS',   label: 'E-Journal / Online Database Subscriptions',     unit: 'titles/packages', hint: 'Include consortium package titles' },
+    ],
+  },
+  {
+    section: '§4.d — Non-Print & Special Collections',
+    icon: '💿',
+    metrics: [
+      { id: 'CHED-S4D-AV-MATERIALS', label: 'Audiovisual Materials (DVDs, CDs, etc.)', unit: 'items', hint: 'Physical AV materials in collection' },
+      { id: 'CHED-S4D-MAPS',         label: 'Maps, Atlases & Geographic Materials',    unit: 'items', hint: 'Physical maps, atlases, globes' },
+    ],
+  },
+  {
+    section: '§6 — Physical Facilities',
+    icon: '🏢',
+    metrics: [
+      { id: 'CHED-S6-FLOOR-AREA',     label: 'Library Floor Area',                   unit: 'sq meters', hint: 'Total usable library space in sq m' },
+      { id: 'CHED-S6-SEATING',        label: 'Reader Seating Capacity',               unit: 'seats',     hint: 'CHED recommends ≥5% of enrollment' },
+      { id: 'CHED-S6-COMPUTERS',      label: 'Public-Access Computer Terminals',      unit: 'units',     hint: 'Including OPACs and research workstations' },
+      { id: 'CHED-S6-ANNUAL-VISITS',  label: 'Annual In-Person Library Visits',       unit: 'visits/yr', hint: 'Gate counter or manual headcount for the year' },
+    ],
+  },
+  {
+    section: '§7 — IT Infrastructure & Services',
+    icon: '💻',
+    metrics: [
+      { id: 'CHED-S7-OPAC-TERMINALS',  label: 'OPAC Terminals Available to Users',          unit: 'units',         hint: 'Dedicated catalog search terminals' },
+      { id: 'CHED-S7-BANDWIDTH-MBPS',  label: 'Internet Bandwidth',                         unit: 'Mbps',          hint: 'Dedicated internet speed for library' },
+      { id: 'CHED-S7-ONLINE-CATALOG',  label: 'Online OPAC Available (Web-accessible)',     unit: '1=Yes / 0=No',  hint: 'Enter 1 for Yes', comply: (v:number) => v === 1 },
+      { id: 'CHED-S7-WIFI',            label: 'Wi-Fi Available to Library Users',            unit: '1=Yes / 0=No',  hint: 'Enter 1 for Yes', comply: (v:number) => v === 1 },
+    ],
+  },
+  {
+    section: '§9 — Linkages & Networking',
+    icon: '🤝',
+    metrics: [
+      { id: 'CHED-S9-MOA-COUNT',       label: 'Active MOAs / Formal Linkages',              unit: 'agreements', hint: 'Signed and currently active memoranda' },
+      { id: 'CHED-S9-CONSORTIUM',      label: 'Library Consortium Memberships',             unit: 'consortia',  hint: 'e.g. PAARL, PLAI, EUSEBI, ERDT' },
+      { id: 'CHED-S9-ILL-PARTNERS',   label: 'Interlibrary Loan Partner Libraries',        unit: 'libraries',  hint: 'Libraries with active resource-sharing agreements' },
+    ],
+  },
+] as const;
+
+type ChedMetricID = typeof CHED_MANUAL_SECTIONS[number]['metrics'][number]['id'];
+type ChedStored = Record<string, { value: number; notes: string; date: string }>;
+
+function ChedManualSection({ unlocked }: { unlocked: boolean }) {
+  const [stored, setStored]   = useState<ChedStored>({});
+  const [loading, setLoading] = useState(true);
+  const [sbError, setSbError] = useState<string | null>(null);
+  const [saving, setSaving]   = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft]     = useState({ value: '', notes: '' });
+
+  const allIds = CHED_MANUAL_SECTIONS.flatMap(s => s.metrics.map(m => m.id));
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const { data, error } = await supabase
+          .from('green_metrics')
+          .select('metric_id, value, notes, recorded_on')
+          .in('metric_id', allIds)
+          .order('recorded_on', { ascending: false });
+        if (error) { setSbError(error.message); return; }
+        const map: ChedStored = {};
+        for (const row of data ?? []) {
+          if (!map[row.metric_id]) {
+            map[row.metric_id] = { value: Number(row.value), notes: row.notes ?? '', date: row.recorded_on };
+          }
+        }
+        setStored(map);
+      } catch (err) {
+        setSbError(err instanceof Error ? err.message : 'Supabase not configured');
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function saveEntry(id: string) {
+    const num = parseFloat(draft.value);
+    if (isNaN(num)) { setEditing(null); return; }
+    setSaving(id);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const today = new Date().toISOString().slice(0, 10);
+      await supabase.from('green_metrics').upsert(
+        { metric_id: id, recorded_on: today, value: num, notes: draft.notes || null },
+        { onConflict: 'metric_id,recorded_on' },
+      );
+      setStored(prev => ({ ...prev, [id]: { value: num, notes: draft.notes, date: today } }));
+      setEditing(null);
+    } catch { /* ignore */ } finally {
+      setSaving(null);
+    }
+  }
+
+  function startEdit(id: string) {
+    const sv = stored[id];
+    setDraft({ value: sv ? String(sv.value) : '', notes: sv?.notes ?? '' });
+    setEditing(id);
+  }
+
+  function fmtValue(id: string, v: number, unit: string) {
+    if (unit === '1=Yes / 0=No') return v === 1 ? '✓ Yes' : v === 0 ? '✗ No' : String(v);
+    if (unit === 'year') return String(Math.round(v));
+    if (unit === 'level') return v === 3 ? 'PhD / Doctorate' : v === 2 ? 'Masters (MA/MS)' : 'Bachelor\'s (BS/AB)';
+    return v % 1 === 0 ? v.toLocaleString() : v.toFixed(1);
+  }
+
+  const recordedCount = Object.keys(stored).length;
+  const totalCount = allIds.length;
+
+  return (
+    <div className="mt-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+          📝 Manual Documentation Metrics
+        </h2>
+        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+          {recordedCount}/{totalCount} fields recorded
+        </span>
+      </div>
+
+      {sbError && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+          ⚠️ {sbError} — values cannot be saved until Supabase is configured.
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-center py-8 text-gray-400 text-sm">Loading saved values…</div>
+      ) : (
+        <div className="space-y-6">
+          {CHED_MANUAL_SECTIONS.map(sec => (
+            <div key={sec.section} className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 bg-gray-700 text-white">
+                <span>{sec.icon}</span>
+                <span className="text-sm font-semibold">{sec.section}</span>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {sec.metrics.map(m => {
+                  const sv    = stored[m.id];
+                  const val   = sv?.value ?? null;
+                  const isEd  = editing === m.id;
+                  const isSav = saving === m.id;
+                  const complyFn = 'comply' in m ? (m as {comply?: (v:number)=>boolean}).comply : undefined;
+                  const comply = complyFn && val !== null ? complyFn(val) : null;
+
+                  return (
+                    <div key={m.id} className="px-4 py-3 flex items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-mono text-gray-500 mb-0.5">{m.id}</div>
+                        <div className="text-sm font-medium text-gray-800">{m.label}</div>
+                        {sv?.notes && <div className="text-xs text-gray-500 mt-0.5 italic">Note: {sv.notes}</div>}
+                        {sv?.date  && <div className="text-xs text-gray-400 mt-0.5">Updated: {sv.date}</div>}
+                      </div>
+
+                      {isEd ? (
+                        <div className="flex flex-col gap-2 shrink-0 min-w-[220px]">
+                          <div className="flex gap-2">
+                            <input
+                              type="number" step="any"
+                              value={draft.value}
+                              onChange={e => setDraft(d => ({ ...d, value: e.target.value }))}
+                              placeholder={m.hint}
+                              className="w-28 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              autoFocus
+                            />
+                            <input
+                              type="text"
+                              value={draft.notes}
+                              onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))}
+                              placeholder="Notes (optional)"
+                              className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => saveEntry(m.id)} disabled={isSav} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
+                              {isSav ? 'Saving…' : 'Save'}
+                            </button>
+                            <button onClick={() => setEditing(null)} className="text-xs text-gray-500 hover:text-gray-700 px-2">Cancel</button>
+                          </div>
+                          <div className="text-xs text-gray-400">{m.hint}</div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-right">
+                            {val !== null ? (
+                              <>
+                                <div className={`text-lg font-bold ${comply === true ? 'text-green-700' : comply === false ? 'text-red-600' : 'text-gray-800'}`}>
+                                  {fmtValue(m.id, val, m.unit)}
+                                </div>
+                                <div className="text-xs text-gray-500">{m.unit}</div>
+                                {comply === true  && <div className="text-xs text-green-600 font-medium">✓ Compliant</div>}
+                                {comply === false && <div className="text-xs text-red-500 font-medium">✗ Non-compliant</div>}
+                              </>
+                            ) : (
+                              <div className="text-sm text-gray-400 italic">Not recorded</div>
+                            )}
+                          </div>
+                          {unlocked && (
+                            <button
+                              onClick={() => startEdit(m.id as ChedMetricID)}
+                              className="bg-white border border-gray-300 hover:border-blue-400 hover:text-blue-700 text-gray-600 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              {val !== null ? '✏️ Edit' : '+ Enter'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: currentYear - 2015 + 1 }, (_, i) => currentYear - i);
@@ -2491,9 +2761,25 @@ export default function Dashboard() {
                 </div>
               )}
 
-              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
-                <strong>Requires manual documentation (not in library system):</strong> VMGO (§1), Administration qualifications &amp; org structure (§2), Staff ratios &amp; HR data (§3), Collection development policy documents (§4.a, §4.c, §4.d), Physical facilities (§6), IT infrastructure (§7), and Linkages &amp; networking (§9).
+              {/* Manual documentation sections */}
+              <div className="mb-6 flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl print:hidden">
+                {insightsUnlocked ? (
+                  <>
+                    <span className="text-emerald-600 text-sm font-semibold">🔓 Edit mode active</span>
+                    <button onClick={() => { setInsightsUnlocked(false); setPwDraft(''); setPwError(false); }} className="text-xs text-gray-500 hover:text-red-500 border border-gray-200 px-3 py-1 rounded-lg transition-colors">Lock</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-sm text-gray-600 font-medium">🔒 Enter editor password to update manual metrics</span>
+                    <form onSubmit={e => { e.preventDefault(); if (pwDraft === 'palstateu') { setInsightsUnlocked(true); setPwError(false); setPwDraft(''); } else { setPwError(true); } }} className="flex items-center gap-2 ml-auto">
+                      <input type="password" value={pwDraft} onChange={e => { setPwDraft(e.target.value); setPwError(false); }} placeholder="Password" className={`border rounded-lg px-3 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 ${pwError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-blue-400'}`} />
+                      <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">Unlock</button>
+                      {pwError && <span className="text-xs text-red-500">Incorrect</span>}
+                    </form>
+                  </>
+                )}
               </div>
+              <ChedManualSection unlocked={insightsUnlocked} />
             </>
           )}
         </div>
