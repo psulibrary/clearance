@@ -13,7 +13,7 @@ export async function GET() {
         ISNULL(pt.PatronTypeDescription, 'Unknown') AS patronType,
         COUNT(*)                                     AS currentlyOut,
         AVG(CAST(DATEDIFF(day, c.DateOut, GETDATE()) AS float))  AS avgDaysOut,
-        AVG(CAST(DATEDIFF(day, c.DateOut, c.DateDue) AS float))  AS avgLoanPeriod,
+        AVG(CASE WHEN DATEDIFF(day, c.DateOut, c.DateDue) > 0 THEN CAST(DATEDIFF(day, c.DateOut, c.DateDue) AS float) ELSE NULL END) AS avgLoanPeriod,
         SUM(CASE WHEN DATEDIFF(day, c.DateDue, GETDATE()) > 0 THEN 1 ELSE 0 END) AS overdueCount
       FROM ${t(p,'Copy')} c
       JOIN ${t(p,'SitePatron')} sp ON sp.PatronID = c.PatronID AND sp.SiteID = c.SiteID
@@ -31,7 +31,7 @@ export async function GET() {
       SELECT
         COUNT(*)                                                   AS currentlyOut,
         AVG(CAST(DATEDIFF(day, DateOut, GETDATE()) AS float))     AS avgDaysOut,
-        AVG(CAST(DATEDIFF(day, DateOut, DateDue) AS float))       AS avgLoanPeriod,
+        AVG(CASE WHEN DATEDIFF(day, DateOut, DateDue) > 0 THEN CAST(DATEDIFF(day, DateOut, DateDue) AS float) ELSE NULL END) AS avgLoanPeriod,
         SUM(CASE WHEN DATEDIFF(day, DateDue, GETDATE()) > 0 THEN 1 ELSE 0 END) AS overdueCount
       FROM ${t(p,'Copy')}
       WHERE PatronID IS NOT NULL

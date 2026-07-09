@@ -66,7 +66,7 @@ export async function GET() {
         /* Fine revenue this year */
         (SELECT ISNULL(SUM(Amount), 0) / 100.0
           FROM ${t(p,'Fine')}
-          WHERE YEAR(DateCharged) = @year)
+          WHERE YEAR(Created) = @year)
           AS fineRevenueThisYear,
 
         /* New patron registrations this year */

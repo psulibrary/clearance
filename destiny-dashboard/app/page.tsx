@@ -598,7 +598,7 @@ function StrategicTab({
                     </span>
                   </div>
                   <p className="text-xs text-gray-500">{kpi.desc}</p>
-                  {kpi.note && <p className="text-xs text-gray-400 mt-0.5 font-mono">📌 {kpi.note}</p>}
+                  {kpi.note && <p className="text-xs text-gray-600 mt-0.5 font-mono">📌 {kpi.note}</p>}
                 </div>
                 <div className="text-right shrink-0 min-w-[110px]">
                   {kpi.value !== null ? (
@@ -606,12 +606,12 @@ function StrategicTab({
                       <div className={`text-2xl font-bold ${achieved ? 'text-emerald-600' : 'text-indigo-700'}`}>
                         {kpi.id === 'cost-per-circ' ? `₱${kpi.value.toFixed(0)}` : kpi.value.toFixed(kpi.value < 10 ? 2 : 1)}
                       </div>
-                      <div className="text-xs text-gray-400">{kpi.unit}</div>
+                      <div className="text-xs text-gray-600">{kpi.unit}</div>
                     </>
                   ) : needsInput ? (
                     <div className="text-xs text-amber-600 italic text-right">Enter value above</div>
                   ) : (
-                    <div className="text-sm text-gray-400 italic">No data</div>
+                    <div className="text-sm text-gray-600 italic">No data</div>
                   )}
                 </div>
               </div>
@@ -834,7 +834,7 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
                     <div className="flex items-start justify-between gap-4 mb-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className="text-xs font-mono text-gray-400">{m.id}</span>
+                          <span className="text-xs font-mono text-gray-600">{m.id}</span>
                           <span className="font-semibold text-gray-900 text-sm">{m.name}</span>
                           {isAuto
                             ? <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">ILS auto</span>
@@ -843,8 +843,8 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
                           <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{m.freq}</span>
                         </div>
                         <p className="text-xs text-gray-500">{m.desc}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">Source: {m.source}</p>
-                        {sv?.date && <p className="text-xs text-gray-400 mt-0.5">Last recorded: {sv.date}{sv.notes ? ` — ${sv.notes}` : ''}</p>}
+                        <p className="text-xs text-gray-600 mt-0.5">Source: {m.source}</p>
+                        {sv?.date && <p className="text-xs text-gray-600 mt-0.5">Last recorded: {sv.date}{sv.notes ? ` — ${sv.notes}` : ''}</p>}
                       </div>
 
                       {/* Current value display */}
@@ -852,10 +852,10 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
                         {val !== null ? (
                           <>
                             <div className={`text-2xl font-bold ${pct !== null && pct >= 100 ? 'text-emerald-600' : c.text}`}>{val}</div>
-                            <div className="text-xs text-gray-400">{m.unit}</div>
+                            <div className="text-xs text-gray-600">{m.unit}</div>
                           </>
                         ) : (
-                          <div className="text-sm text-gray-400 italic">Not measured</div>
+                          <div className="text-sm text-gray-600 italic">Not measured</div>
                         )}
                       </div>
                     </div>
@@ -1530,7 +1530,7 @@ export default function Dashboard() {
                     <div className="text-sm text-gray-500 mt-1">Avg Days Out (current)</div>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                    <div className="text-3xl font-bold text-indigo-700">{loanDur.overall.avgLoanPeriod?.toFixed(1) ?? '—'}</div>
+                    <div className="text-3xl font-bold text-indigo-700">{loanDur.overall.avgLoanPeriod != null && loanDur.overall.avgLoanPeriod > 0 ? loanDur.overall.avgLoanPeriod.toFixed(1) : '—'}</div>
                     <div className="text-sm text-gray-500 mt-1">Avg Loan Period (days)</div>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm p-4 text-center">
@@ -1560,7 +1560,7 @@ export default function Dashboard() {
                             <td className="p-2 border-b border-gray-100 font-medium">{r.patronType}</td>
                             <td className="p-2 border-b border-gray-100 text-right">{r.currentlyOut?.toLocaleString()}</td>
                             <td className="p-2 border-b border-gray-100 text-right">{r.avgDaysOut?.toFixed(1)}</td>
-                            <td className="p-2 border-b border-gray-100 text-right">{r.avgLoanPeriod?.toFixed(1)}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.avgLoanPeriod != null && r.avgLoanPeriod > 0 ? r.avgLoanPeriod.toFixed(1) : '—'}</td>
                             <td className="p-2 border-b border-gray-100 text-right font-semibold text-red-600">{r.overdueCount?.toLocaleString()}</td>
                           </tr>
                         ))}
@@ -2622,7 +2622,7 @@ export default function Dashboard() {
                       <div className="text-xs text-gray-600">Avg Days Kept</div>
                     </div>
                     <div className="bg-blue-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-blue-700">{loanDur.overall.avgLoanPeriod?.toFixed(1) ?? '—'}</div>
+                      <div className="text-xl font-bold text-blue-700">{loanDur.overall.avgLoanPeriod != null && loanDur.overall.avgLoanPeriod > 0 ? loanDur.overall.avgLoanPeriod.toFixed(1) : '—'}</div>
                       <div className="text-xs text-gray-600">Avg Loan Period</div>
                     </div>
                     <div className="bg-red-50 rounded-lg p-3 text-center">
