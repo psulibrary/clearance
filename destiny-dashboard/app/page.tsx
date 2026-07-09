@@ -1378,13 +1378,6 @@ function ChedComplianceSummary({ chedStats }: { chedStats: Record<string,number>
       pass: chedStats.totalItems > 0 ? (chedStats.itemsLast10Years ?? 0) / chedStats.totalItems >= 0.35 : null,
       note: 'Adequate, relevant, and current resources are required for all programs',
     },
-    {
-      label: 'ILL Service Has Transactions on Record',
-      section: '§5.a.iii',
-      value: `${Number(chedStats.totalILL ?? 0).toLocaleString()} ILL records`,
-      pass: (chedStats.totalILL ?? 0) > 0,
-      note: (chedStats.totalILL ?? 0) > 0 ? 'ILL transactions found in Destiny CrossDistrictLoan table' : 'No Destiny ILL record found — if ILL is done manually, enter count in §5 manual fields below',
-    },
   ];
 
   const passed  = checks.filter(c => c.pass === true).length;
@@ -1568,8 +1561,6 @@ function AaccupAutoVerified({ chedStats }: { chedStats: Record<string,number> | 
   const filipiniana      = chedStats.filipianianaItems ?? 0;
   const last10Years      = chedStats.itemsLast10Years ?? 0;
   const withdrawnThisYr  = chedStats.withdrawnThisYear ?? 0;
-  const totalILL         = chedStats.totalILL ?? 0;
-
   const currencyPct = totalItems > 0 ? (last10Years / totalItems) * 100 : 0;
   const filPct      = totalItems > 0 ? (filipiniana / totalItems) * 100 : 0;
 
@@ -1650,13 +1641,6 @@ function AaccupAutoVerified({ chedStats }: { chedStats: Record<string,number> | 
       value: 'This Dashboard — Active',
       pass: true,
       note: 'Circulation, patron, and collection statistics generated from live ILS data',
-    },
-    {
-      id: 'G.ILL',
-      label: 'G.3 / CHED §5 — ILL / Resource Sharing',
-      value: `${totalILL.toLocaleString()} total ILL records`,
-      pass: totalILL > 0,
-      note: totalILL > 0 ? 'ILL transactions found in Destiny — supports G.3 linkage claim' : 'No ILL records found in Destiny',
     },
   ];
 
@@ -3711,119 +3695,49 @@ export default function Dashboard() {
 
         {/* Tab: ISO Standards */}
         <div className={activeTab === 'iso' ? 'block' : 'hidden print:block'}>
-          <Section title="ISO 2789 Performance Indicators" icon="📐">
-            <Card label="Loans per Registered User" value={s?.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 2789 §6.2.3 — ${periodLabel}`} color="text-indigo-700" />
-            <Card label="Items per Registered User" value={s?.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'} sub="ISO 2789 §6.3.2 collection density" color="text-indigo-700" />
-            <Card label="Active Borrower Rate" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 2789 §2.2.2 — ${periodLabel}`} color="text-blue-700" />
-            <Card label="Reservation Rate" value={s?.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub="ISO 2789 §6.2.3.6 holds vs loans" color="text-purple-700" />
-            <Card label="Overdue Borrower Rate" value={pct(s?.patronsWithOverdue ?? 0, s?.patronsWithCheckouts ?? 0)} sub="% of active borrowers with overdue items" color="text-red-600" />
-            <Card label="Collection Turnover Rate" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—'} sub={`ISO 2789 §6.2.3 loans per item — ${periodLabel}`} color="text-green-700" />
-          </Section>
 
-          <Section title="ISO 16439 Impact Indicators" icon="📊">
-            <Card label="Library Use Rate" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 16439 §5.2 — active users / registered × 100 — ${periodLabel}`} color="text-rose-700" />
-            <Card label="Borrower Penetration Rate" value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="ISO 16439 §5.2 — patrons with active loans / total" color="text-rose-700" />
+          {/* ── Circulation & Use (ISO 2789 / 11620 / 16439 — deduplicated) ── */}
+          <Section title="Circulation & Use Indicators — ISO 2789 / 11620 / 16439" icon="📐">
+            <Card label="Loans per Registered User" value={s?.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 2789 §6.2.3 · ISO 11620 B.2.1.2 — ${periodLabel}`} color="text-indigo-700" />
+            <Card label="Collection Turnover Rate" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(3) + 'x' : '—'} sub={`ISO 2789 §6.2.3 · ISO 11620 B.2.1.1 · ISO 16439 §5.3 — loans ÷ items`} color="text-green-700" />
+            <Card label="Active Borrower Rate" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 2789 §2.2.2 · ISO 11620 B.2.4.1 · ISO 16439 §5.2 — ${periodLabel}`} color="text-blue-700" />
+            <Card label="% Stock Not Used" value={pct(s?.neverCheckedOut ?? 0, s?.totalItems ?? 0)} sub="ISO 11620 B.2.1.3 — never-borrowed items ÷ total (lower = better)" color="text-amber-700" />
             <Card label="Repeat Use Index" value={s?.activePatronsThisYear ? (s.checkoutsThisYear / s.activePatronsThisYear).toFixed(2) : '—'} sub={`ISO 16439 §5.3 — loans per active user — ${periodLabel}`} color="text-orange-700" />
-            <Card label="Collection Use Ratio" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) : '—'} sub={`ISO 16439 §5.3 — loans per item — ${periodLabel}`} color="text-orange-700" />
-            <Card label="Hold Fulfillment Rate" value={((s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) > 0 ? pct(s?.readyHolds ?? 0, (s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) : '—'} sub="ISO 16439 §5.3 — ready holds / total holds" color="text-teal-700" />
-            <Card label="Overdue Rate" value={s?.checkedOut ? pct(s.overdue, s.checkedOut) : '—'} sub="ISO 16439 §5.3 — overdue / checked-out items" color="text-red-700" />
-            <Card label="New User Growth Rate" value={pct(s?.newPatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 16439 §5.2 — new patrons / total — ${s?.year}`} color="text-green-700" />
-            <Card label="Collection Refresh Rate" value={pct(s?.newItemsThisYear ?? 0, s?.totalItems ?? 0)} sub={`ISO 16439 §5.3 — new items / total — ${s?.year}`} color="text-green-700" />
-          </Section>
-
-          <Section title="ISO 11620:2014 Performance Indicators" icon="📋">
-            <Card label="% of Stock Not Used" value={pct(s?.neverCheckedOut ?? 0, s?.totalItems ?? 0)} sub="ISO 11620 B.2.1.3 — items never borrowed / total items" color="text-amber-700" />
-            <Card label="Loans per Capita" value={s?.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 11620 B.2.1.2 — loans / registered users — ${periodLabel}`} color="text-indigo-700" />
-            <Card label="Collection Turnover" value={s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(3) : '—'} sub={`ISO 11620 B.2.1.1 — loans / total items — ${periodLabel}`} color="text-indigo-700" />
-            <Card label="% Target Population Reached" value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 11620 B.2.4.1 — active borrowers / registered users — ${periodLabel}`} color="text-blue-700" />
-            <Card label="Hold Request Rate" value={s?.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub="ISO 11620 B.1.1 — holds placed vs loans (demand proxy)" color="text-purple-700" />
+            <Card label="Borrower Penetration Rate" value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="ISO 16439 §5.2 — patrons with active loans ÷ total" color="text-rose-700" />
+            <Card label="Hold / Reservation Rate" value={s?.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub="ISO 2789 §6.2.3.6 · ISO 11620 B.1.1 — holds placed ÷ loans" color="text-purple-700" />
+            <Card label="Hold Fulfillment Rate" value={((s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) > 0 ? pct(s?.readyHolds ?? 0, (s?.pendingHolds ?? 0) + (s?.readyHolds ?? 0)) : '—'} sub="ISO 16439 §5.3 — ready holds ÷ total holds" color="text-teal-700" />
             <Card label="Avg Loan Duration" value={s?.avgLoanDays !== undefined ? s.avgLoanDays.toFixed(1) + ' days' : '—'} sub={`ISO 11620 B.2.1 — avg days per loan — ${periodLabel}`} color="text-cyan-700" />
+            <Card label="Overdue Rate (by item)" value={s?.checkedOut ? pct(s.overdue, s.checkedOut) : '—'} sub="ISO 16439 §5.3 — overdue ÷ checked-out items" color="text-red-700" />
+            <Card label="Overdue Borrower Rate" value={pct(s?.patronsWithOverdue ?? 0, s?.patronsWithCheckouts ?? 0)} sub="ISO 2789 — patrons with overdue ÷ patrons with loans" color="text-red-600" />
+            <Card label="New User Growth Rate" value={pct(s?.newPatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`ISO 16439 §5.2 — new patrons ÷ total — ${s?.year}`} color="text-green-700" />
+            <Card label="Collection Refresh Rate" value={pct(s?.newItemsThisYear ?? 0, s?.totalItems ?? 0)} sub={`ISO 16439 §5.3 — new items ÷ total — ${s?.year}`} color="text-green-600" />
           </Section>
 
-          <Section title="ISO 21001:2018 Educational Support Indicators" icon="🎓">
-            <Card label="Learning Resource Availability" value={pct(s?.available ?? 0, s?.totalItems ?? 0)} sub="ISO 21001 §8.3 — shelf-ready items / total collection" color="text-emerald-700" />
-            <Card label="Learner Support Rate" value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="ISO 21001 §8.3 — learners currently borrowing / registered" color="text-emerald-700" />
-            <Card label="Titles per Learner" value={s?.totalPatrons ? (s.uniqueTitles / s.totalPatrons).toFixed(2) : '—'} sub="ISO 21001 §8.3 — unique titles / registered users (breadth)" color="text-teal-700" />
-            <Card label="Severe Overdue Ratio" value={s?.overdue ? pct(s.overdueOver30Days, s.overdue) : '—'} sub="ISO 21001 §8.3 — items overdue &gt;30 days / all overdue (non-return risk)" color="text-red-700" />
-            <Card label="New Items per Learner" value={s?.totalPatrons ? (s.newItemsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 21001 §8.3 — new acquisitions / learners — ${s?.year}`} color="text-blue-700" />
-            <Card label="Active Borrower Growth" value={s?.totalPatrons ? pct(s.activePatronsLast30Days, s.totalPatrons) : '—'} sub="ISO 21001 §9.1 — patrons active last 30 days / total (recent engagement)" color="text-violet-700" />
+          {/* ── Collection & Resource Indicators (ISO 2789 / 11620 / ALA ACRL) ── */}
+          <Section title="Collection & Resource Indicators — ISO 2789 / ALA ACRL" icon="📚">
+            <Card label="Items per Registered User" value={s?.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'} sub="ISO 2789 §6.3.2 · ISO 11620 B.3.2.1 — target ≥ 3 for academic libraries" color="text-indigo-700" />
+            <Card label="Unique Titles" value={fmt(s?.uniqueTitles)} sub="ALA/ACRL — unique bibliographic records in catalog" color="text-blue-700" />
+            <Card label="Physical Volumes Held" value={fmt(s?.totalItems)} sub="ALA/ACRL — gross cataloged print items in active inventory" color="text-blue-700" />
+            <Card label="Items Never Borrowed" value={fmt(s?.neverCheckedOut)} sub="ALA/ACRL — physical items with zero loan history" color="text-amber-700" />
+            <Card label="New Items This Year" value={fmt(s?.newItemsThisYear)} sub={`ALA/ACRL — acquisitions added in ${s?.year}`} color="text-green-700" />
+            <Card label="Items Withdrawn (All-Time)" value={fmt(s?.withdrawnItems)} sub="ALA/ACRL — deselected / weeded items on record" color="text-gray-600" />
           </Section>
 
-          {/* ── ISO 11620 Per-Capita Benchmarks (derived from ILS data) ── */}
-          {s && (
-            <div className="mb-8">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span>📏</span>ISO 11620 Key Performance Indicators — Detail View
-              </h2>
-              <p className="text-xs text-gray-600 mb-4">
-                ISO 11620:2014 performance indicators computed from live ILS data. Enter enrolled student count in <strong>💡 Insights</strong> to unlock true per-capita metrics based on actual service population.
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <div className="bg-white rounded-xl shadow-sm p-4">
-                  <div className="text-3xl font-bold text-purple-700">{s.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'}</div>
-                  <div className="text-sm font-medium text-gray-600">Loans per Registered User</div>
-                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.2.1.1 · {periodLabel}</div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm p-4">
-                  <div className="text-3xl font-bold text-teal-700">{s.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(3) : '—'}</div>
-                  <div className="text-sm font-medium text-gray-600">Collection Turnover Rate</div>
-                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.2.1 · loans ÷ total items</div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm p-4">
-                  <div className="text-3xl font-bold text-amber-700">{s.totalItems ? pct(s.neverCheckedOut, s.totalItems) : '—'}</div>
-                  <div className="text-sm font-medium text-gray-600">% Stock Not Used</div>
-                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.2.1.3 · never borrowed ÷ total (lower = better)</div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm p-4">
-                  <div className="text-3xl font-bold text-indigo-700">{pct(s.activePatronsThisYear, s.totalPatrons)}</div>
-                  <div className="text-sm font-medium text-gray-600">% Target Population Reached</div>
-                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.2.4.1 · active borrowers ÷ registered users</div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm p-4">
-                  <div className="text-3xl font-bold text-blue-700">{s.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'}</div>
-                  <div className="text-sm font-medium text-gray-600">Collection Items per User</div>
-                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.3.2.1 · target ≥ 3 for academic libraries</div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm p-4">
-                  <div className="text-3xl font-bold text-green-700">{s.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'}</div>
-                  <div className="text-sm font-medium text-gray-600">Hold Request Rate</div>
-                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.1.1 · holds placed ÷ loans (demand signal)</div>
-                </div>
-              </div>
-              <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
-                💡 ISO 11620 also defines <strong>Visits per Capita</strong> and <strong>Staff per 1,000 Population</strong>. Go to <strong>💡 Insights → Strategic Planning KPIs</strong> and enter enrolled students, then use CHED CMO 22 tab to record staff headcount for full benchmark coverage.
-              </div>
-            </div>
-          )}
+          {/* ── Educational Support (ISO 21001) ── */}
+          <Section title="Educational Support Indicators — ISO 21001:2018" icon="🎓">
+            <Card label="Learning Resource Availability" value={pct(s?.available ?? 0, s?.totalItems ?? 0)} sub="ISO 21001 §8.3 — shelf-ready items ÷ total collection" color="text-emerald-700" />
+            <Card label="Titles per Learner" value={s?.totalPatrons ? (s.uniqueTitles / s.totalPatrons).toFixed(2) : '—'} sub="ISO 21001 §8.3 — unique titles ÷ registered users (breadth)" color="text-teal-700" />
+            <Card label="New Items per Learner" value={s?.totalPatrons ? (s.newItemsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 21001 §8.3 — new acquisitions ÷ learners — ${s?.year}`} color="text-blue-700" />
+            <Card label="Severe Overdue Ratio" value={s?.overdue ? pct(s.overdueOver30Days, s.overdue) : '—'} sub="ISO 21001 §8.3 — items overdue >30 days ÷ all overdue" color="text-red-700" />
+            <Card label="Recent Engagement (30d)" value={s?.totalPatrons ? pct(s.activePatronsLast30Days, s.totalPatrons) : '—'} sub="ISO 21001 §9.1 — patrons active last 30 days ÷ total" color="text-violet-700" />
+          </Section>
 
-          {/* ── ALA / ACRL Holdings (ILS auto-computable) ── */}
-          {s && (
-            <div className="mb-8">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span>🏛️</span>ALA / ACRL — Holdings &amp; Inventory (Auto from ILS)
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                <Card label="Physical Volumes Held" value={fmt(s.totalItems)} sub="ALA/ACRL — gross cataloged print items in active inventory" color="text-blue-700" />
-                <Card label="Unique Titles" value={fmt(s.uniqueTitles)} sub="ALA/ACRL — unique bibliographic titles" color="text-blue-700" />
-                <Card label="Items Withdrawn (All-Time)" value={fmt(s.withdrawnItems)} sub="ALA/ACRL — deselected / weeded items on record" color="text-gray-600" />
-                <Card label="Items Never Borrowed" value={fmt(s.neverCheckedOut)} sub="ALA/ACRL — physical items with zero loan history" color="text-amber-700" />
-                <Card label="New Items This Year" value={fmt(s.newItemsThisYear)} sub={`ALA/ACRL — acquisitions added in ${s.year}`} color="text-green-700" />
-                <Card label="New Items This Month" value={fmt(s.newItemsThisMonth)} sub="ALA/ACRL — acquisitions added this calendar month" color="text-green-600" />
-                <Card label="Total Checkouts This Period" value={fmt(s.checkoutsThisYear)} sub={`ALA/ACRL — total loans in ${periodLabel}`} color="text-indigo-700" />
-                <Card label="Registered Users" value={fmt(s.totalPatrons)} sub="ALA/ACRL — total enrolled patron accounts" color="text-indigo-700" />
-              </div>
-              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
-                ALA/ACRL also tracks <strong>Licensed Digital Databases</strong>, <strong>E-Books &amp; E-Serials</strong>, and <strong>Institutional Repository Holdings</strong> — enter these in the <strong>CHED CMO 22</strong> tab (§4.b / §7) and <strong>AACCUP Area VII</strong> tab (D.5.2.8) since they are not stored in Destiny.
-              </div>
-            </div>
-          )}
-
-          {/* ── IFLA Financial & Management — Reference Table ── */}
+          {/* ── IFLA / ISO 11620 — Financial (requires budget records) ── */}
           <div className="mb-8">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-              <span>💸</span>IFLA / ISO 11620 — Financial &amp; Management Metrics
+              <span>💸</span>Financial &amp; Management Metrics — IFLA / ISO 11620
             </h2>
-            <p className="text-xs text-gray-600 mb-3">These require financial ledger data not stored in Destiny. Use the formulas below with your institutional budget records.</p>
+            <p className="text-xs text-gray-600 mb-3">Require financial ledger data. ILS provides the denominator for Cost per User — enter budget figures in the manual section below.</p>
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <table className="w-full text-xs border-collapse">
                 <thead>
@@ -3831,23 +3745,23 @@ export default function Dashboard() {
                     <th className="text-left p-3">Metric</th>
                     <th className="text-left p-3 hidden sm:table-cell">Formula</th>
                     <th className="text-left p-3 hidden md:table-cell">Stakeholder</th>
-                    {s && <th className="text-left p-3">ILS Input Available</th>}
+                    <th className="text-left p-3">ILS Denominator</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {[
-                    { name: 'Cost per User', formula: 'Total operating expenditure ÷ Active registered users', stake: 'Funding Bodies', ilsVal: s ? `÷ ${fmt(s.activePatronsThisYear)} active users` : null },
-                    { name: 'Cost per Visit', formula: 'Total expenditure ÷ (Gate count + Website visits)', stake: 'Library Board', ilsVal: null },
+                    { name: 'Cost per Active User', formula: 'Total operating expenditure ÷ Active registered users', stake: 'Funding Bodies', ilsVal: s ? `${fmt(s.activePatronsThisYear)} active users` : null },
+                    { name: 'Cost per Loan', formula: 'Total expenditure ÷ Total checkouts', stake: 'Library Board', ilsVal: s ? `${fmt(s.checkoutsThisYear)} loans` : null },
                     { name: 'Cost per Resource Download', formula: 'Subscription cost ÷ Full-text downloads', stake: 'Collection Librarians', ilsVal: null },
-                    { name: 'Library Expenditures as % of Institutional Budget', formula: '(Library budget ÷ Total institution budget) × 100', stake: 'Provost / Board', ilsVal: null },
+                    { name: 'Library Budget as % of Institution Budget', formula: '(Library budget ÷ Total institution budget) × 100', stake: 'Provost / Board', ilsVal: null },
                     { name: 'Staff Costs as % of Operating Expenditures', formula: '(Staff compensation ÷ Total annual budget) × 100', stake: 'Library Director', ilsVal: null },
-                    { name: 'Total Library Expenditures per Capita', formula: 'Annual budget ÷ Total target census population', stake: 'Government / Taxpayers', ilsVal: null },
+                    { name: '% Electronic Expenditures', formula: '(Digital content budget ÷ Total collection budget) × 100', stake: 'Collection Head', ilsVal: null },
                   ].map((r, i) => (
                     <tr key={i} className="hover:bg-gray-50">
                       <td className="p-3 font-semibold text-gray-800">{r.name}</td>
                       <td className="p-3 text-gray-600 hidden sm:table-cell font-mono">{r.formula}</td>
                       <td className="p-3 text-gray-500 hidden md:table-cell">{r.stake}</td>
-                      {s && <td className="p-3">{r.ilsVal ? <span className="text-green-700 font-medium">{r.ilsVal}</span> : <span className="text-gray-400">Enter budget in Insights tab</span>}</td>}
+                      <td className="p-3">{r.ilsVal ? <span className="text-green-700 font-medium">{r.ilsVal}</span> : <span className="text-gray-400 italic">Enter in manual section ↓</span>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3855,120 +3769,47 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* ── IFLA User Perspective (additional non-duplicate) ── */}
+          {/* ── IFLA / ISO 11620 — Survey-based & Operational (requires manual data) ── */}
           <div className="mb-8">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-              <span>👤</span>IFLA / ISO 11620 — User Perspective Metrics
+              <span>📋</span>Survey-based &amp; Operational Metrics — IFLA / ISO 11620 / ALA
             </h2>
-            <p className="text-xs text-gray-600 mb-3">ILS-computable metrics are shown as cards. Survey-based metrics require separate data collection.</p>
-            {s && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
-                <Card label="Circulation per Capita (Registered)" value={(s.totalPatrons ? s.checkoutsThisYear / s.totalPatrons : 0).toFixed(2)} sub={`ISO 11620 — loans ÷ registered users · ${periodLabel}`} color="text-indigo-700" />
-                <Card label="Turnover Rate" value={s.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(3) + 'x' : '—'} sub="ISO 11620 — loans ÷ total physical items" color="text-teal-700" />
-                <Card label="% Target Population Reached" value={pct(s.activePatronsThisYear, s.totalPatrons)} sub="ISO 11620 B.2.4.1 — active borrowers ÷ registered users" color="text-blue-700" />
-                <Card label="% Stock Not Used" value={pct(s.neverCheckedOut, s.totalItems)} sub="ISO 11620 B.2.1.3 — never-borrowed items ÷ total (lower = better)" color="text-amber-700" />
-              </div>
-            )}
+            <p className="text-xs text-gray-600 mb-3">Require surveys, logs, or HR records. Enter actual values in the manual section below.</p>
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
                     <th className="text-left p-3">Metric</th>
-                    <th className="text-left p-3 hidden sm:table-cell">Formula</th>
-                    <th className="text-left p-3">Data Source Needed</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {[
-                    { name: 'User Satisfaction Index', formula: 'Avg Likert score from LibQUAL+ / survey', source: 'Annual user satisfaction survey' },
-                    { name: 'Title / Subject Availability Rate', formula: '(Titles found ÷ Titles sought) × 100', source: 'User sampling / shelf-availability study' },
-                    { name: 'Facilities Satisfaction Rate', formula: '% users rating spaces as satisfactory', source: 'Facility satisfaction survey' },
-                    { name: 'Public Workstation / Wi-Fi Downtime Rate', formula: '(Downtime hours ÷ Total open hours) × 100', source: 'IT syslog / ticket management' },
-                    { name: 'Speed of ILL / Document Delivery', formula: 'Median days from ILL request to user notification', source: 'ILL management software log' },
-                    { name: 'Correct Answer Rate (Reference)', formula: '(Accurately answered queries ÷ Sampled queries) × 100', source: 'Reference audit / mystery shopping' },
-                    { name: 'Library Visits per Capita', formula: 'Annual gate count ÷ Target population', source: 'Physical gate counter + census data' },
-                  ].map((r, i) => (
-                    <tr key={i} className="hover:bg-gray-50">
-                      <td className="p-3 font-semibold text-gray-800">{r.name}</td>
-                      <td className="p-3 font-mono text-gray-600 hidden sm:table-cell">{r.formula}</td>
-                      <td className="p-3 text-amber-700">{r.source}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* ── IFLA Internal Processes & Learning/Growth — Reference ── */}
-          <div className="mb-8">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-              <span>⚙️</span>IFLA / ISO 11620 — Internal Processes &amp; Learning/Growth
-            </h2>
-            <p className="text-xs text-gray-600 mb-3">Operational efficiency and staff development metrics — require internal logs and HR records.</p>
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
-                    <th className="text-left p-3">Metric</th>
-                    <th className="text-left p-3 hidden sm:table-cell">Formula</th>
+                    <th className="text-left p-3 hidden sm:table-cell">Formula / Definition</th>
                     <th className="text-left p-3">Data Source</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {[
-                    { name: 'Median Processing Time for New Acquisitions', formula: 'Median days: receipt → live catalog entry', source: 'Acquisitions & cataloging logs' },
-                    { name: 'Cataloging Accuracy Rate', formula: '(Correct MARC/RDA records ÷ Records audited) × 100', source: 'Peer cataloging audit' },
-                    { name: 'Time to Resolve System Failures', formula: 'Mean time to repair (MTTR) critical systems', source: 'IT service desk platform' },
-                    { name: 'Conservation Stabilization Rate', formula: '(Items stabilized or digitized ÷ Items flagged) × 100', source: 'Conservation database' },
-                    { name: 'Cost per Cataloged Item', formula: 'Total technical services staff cost ÷ Titles processed', source: 'HR records + cataloging reports' },
-                    { name: 'Staff Training Hours per FTE', formula: 'Total professional development hours ÷ FTE staff', source: 'HR / training records' },
-                    { name: '% Electronic Library Expenditures', formula: '(Digital content budget ÷ Total collection budget) × 100', source: 'Financial ledger + ERM system' },
-                    { name: '% Staff with Specialized IT / Data Certifications', formula: '(Staff with IT certs ÷ Total FTE) × 100', source: 'HR credentials database' },
+                    { name: 'User Satisfaction Index', def: 'Avg Likert score from LibQUAL+ or annual survey (1–5)', source: 'User satisfaction survey (annual)' },
+                    { name: 'Title / Subject Availability Rate', def: '(Titles found ÷ Titles sought) × 100', source: 'Shelf-availability / user sampling study' },
+                    { name: 'Facilities Satisfaction Rate', def: '% of surveyed users rating study spaces as satisfactory', source: 'Facility satisfaction survey' },
+                    { name: 'Correct Answer Rate (Reference)', def: '(Accurate answers ÷ Sampled reference queries) × 100', source: 'Reference audit / mystery shopping' },
+                    { name: 'Library Visits per Capita', def: 'Annual gate count ÷ Target service population', source: 'Physical gate counter + census/enrollment data' },
+                    { name: 'Workstation / Wi-Fi Downtime Rate', def: '(Offline hours ÷ Total open hours) × 100', source: 'IT syslog / helpdesk ticket system' },
+                    { name: 'Speed of Document Delivery / ILL', def: 'Median calendar days: ILL request → user notification', source: 'ILL logbook or delivery tracking' },
+                    { name: 'Median Acquisitions Processing Time', def: 'Median days: receipt of item → live catalog entry', source: 'Acquisitions & cataloging logbook' },
+                    { name: 'Cataloging Accuracy Rate', def: '(Correct MARC/RDA records ÷ Records audited) × 100', source: 'Peer cataloging audit' },
+                    { name: 'Staff Training Hours per FTE', def: 'Total PD hours ÷ FTE staff count', source: 'HR / training attendance records' },
+                    { name: '% Staff with IT / Data Certifications', def: '(Staff with current IT certs ÷ Total FTE) × 100', source: 'HR credentials database' },
+                    { name: 'ALA — Knowledge Acquisition Rate', def: '(Attendees who learned something new ÷ Respondents) × 100', source: 'Post-program ALA Project Outcome survey' },
+                    { name: 'ALA — Confidence Building Rate', def: '(Attendees reporting increased confidence ÷ Respondents) × 100', source: 'Post-program ALA Project Outcome survey' },
+                    { name: 'ALA — Behavioral Change Intention Rate', def: '(Attendees who plan behavior change ÷ Respondents) × 100', source: 'Post-program ALA Project Outcome survey' },
+                    { name: 'ALA — Resource Awareness Rate', def: '(Attendees with expanded resource awareness ÷ Respondents) × 100', source: 'Post-program ALA Project Outcome survey' },
                   ].map((r, i) => (
                     <tr key={i} className="hover:bg-gray-50">
                       <td className="p-3 font-semibold text-gray-800">{r.name}</td>
-                      <td className="p-3 font-mono text-gray-600 hidden sm:table-cell">{r.formula}</td>
+                      <td className="p-3 font-mono text-gray-600 hidden sm:table-cell">{r.def}</td>
                       <td className="p-3 text-amber-700">{r.source}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-
-          {/* ── ALA Project Outcome ── */}
-          <div className="mb-8">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-              <span>🎯</span>ALA / PLA — Project Outcome (Impact) Metrics
-            </h2>
-            <p className="text-xs text-gray-600 mb-3">Survey-based outcome metrics from ALA Project Outcome standard. Require post-program participant surveys.</p>
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
-                    <th className="text-left p-3">Outcome Metric</th>
-                    <th className="text-left p-3 hidden sm:table-cell">Formula</th>
-                    <th className="text-left p-3">Target Stakeholder</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {[
-                    { name: 'Knowledge Acquisition Rate', formula: '(Attendees who learned something new ÷ Survey respondents) × 100', stake: 'Grant agencies / Donors' },
-                    { name: 'Confidence Building Rate', formula: '(Attendees reporting increased confidence ÷ Respondents) × 100', stake: 'Educational boards' },
-                    { name: 'Behavioral Change Intention Rate', formula: '(Attendees who plan behavior change ÷ Respondents) × 100', stake: 'City councils' },
-                    { name: 'Resource Awareness Rate', formula: '(Attendees with expanded library resource awareness ÷ Respondents) × 100', stake: 'Marketing & PR' },
-                  ].map((r, i) => (
-                    <tr key={i} className="hover:bg-gray-50">
-                      <td className="p-3 font-semibold text-gray-800">{r.name}</td>
-                      <td className="p-3 font-mono text-gray-600 hidden sm:table-cell">{r.formula}</td>
-                      <td className="p-3 text-gray-500">{r.stake}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="px-4 py-3 bg-blue-50 text-xs text-blue-700 border-t border-blue-100">
-                Use <a href="https://www.ala.org/pla/initiatives/performancemeasurement" target="_blank" rel="noopener noreferrer" className="underline">ALA Project Outcome</a> standard survey forms to collect these after each library program or instruction session. Results can be recorded in the CHED CMO 22 tab (§5 — Instruction Sessions).
-              </div>
             </div>
           </div>
 
@@ -4029,11 +3870,6 @@ export default function Dashboard() {
               <Section title="§4.a.6 — Weeding Program" icon="✂️">
                 <Card label="Total Withdrawn Items" value={Number(chedStats.withdrawnItems ?? 0).toLocaleString()} sub="§4.a.6 — cumulative weeded items" color="text-gray-600" />
                 <Card label="Withdrawn This Year" value={Number(chedStats.withdrawnThisYear ?? 0).toLocaleString()} sub={`§4.a.6 — weeded in ${currentYear}`} color="text-gray-600" />
-              </Section>
-
-              <Section title="§5.a.iii — Interlibrary Loans" icon="🔄">
-                <Card label="Total ILL Transactions" value={Number(chedStats.totalILL ?? 0).toLocaleString()} sub="§5.a.iii — all-time interlibrary loan records" color="text-purple-700" />
-                <Card label="ILL This Year" value={Number(chedStats.illThisYear ?? 0).toLocaleString()} sub={`§5.a.iii — interlibrary loans in ${currentYear}`} color="text-purple-700" />
               </Section>
 
               <Section title="§8 — Financial Resources & Acquisition" icon="💰">
