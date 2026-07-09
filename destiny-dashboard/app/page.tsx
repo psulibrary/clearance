@@ -1298,6 +1298,9 @@ export default function Dashboard() {
   const [extraLoaded2, setExtraLoaded2]   = useState({ collection: false, patrons: false });
   const [extra2Errors, setExtra2Errors]   = useState<Record<string, string>>({});
   const [extra2Loading, setExtra2Loading] = useState<Record<string, boolean>>({});
+  const [yoyData, setYoyData]             = useState<{year:number;checkouts:number;newPatrons:number;newItems:number}[]>([]);
+  const [patronTiers, setPatronTiers]     = useState<{totalPatrons:number;activeThisYear:number;lapsed:number;neverBorrowed:number;newThisYear:number;year:number}|null>(null);
+  const [yoyLoaded, setYoyLoaded]         = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1385,7 +1388,14 @@ export default function Dashboard() {
       fetch('/api/charts/collection-by-publisher').then(r=>r.json()).then(d=>{ if(d.data) setPublisherData(d.data); }).catch(() => {});
       setChartsLoaded(p => ({ ...p, collection: true }));
     }
-    if (activeTab === 'insights' && !strategicLoaded) {
+    if ((activeTab === 'overview') && !yoyLoaded) {
+      setYoyLoaded(true);
+      fetch('/api/charts/yoy-circulation').then(r=>r.json()).then(d=>{ if(d.years) setYoyData(d.years); }).catch(() => {});
+    }
+    if (activeTab === 'patrons' && !extraLoaded.patrons && !patronTiers) {
+      fetch(`/api/charts/patron-tiers?year=${year}`).then(r=>r.json()).then(d=>{ if(d && !d.error) setPatronTiers(d); }).catch(() => {});
+    }
+    if ((activeTab === 'insights' || activeTab === 'iso') && !strategicLoaded) {
       setStrategicLoaded(true);
       fetch('/api/strategic/stats').then(r => r.json()).then(setStrategicStats).catch(() => {});
     }
@@ -1394,7 +1404,7 @@ export default function Dashboard() {
       fetch('/api/ched/stats').then(r=>r.json()).then(d=>{ setChedStats(d); }).catch(() => {});
       fetch('/api/ched/acquisition-by-year').then(r=>r.json()).then(d=>{ if(d.data) setAcqData(d.data); }).catch(() => {});
     }
-  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2]);
+  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers]);
 
   const s = stats;
   const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
@@ -1633,10 +1643,12 @@ export default function Dashboard() {
           </Section>
 
           <Section title="Efficiency & Engagement Ratios" icon="📊">
-            <Card label="Items per Patron"        value={s && s.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'} sub="ISO 2789 target: ≥ 3" color="text-indigo-700" />
-            <Card label="Loans per Patron"        value={s && s.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`checkouts ÷ patrons (${periodLabel})`} color="text-blue-700" />
-            <Card label="Holds Satisfaction Rate" value={s ? pct(s.readyHolds, (s.pendingHolds + s.readyHolds) || 0) : '—'} sub="ready holds ÷ all active holds" color="text-green-700" />
-            <Card label="Patron Reach Rate"       value={s && s.totalPatrons ? pct(s.activePatronsThisYear, s.totalPatrons) : '—'} sub={`active borrowers vs total (${periodLabel})`} color="text-teal-700" />
+            <Card label="Items per Patron"          value={s && s.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'} sub="ISO 2789 target: ≥ 3" color="text-indigo-700" />
+            <Card label="Loans per Patron"          value={s && s.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`checkouts ÷ patrons (${periodLabel})`} color="text-blue-700" />
+            <Card label="Holds Satisfaction Rate"   value={s ? pct(s.readyHolds, (s.pendingHolds + s.readyHolds) || 0) : '—'} sub="ready holds ÷ all active holds" color="text-green-700" />
+            <Card label="Patron Reach Rate"         value={s && s.totalPatrons ? pct(s.activePatronsThisYear, s.totalPatrons) : '—'} sub={`active borrowers vs total (${periodLabel})`} color="text-teal-700" />
+            <Card label="Hold-to-Checkout Rate"     value={s && s.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub={`holds placed ÷ checkouts — demand signal (${periodLabel})`} color="text-purple-700" />
+            <Card label="Dead Stock Rate"           value={s && s.totalItems ? pct(s.neverCheckedOut, s.totalItems) : '—'} sub="items never borrowed — weeding priority" color={s && s.neverCheckedOut/s.totalItems > 0.3 ? 'text-red-600' : 'text-amber-600'} />
           </Section>
 
           <Section title="Holds & Reservations" icon="🔖">
@@ -1652,6 +1664,62 @@ export default function Dashboard() {
             <Card label="Total Fines Ever Collected" value={money(s?.totalFinesEverCollected)} sub="all-time AmountPaid" color="text-green-700" />
             <Card label="Avg Balance per Fine"       value={s?.activeFines && s.totalFinesBalance ? money(s.totalFinesBalance / s.activeFines) : '—'} sub="average open fine amount" />
           </Section>
+
+          {/* ── Year-over-Year Circulation Trend ── */}
+          {yoyData.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>📈</span>Year-over-Year Circulation Trend (Last 5 Years)
+              </h2>
+              <p className="text-xs text-gray-600 mb-4">Annual checkouts, new patron registrations, and new acquisitions — shows library growth trajectory.</p>
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={yoyData} margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="year" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={n => n >= 1000 ? (n/1000).toFixed(0)+'k' : String(n)} />
+                    <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                    <Legend />
+                    <Bar dataKey="checkouts"  name="Checkouts"    fill="#3b82f6" radius={[3,3,0,0]} />
+                    <Bar dataKey="newPatrons" name="New Patrons"  fill="#10b981" radius={[3,3,0,0]} />
+                    <Bar dataKey="newItems"   name="New Items"    fill="#f59e0b" radius={[3,3,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                        <th className="text-left p-2 border border-gray-200">Year</th>
+                        <th className="text-right p-2 border border-gray-200">Checkouts</th>
+                        <th className="text-right p-2 border border-gray-200">YoY Change</th>
+                        <th className="text-right p-2 border border-gray-200">New Patrons</th>
+                        <th className="text-right p-2 border border-gray-200">New Items</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {yoyData.map((r, i) => {
+                        const prev = yoyData[i - 1];
+                        const change = prev && prev.checkouts > 0 ? ((r.checkouts - prev.checkouts) / prev.checkouts * 100) : null;
+                        return (
+                          <tr key={r.year} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="p-2 border border-gray-200 font-semibold text-gray-900">{r.year}</td>
+                            <td className="p-2 border border-gray-200 text-right font-bold text-blue-700">{r.checkouts.toLocaleString()}</td>
+                            <td className="p-2 border border-gray-200 text-right">
+                              {change !== null
+                                ? <span className={`font-semibold ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>{change >= 0 ? '+' : ''}{change.toFixed(1)}%</span>
+                                : <span className="text-gray-400">—</span>}
+                            </td>
+                            <td className="p-2 border border-gray-200 text-right text-emerald-700">{r.newPatrons.toLocaleString()}</td>
+                            <td className="p-2 border border-gray-200 text-right text-amber-700">{r.newItems.toLocaleString()}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tab: Patrons */}
@@ -1701,6 +1769,62 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* ── Patron Engagement Tiers ── */}
+          {patronTiers && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>🎯</span>Patron Engagement Tiers ({patronTiers.year})
+              </h2>
+              <p className="text-xs text-gray-600 mb-4">Breakdown of your patron base by engagement level — active borrowers, lapsed, and never-borrowed.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-bold text-green-700">{patronTiers.activeThisYear.toLocaleString()}</div>
+                  <div className="text-sm font-medium text-gray-600">Active {patronTiers.year}</div>
+                  <div className="text-xs text-gray-600">{patronTiers.totalPatrons > 0 ? (patronTiers.activeThisYear/patronTiers.totalPatrons*100).toFixed(1) : '—'}% of total</div>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-bold text-amber-700">{patronTiers.lapsed.toLocaleString()}</div>
+                  <div className="text-sm font-medium text-gray-600">Lapsed / Dormant</div>
+                  <div className="text-xs text-gray-600">{patronTiers.totalPatrons > 0 ? (patronTiers.lapsed/patronTiers.totalPatrons*100).toFixed(1) : '—'}% of total</div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-bold text-red-600">{patronTiers.neverBorrowed.toLocaleString()}</div>
+                  <div className="text-sm font-medium text-gray-600">Never Borrowed</div>
+                  <div className="text-xs text-gray-600">{patronTiers.totalPatrons > 0 ? (patronTiers.neverBorrowed/patronTiers.totalPatrons*100).toFixed(1) : '—'}% of total</div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-bold text-blue-700">{patronTiers.newThisYear.toLocaleString()}</div>
+                  <div className="text-sm font-medium text-gray-600">New {patronTiers.year}</div>
+                  <div className="text-xs text-gray-600">registered this year</div>
+                </div>
+              </div>
+              {(() => {
+                const tierData = [
+                  { name: 'Active',        value: patronTiers.activeThisYear, color: '#10b981' },
+                  { name: 'Lapsed',        value: patronTiers.lapsed,         color: '#f59e0b' },
+                  { name: 'Never Borrowed',value: patronTiers.neverBorrowed,  color: '#ef4444' },
+                ];
+                return (
+                  <div className="bg-white rounded-xl shadow-sm p-4">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={tierData} margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
+                        <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                        <Bar dataKey="value" name="Patrons" radius={[4,4,0,0]}>
+                          {tierData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <p className="text-xs text-gray-500 mt-2 text-center">
+                      Lapsed = registered patrons who borrowed before {patronTiers.year} but not this year. Never Borrowed = no borrowing history on record.
+                    </p>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           {/* ── Patron Growth Trend ── */}
           {patronGrowth.length > 0 && (
@@ -2348,6 +2472,40 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* ── Subject Area Gap Analysis ── */}
+          {callNumData.length > 0 && (() => {
+            const total = callNumData.reduce((s, r) => s + r.items, 0);
+            const gaps = callNumData.filter(r => r.items > 0).map(r => ({
+              ...r,
+              sharePct: total > 0 ? parseFloat((r.items / total * 100).toFixed(1)) : 0,
+              isUnderused: r.utilRate < 10 && r.items >= 5,
+            })).filter(r => r.isUnderused).sort((a,b) => a.utilRate - b.utilRate).slice(0, 6);
+            if (!gaps.length) return null;
+            return (
+              <div className="mb-8">
+                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                  <span>🔍</span>Subject Area Gap Analysis — Under-Utilised Sections
+                </h2>
+                <p className="text-xs text-gray-600 mb-4">Dewey ranges with low checkout rates relative to their size — candidates for targeted promotion or weeding.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {gaps.map(r => (
+                    <div key={r.firstDigit} className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-amber-400">
+                      <div className="font-semibold text-gray-800 text-sm truncate">{r.range}</div>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs text-gray-500">{r.items.toLocaleString()} items</span>
+                        <span className="text-xs font-bold text-amber-700">{r.utilRate}% utilization</span>
+                      </div>
+                      <div className="mt-2 w-full bg-gray-100 rounded-full h-1.5">
+                        <div className="h-1.5 bg-amber-400 rounded-full" style={{ width: `${Math.min(r.utilRate, 100)}%` }} />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1.5">Only {r.checkouts.toLocaleString()} checkouts — consider display promotion or faculty liaison</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* ── Longest Overdue Items ── */}
           {longestOverdue.length > 0 && (
             <div className="mb-8">
@@ -2681,6 +2839,53 @@ export default function Dashboard() {
             <Card label="New Items per Learner" value={s?.totalPatrons ? (s.newItemsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`ISO 21001 §8.3 — new acquisitions / learners — ${s?.year}`} color="text-blue-700" />
             <Card label="Active Borrower Growth" value={s?.totalPatrons ? pct(s.activePatronsLast30Days, s.totalPatrons) : '—'} sub="ISO 21001 §9.1 — patrons active last 30 days / total (recent engagement)" color="text-violet-700" />
           </Section>
+
+          {/* ── ISO 11620 Per-Capita Benchmarks (derived from ILS data) ── */}
+          {s && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>📏</span>ISO 11620 Key Performance Indicators — Detail View
+              </h2>
+              <p className="text-xs text-gray-600 mb-4">
+                ISO 11620:2014 performance indicators computed from live ILS data. Enter enrolled student count in <strong>💡 Insights</strong> to unlock true per-capita metrics based on actual service population.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="bg-white rounded-xl shadow-sm p-4">
+                  <div className="text-3xl font-bold text-purple-700">{s.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Loans per Registered User</div>
+                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.2.1.1 · {periodLabel}</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4">
+                  <div className="text-3xl font-bold text-teal-700">{s.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(3) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Collection Turnover Rate</div>
+                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.2.1 · loans ÷ total items</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4">
+                  <div className="text-3xl font-bold text-amber-700">{s.totalItems ? pct(s.neverCheckedOut, s.totalItems) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">% Stock Not Used</div>
+                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.2.1.3 · never borrowed ÷ total (lower = better)</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4">
+                  <div className="text-3xl font-bold text-indigo-700">{pct(s.activePatronsThisYear, s.totalPatrons)}</div>
+                  <div className="text-sm font-medium text-gray-600">% Target Population Reached</div>
+                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.2.4.1 · active borrowers ÷ registered users</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4">
+                  <div className="text-3xl font-bold text-blue-700">{s.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Collection Items per User</div>
+                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.3.2.1 · target ≥ 3 for academic libraries</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4">
+                  <div className="text-3xl font-bold text-green-700">{s.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'}</div>
+                  <div className="text-sm font-medium text-gray-600">Hold Request Rate</div>
+                  <div className="text-xs text-gray-500 mt-0.5">ISO 11620 B.1.1 · holds placed ÷ loans (demand signal)</div>
+                </div>
+              </div>
+              <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
+                💡 ISO 11620 also defines <strong>Visits per Capita</strong> and <strong>Staff per 1,000 Population</strong>. Go to <strong>💡 Insights → Strategic Planning KPIs</strong> and enter enrolled students, then use CHED CMO 22 tab to record staff headcount for full benchmark coverage.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tab: CHED CMO 22 */}
