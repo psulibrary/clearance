@@ -292,6 +292,227 @@ function RecommendedActions({ stats, chedStats, year }: { stats: Stats; chedStat
   );
 }
 
+// ── Green Library KPI Tab ────────────────────────────────────────────────────
+
+const GREEN_METRICS = [
+  { id:'LIB-ENV-001', cat:'Sustainable Facilities',      icon:'🏢', color:'emerald', name:'Energy Use Intensity (EUI)',          unit:'kBtu/sq ft/yr',   baseline:55,  goal:40,   lowerIsBetter:true,  freq:'Monthly',   desc:'Total annual energy (electricity + gas) ÷ library sq footage.',          source:'Utility Bills & Building Floor Plan' },
+  { id:'LIB-ENV-002', cat:'Sustainable Facilities',      icon:'🏢', color:'emerald', name:'Waste Diversion Rate',               unit:'%',               baseline:35,  goal:75,   lowerIsBetter:false, freq:'Quarterly', desc:'% of waste diverted from landfills via recycling, composting, or book donation.', source:'Waste Management Invoices / Waste Audits' },
+  { id:'LIB-ENV-003', cat:'Sustainable Facilities',      icon:'🏢', color:'emerald', name:'Water Consumption Intensity',        unit:'Gal/sq ft/yr',    baseline:12,  goal:8.5,  lowerIsBetter:true,  freq:'Monthly',   desc:'Total water consumed (indoor + landscaping) per square foot.',            source:'Water Utility Bills' },
+  { id:'LIB-CIRC-001',cat:'Circulation & Circular Economy', icon:'♻️', color:'blue', name:'Collection Reuse Factor',           unit:'Circ/item/yr',    baseline:2.1, goal:3.5,  lowerIsBetter:false, freq:'Annually',  desc:'Average annual checkouts per physical item (Turnover Rate).',             source:'ILS — auto-computed' },
+  { id:'LIB-CIRC-002',cat:'Circulation & Circular Economy', icon:'♻️', color:'blue', name:'Paperless Administration Index',    unit:'%',               baseline:60,  goal:95,   lowerIsBetter:false, freq:'Monthly',   desc:'% of receipts, notices, and registrations that are digital-only.',        source:'ILS Notification Logs & Printer Logs' },
+  { id:'LIB-CIRC-003',cat:'Circulation & Circular Economy', icon:'♻️', color:'blue', name:'Sustainable Procurement %',         unit:'% of spend',      baseline:20,  goal:60,   lowerIsBetter:false, freq:'Quarterly', desc:'% of supplies sourced with eco-labels (EcoLogo, Green Seal, FSC).',      source:'Financial Procurement & Invoice Audits' },
+  { id:'LIB-IT-001',  cat:'Digital Infrastructure',      icon:'💻', color:'violet', name:'E-Waste Recycling Compliance',       unit:'%',               baseline:80,  goal:100,  lowerIsBetter:false, freq:'Annually',  desc:'% of decommissioned IT hardware sent to certified e-waste recyclers.',    source:'IT Asset Management / Disposal Receipts' },
+  { id:'LIB-IT-002',  cat:'Digital Infrastructure',      icon:'💻', color:'violet', name:'Workstation Power Efficiency',       unit:'%',               baseline:50,  goal:100,  lowerIsBetter:false, freq:'Monthly',   desc:'% of terminals with automated sleep/power-down outside operating hours.', source:'IT Management Console (MDM)' },
+  { id:'LIB-COM-001', cat:'Community & Literacy',        icon:'🌱', color:'teal',   name:'Eco-Programming Density',            unit:'%',               baseline:3,   goal:10,   lowerIsBetter:false, freq:'Quarterly', desc:'% of library programs dedicated to sustainability and climate literacy.', source:'Events Calendar & Room Booking System' },
+  { id:'LIB-COM-002', cat:'Community & Literacy',        icon:'🌱', color:'teal',   name:'Sustainability Program Engagement',  unit:'patrons/yr',      baseline:450, goal:1200, lowerIsBetter:false, freq:'Monthly',   desc:'Total annual attendance at environmental/sustainability programs.',       source:'Program Gate/Head Counts' },
+] as const;
+
+type MetricID = typeof GREEN_METRICS[number]['id'];
+
+const COLOR = {
+  emerald: { bg:'bg-emerald-50', border:'border-emerald-200', head:'bg-emerald-600', bar:'bg-emerald-500', text:'text-emerald-700', badge:'bg-emerald-100 text-emerald-800' },
+  blue:    { bg:'bg-blue-50',    border:'border-blue-200',    head:'bg-blue-600',    bar:'bg-blue-500',    text:'text-blue-700',    badge:'bg-blue-100 text-blue-800'       },
+  violet:  { bg:'bg-violet-50',  border:'border-violet-200',  head:'bg-violet-600',  bar:'bg-violet-500',  text:'text-violet-700',  badge:'bg-violet-100 text-violet-800'   },
+  teal:    { bg:'bg-teal-50',    border:'border-teal-200',    head:'bg-teal-600',    bar:'bg-teal-500',    text:'text-teal-700',    badge:'bg-teal-100 text-teal-800'       },
+} as const;
+
+type StoredValues = Record<string, { value: number; notes: string; date: string }>;
+const LS_KEY = 'psu_green_metrics_v1';
+
+function loadGreenValues(): StoredValues {
+  if (typeof window === 'undefined') return {};
+  try { return JSON.parse(localStorage.getItem(LS_KEY) ?? '{}'); } catch { return {}; }
+}
+function saveGreenValues(v: StoredValues) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(LS_KEY, JSON.stringify(v));
+}
+
+function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
+  const [stored, setStored] = useState<StoredValues>({});
+  const [editing, setEditing] = useState<MetricID | null>(null);
+  const [draft, setDraft] = useState({ value: '', notes: '' });
+
+  useEffect(() => { setStored(loadGreenValues()); }, []);
+
+  function startEdit(id: MetricID) {
+    const cur = stored[id];
+    setDraft({ value: cur ? String(cur.value) : '', notes: cur?.notes ?? '' });
+    setEditing(id);
+  }
+
+  function saveEdit(id: MetricID) {
+    const num = parseFloat(draft.value);
+    if (isNaN(num)) { setEditing(null); return; }
+    const next = { ...stored, [id]: { value: num, notes: draft.notes, date: new Date().toISOString().slice(0, 10) } };
+    setStored(next);
+    saveGreenValues(next);
+    setEditing(null);
+  }
+
+  function clearValue(id: MetricID) {
+    const next = { ...stored };
+    delete next[id];
+    setStored(next);
+    saveGreenValues(next);
+  }
+
+  function exportCSV() {
+    const rows = ['Metric ID,Name,Unit,Baseline,Green Goal,Current Value,Date Recorded,Notes'];
+    for (const m of GREEN_METRICS) {
+      const sv = m.id === 'LIB-CIRC-001' ? { value: reuseRate, date: new Date().toISOString().slice(0,10), notes:'Auto from ILS' } : stored[m.id];
+      rows.push(`"${m.id}","${m.name}","${m.unit}",${m.baseline},${m.goal},${sv ? sv.value : ''},"${sv?.date ?? ''}","${sv?.notes ?? ''}"`);
+    }
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `green-library-kpis-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  }
+
+  const categories = [...new Set(GREEN_METRICS.map(m => m.cat))];
+
+  return (
+    <div>
+      <div className="mb-6 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl p-5 text-white flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold mb-1">🌿 Green Library KPI Dashboard</h2>
+          <p className="text-sm text-emerald-100">Track environmental sustainability metrics. <strong>LIB-CIRC-001</strong> is auto-computed from your ILS. Enter current values for the rest by clicking <em>Update</em> — saved locally in your browser.</p>
+        </div>
+        <button onClick={exportCSV} className="shrink-0 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors">
+          ↓ Export CSV
+        </button>
+      </div>
+
+      {categories.map(cat => {
+        const catMetrics = GREEN_METRICS.filter(m => m.cat === cat);
+        const c = COLOR[catMetrics[0].color];
+        return (
+          <div key={cat} className="mb-8">
+            <div className={`flex items-center gap-2 mb-4 px-4 py-2 rounded-lg ${c.head} text-white`}>
+              <span className="text-xl">{catMetrics[0].icon}</span>
+              <span className="font-bold text-sm">{cat}</span>
+            </div>
+            <div className="grid grid-cols-1 gap-4">
+              {catMetrics.map(m => {
+                const isAuto  = m.id === 'LIB-CIRC-001';
+                const sv      = isAuto ? (reuseRate !== null ? { value: reuseRate, date: new Date().toISOString().slice(0,10), notes: 'Auto-computed from ILS' } : null) : (stored[m.id] ?? null);
+                const val     = sv?.value ?? null;
+                const lob     = m.lowerIsBetter;
+                const pct     = val !== null
+                  ? lob
+                    ? Math.min(100, Math.max(0, ((m.baseline - val) / (m.baseline - m.goal)) * 100))
+                    : Math.min(100, Math.max(0, ((val - m.baseline) / (m.goal - m.baseline)) * 100))
+                  : null;
+                const isEdit  = editing === m.id;
+
+                return (
+                  <div key={m.id} className={`rounded-xl border ${c.border} ${c.bg} p-5`}>
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="text-xs font-mono text-gray-400">{m.id}</span>
+                          <span className="font-semibold text-gray-900 text-sm">{m.name}</span>
+                          {isAuto
+                            ? <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">ILS auto</span>
+                            : <span className={`text-xs px-2 py-0.5 rounded-full ${c.badge}`}>Manual</span>
+                          }
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{m.freq}</span>
+                        </div>
+                        <p className="text-xs text-gray-500">{m.desc}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">Source: {m.source}</p>
+                        {sv?.date && <p className="text-xs text-gray-400 mt-0.5">Last recorded: {sv.date}{sv.notes ? ` — ${sv.notes}` : ''}</p>}
+                      </div>
+
+                      {/* Current value display */}
+                      <div className="text-right shrink-0 min-w-[100px]">
+                        {val !== null ? (
+                          <>
+                            <div className={`text-2xl font-bold ${pct !== null && pct >= 100 ? 'text-emerald-600' : c.text}`}>{val}</div>
+                            <div className="text-xs text-gray-400">{m.unit}</div>
+                          </>
+                        ) : (
+                          <div className="text-sm text-gray-400 italic">Not measured</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="mb-3">
+                      <div className="flex justify-between text-xs text-gray-500 mb-1">
+                        <span>Baseline: <strong>{m.baseline}</strong> {m.unit}</span>
+                        <span className={`font-semibold ${c.text}`}>Goal: {m.goal} {m.unit}</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                        {pct !== null
+                          ? <div className={`h-2.5 rounded-full transition-all ${c.bar}`} style={{ width: `${Math.max(3, pct)}%` }} />
+                          : <div className="h-2.5 w-8 rounded-full bg-gray-300 opacity-40" />
+                        }
+                      </div>
+                      {pct !== null && (
+                        <p className="text-xs mt-1">
+                          {pct >= 100
+                            ? <span className="text-emerald-600 font-semibold">✓ Green goal achieved!</span>
+                            : <span className="text-gray-500">{pct.toFixed(0)}% progress toward green goal</span>
+                          }
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Edit form (manual metrics only) */}
+                    {!isAuto && (
+                      isEdit ? (
+                        <div className="border-t border-gray-200 pt-3 mt-1 flex flex-wrap gap-2 items-end">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Current value ({m.unit})</label>
+                            <input
+                              type="number" step="any"
+                              value={draft.value}
+                              onChange={e => setDraft(d => ({ ...d, value: e.target.value }))}
+                              className="w-32 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                              placeholder={`e.g. ${m.baseline}`}
+                              autoFocus
+                            />
+                          </div>
+                          <div className="flex-1 min-w-[160px]">
+                            <label className="block text-xs text-gray-500 mb-1">Notes (optional)</label>
+                            <input
+                              type="text"
+                              value={draft.notes}
+                              onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))}
+                              className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                              placeholder="e.g. From July utility bill"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => saveEdit(m.id as MetricID)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">Save</button>
+                            <button onClick={() => setEditing(null)} className="bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold px-3 py-1.5 rounded-lg">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 mt-1">
+                          <button onClick={() => startEdit(m.id as MetricID)} className="bg-white border border-gray-300 hover:border-emerald-400 hover:text-emerald-700 text-gray-600 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+                            {val !== null ? '✏️ Update' : '+ Enter value'}
+                          </button>
+                          {val !== null && (
+                            <button onClick={() => clearValue(m.id as MetricID)} className="text-xs text-gray-400 hover:text-red-500 px-2 py-1.5">✕ Clear</button>
+                          )}
+                        </div>
+                      )
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      <div className="mt-2 p-4 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
+        <strong>How values are stored:</strong> Entered values are saved in your browser&apos;s localStorage — no server or database needed. They persist between sessions on this device. Use <em>Export CSV</em> to back them up or share with colleagues.
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: currentYear - 2015 + 1 }, (_, i) => currentYear - i);
@@ -1195,153 +1416,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Green Library Tab ── */}
-          <div className={activeTab === 'green' ? 'block' : 'hidden print:block'}>
-            {(() => {
-              const reuseRate = (s && s.totalItems && s.checkoutsThisYear)
-                ? parseFloat((s.checkoutsThisYear / s.totalItems).toFixed(2))
-                : null;
-
-              type GreenMetric = {
-                id: string; name: string; description: string; unit: string;
-                source: string; frequency: string; baseline: number; goal: number;
-                computed?: number | null; computedLabel?: string;
-              };
-
-              const categories: { name: string; icon: string; color: string; metrics: GreenMetric[] }[] = [
-                {
-                  name: 'Sustainable Facilities', icon: '🏢', color: 'emerald',
-                  metrics: [
-                    { id:'LIB-ENV-001', name:'Energy Use Intensity (EUI)', description:'Total annual energy consumption (electricity + natural gas) divided by library square footage.', unit:'kBtu/sq ft/year', source:'Utility Bills & Building Floor Plan', frequency:'Monthly', baseline:55, goal:40 },
-                    { id:'LIB-ENV-002', name:'Waste Diversion Rate', description:'Percentage of total library waste diverted from landfills via recycling, composting, or book-donation pipelines.', unit:'%', source:'Waste Management Invoices / Waste Audits', frequency:'Quarterly', baseline:35, goal:75 },
-                    { id:'LIB-ENV-003', name:'Water Consumption Intensity', description:'Total water consumed indoors and for facility landscaping per square foot.', unit:'Gallons/sq ft/year', source:'Water Utility Bills', frequency:'Monthly', baseline:12, goal:8.5 },
-                  ],
-                },
-                {
-                  name: 'Circulation & Circular Economy', icon: '♻️', color: 'blue',
-                  metrics: [
-                    { id:'LIB-CIRC-001', name:'Collection Reuse Factor', description:'Average annual checkouts per physical item in the active collection (Turnover Rate).', unit:'Circulations/Item/Year', source:'ILS — computed from dashboard data', frequency:'Annually', baseline:2.1, goal:3.5, computed: reuseRate, computedLabel: reuseRate !== null ? `${reuseRate} checkouts/item` : undefined },
-                    { id:'LIB-CIRC-002', name:'Paperless Administration Index', description:'Ratio of digital-only receipts, notices, and registrations versus total processed paper administration.', unit:'%', source:'ILS Notification Logs & Receipts Printer Logs', frequency:'Monthly', baseline:60, goal:95 },
-                    { id:'LIB-CIRC-003', name:'Sustainable Procurement %', description:'Percentage of operational, office, and cleaning supplies sourced with eco-labels (EcoLogo, Green Seal, FSC).', unit:'% of Total Spend', source:'Financial Procurement & Invoice Audits', frequency:'Quarterly', baseline:20, goal:60 },
-                  ],
-                },
-                {
-                  name: 'Digital Infrastructure', icon: '💻', color: 'violet',
-                  metrics: [
-                    { id:'LIB-IT-001', name:'E-Waste Recycling Compliance', description:'Percentage of decommissioned IT hardware responsibly recycled via certified e-waste partners.', unit:'%', source:'IT Asset Management / Disposal Receipts', frequency:'Annually', baseline:80, goal:100 },
-                    { id:'LIB-IT-002', name:'Public Workstation Power Efficiency', description:'Percentage of active public and staff terminals utilizing automated power-down/sleep schedules outside operating hours.', unit:'%', source:'IT Central Management Console (MDM)', frequency:'Monthly', baseline:50, goal:100 },
-                  ],
-                },
-                {
-                  name: 'Community & Literacy', icon: '🌱', color: 'teal',
-                  metrics: [
-                    { id:'LIB-COM-001', name:'Eco-Programming Density', description:'Percentage of library programs dedicated to sustainability and climate literacy.', unit:'%', source:'Library Events Calendar & Room Booking System', frequency:'Quarterly', baseline:3, goal:10 },
-                    { id:'LIB-COM-002', name:'Sustainability Program Engagement', description:'Total annual attendance at environmental/sustainability programs.', unit:'Patrons/Year', source:'Program Gate/Head Counts', frequency:'Monthly', baseline:450, goal:1200 },
-                  ],
-                },
-              ];
-
-              const colorMap: Record<string, { bg: string; border: string; badge: string; bar: string; text: string; head: string }> = {
-                emerald: { bg:'bg-emerald-50', border:'border-emerald-200', badge:'bg-emerald-100 text-emerald-700', bar:'bg-emerald-500', text:'text-emerald-700', head:'bg-emerald-600' },
-                blue:    { bg:'bg-blue-50',    border:'border-blue-200',    badge:'bg-blue-100 text-blue-700',    bar:'bg-blue-500',    text:'text-blue-700',    head:'bg-blue-600'    },
-                violet:  { bg:'bg-violet-50',  border:'border-violet-200',  badge:'bg-violet-100 text-violet-700',bar:'bg-violet-500',  text:'text-violet-700',  head:'bg-violet-600'  },
-                teal:    { bg:'bg-teal-50',    border:'border-teal-200',    badge:'bg-teal-100 text-teal-700',    bar:'bg-teal-500',    text:'text-teal-700',    head:'bg-teal-600'    },
-              };
-
-              return (
-                <div>
-                  <div className="mb-6 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl p-5 text-white">
-                    <h2 className="text-lg font-bold mb-1">🌿 Green Library KPI Dashboard</h2>
-                    <p className="text-sm text-emerald-100">Tracks environmental sustainability metrics aligned with globally recognized green library frameworks. Metrics in blue are computed from ILS data; others require manual tracking from operational records.</p>
-                  </div>
-
-                  {categories.map(cat => {
-                    const c = colorMap[cat.color];
-                    return (
-                      <div key={cat.name} className="mb-8">
-                        <div className={`flex items-center gap-2 mb-4 px-4 py-2 rounded-lg ${c.head} text-white`}>
-                          <span className="text-xl">{cat.icon}</span>
-                          <span className="font-bold text-sm">{cat.name}</span>
-                        </div>
-                        <div className="grid grid-cols-1 gap-4">
-                          {cat.metrics.map(m => {
-                            const isComputed = m.computed !== undefined && m.computed !== null;
-                            const val = isComputed ? m.computed! : null;
-                            // For percentage metrics, goal is "higher is better" unless it's a usage metric
-                            const lowerIsBetter = m.unit.includes('kBtu') || m.unit.includes('Gallons');
-                            const pctToGoal = val !== null
-                              ? lowerIsBetter
-                                ? Math.min(100, Math.max(0, ((m.baseline - val) / (m.baseline - m.goal)) * 100))
-                                : Math.min(100, Math.max(0, ((val - m.baseline) / (m.goal - m.baseline)) * 100))
-                              : null;
-
-                            return (
-                              <div key={m.id} className={`rounded-xl border ${c.border} ${c.bg} p-5`}>
-                                <div className="flex items-start justify-between gap-4 mb-2">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-xs font-mono text-gray-400">{m.id}</span>
-                                      <span className="font-semibold text-gray-900 text-sm">{m.name}</span>
-                                      {isComputed
-                                        ? <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">ILS computed</span>
-                                        : <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Manual tracking</span>
-                                      }
-                                      <span className={`text-xs px-2 py-0.5 rounded-full ${c.badge}`}>{m.frequency}</span>
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-1">{m.description}</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">Source: {m.source}</p>
-                                  </div>
-                                  <div className="text-right shrink-0">
-                                    {isComputed && val !== null ? (
-                                      <>
-                                        <div className={`text-2xl font-bold ${c.text}`}>{val}</div>
-                                        <div className="text-xs text-gray-400">{m.unit}</div>
-                                      </>
-                                    ) : (
-                                      <div className="text-sm text-gray-400 italic">Not yet measured</div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Progress bar: baseline → current → goal */}
-                                <div className="mt-3">
-                                  <div className="flex justify-between text-xs text-gray-500 mb-1">
-                                    <span>Baseline: {m.baseline} {m.unit}</span>
-                                    <span className={`font-semibold ${c.text}`}>Goal: {m.goal} {m.unit}</span>
-                                  </div>
-                                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                                    {pctToGoal !== null ? (
-                                      <div
-                                        className={`h-2 rounded-full transition-all ${c.bar} ${pctToGoal >= 100 ? 'opacity-100' : 'opacity-80'}`}
-                                        style={{ width: `${Math.max(4, pctToGoal)}%` }}
-                                      />
-                                    ) : (
-                                      <div className="h-2 rounded-full bg-gray-300 w-1/6 opacity-40" />
-                                    )}
-                                  </div>
-                                  {pctToGoal !== null && (
-                                    <div className="text-xs text-gray-500 mt-1">
-                                      {pctToGoal >= 100
-                                        ? <span className="text-emerald-600 font-semibold">✓ Goal achieved</span>
-                                        : <span>{pctToGoal.toFixed(0)}% of the way from baseline to green goal</span>
-                                      }
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
-                    <strong>Note:</strong> &quot;Manual tracking&quot; metrics are not stored in Follett Destiny. Record current values in a separate spreadsheet or tracking system and compare against the targets above. Only the <em>Collection Reuse Factor</em> (LIB-CIRC-001) is automatically computed from your ILS circulation data.
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
+          {activeTab === 'green' && <GreenLibraryTab reuseRate={s && s.totalItems ? parseFloat((s.checkoutsThisYear / s.totalItems).toFixed(2)) : null} />}
 
           {/* ── Recommended Actions ── */}
           {s && !s.error && <RecommendedActions stats={s} chedStats={chedStats} year={year} />}
