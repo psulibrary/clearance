@@ -327,37 +327,34 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
   const [draft, setDraft]         = useState({ value: '', notes: '' });
 
   useEffect(() => {
-    import('@/lib/supabase').then(({ supabase }) => {
-      supabase
-        .from('green_metrics')
-        .select('metric_id, value, notes, recorded_on')
-        .order('recorded_on', { ascending: false })
-        .then(({ data, error }) => {
-          if (error) {
-            console.error('Supabase fetch error:', error);
-            setSupabaseError(error.message);
-          }
-          if (data) {
-            const map: StoredValues = {};
-            for (const row of data) {
-              if (!map[row.metric_id]) {
-                map[row.metric_id] = { value: Number(row.value), notes: row.notes ?? '', date: row.recorded_on };
-              }
+    async function load() {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const { data, error } = await supabase
+          .from('green_metrics')
+          .select('metric_id, value, notes, recorded_on')
+          .order('recorded_on', { ascending: false });
+        if (error) {
+          console.error('Supabase fetch error:', error);
+          setSupabaseError(error.message);
+        }
+        if (data) {
+          const map: StoredValues = {};
+          for (const row of data) {
+            if (!map[row.metric_id]) {
+              map[row.metric_id] = { value: Number(row.value), notes: row.notes ?? '', date: row.recorded_on };
             }
-            setStored(map);
           }
-          setLoading(false);
-        })
-        .catch((err: unknown) => {
-          console.error('Supabase query error:', err);
-          setSupabaseError(err instanceof Error ? err.message : String(err));
-          setLoading(false);
-        });
-    }).catch((err: unknown) => {
-      console.error('Supabase import error:', err);
-      setSupabaseError('Supabase is not configured — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
-      setLoading(false);
-    });
+          setStored(map);
+        }
+      } catch (err: unknown) {
+        console.error('Supabase error:', err);
+        setSupabaseError(err instanceof Error ? err.message : 'Supabase is not configured — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
   }, []);
 
   function startEdit(id: MetricID) {
