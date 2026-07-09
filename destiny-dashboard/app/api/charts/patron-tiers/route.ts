@@ -38,6 +38,7 @@ export async function GET(request: Request) {
           SELECT COUNT(DISTINCT PatronID) AS cnt
           FROM ${t(p, 'Audit')}
           WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+            AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19
             AND YEAR(Created) = @year2 AND PatronID IS NOT NULL
         `);
         roomUsePatronsThisYear = ru.recordset[0]?.cnt ?? 0;
@@ -54,7 +55,8 @@ export async function GET(request: Request) {
           WHERE PatronID IS NOT NULL AND YEAR(Created) = @y
             AND (
               TransModifier = 0
-              OR (TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod})
+              OR (TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+                  AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19)
             )
         `);
         activeThisYear = combined.recordset[0]?.cnt ?? activeThisYear;
@@ -74,6 +76,7 @@ export async function GET(request: Request) {
         SELECT 1 FROM ${t(p, 'Audit')} a
         WHERE a.PatronID = p.PatronID
           AND a.TransType = ${cfg.checkInType} AND a.TransModifier = ${cfg.inLibMod}
+          AND DATEPART(hour, a.Created) >= 8 AND DATEPART(hour, a.Created) < 19
       )` : ''}
     `);
     const neverBorrowed = neverUsedRes.recordset[0]?.cnt ?? 0;

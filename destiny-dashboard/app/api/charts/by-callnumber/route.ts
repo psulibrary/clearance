@@ -51,6 +51,7 @@ export async function GET() {
           FROM ${t(p,'Audit')} a
           JOIN ${t(p,'Copy')} c ON c.CopyID = a.CopyID
           WHERE a.TransType = ${cfg.checkInType} AND a.TransModifier = ${cfg.inLibMod}
+            AND DATEPART(hour, a.Created) >= 8 AND DATEPART(hour, a.Created) < 19
             AND c.CallNumber IS NOT NULL AND c.CallNumber != ''
             AND LEFT(LTRIM(c.CallNumber), 1) BETWEEN '0' AND '9'
           GROUP BY LEFT(LTRIM(c.CallNumber), 1)

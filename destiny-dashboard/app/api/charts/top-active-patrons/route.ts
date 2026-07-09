@@ -60,6 +60,7 @@ export async function GET(request: Request) {
             COUNT(CASE WHEN YEAR(Created) = ${year} THEN 1 END) AS roomUseThisYear
           FROM ${t(p,'Audit')}
           WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+            AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19
             AND PatronID IN (${patronIds})
           GROUP BY PatronID
         `);

@@ -41,6 +41,7 @@ export async function GET() {
           FROM ${t(p,'Audit')} a
           JOIN ${t(p,'PatronType')} pt ON pt.PatronTypeID = a.PatronTypeID
           WHERE a.TransType = ${cfg.checkInType} AND a.TransModifier = ${cfg.inLibMod}
+            AND DATEPART(hour, a.Created) >= 8 AND DATEPART(hour, a.Created) < 19
           GROUP BY pt.PatronTypeDescription
         `);
         for (const r of ruRes.recordset as { patronType: string; roomUse: number; roomUsePatrons: number }[]) {

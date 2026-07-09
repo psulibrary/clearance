@@ -49,6 +49,7 @@ export async function GET() {
               SELECT DISTINCT PatronID FROM ${t(p,'Audit')}
               WHERE PatronID IS NOT NULL AND YEAR(Created) = @ly
                 AND TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+                AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19
             ),
             this_year AS (
               SELECT DISTINCT PatronID FROM ${t(p,'Copy')}
@@ -58,6 +59,7 @@ export async function GET() {
               SELECT DISTINCT PatronID FROM ${t(p,'Audit')}
               WHERE PatronID IS NOT NULL AND YEAR(Created) = @y
                 AND TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+                AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19
             )
             SELECT
               (SELECT COUNT(*) FROM last_year)                                         AS activeLastYear,

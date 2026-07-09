@@ -65,7 +65,7 @@ export async function GET() {
     let roomUseAware = false;
     let ruClause = '';
     if (cfg) {
-      ruClause = `AND TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}`;
+      ruClause = `AND TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod} AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19`;
       roomUseAware = true;
     }
 

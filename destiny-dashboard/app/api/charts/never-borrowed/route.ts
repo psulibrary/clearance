@@ -15,6 +15,7 @@ export async function GET() {
           SELECT 1 FROM ${t(p,'Audit')} a
           WHERE a.CopyID = c.CopyID
             AND a.TransType = ${cfg.checkInType} AND a.TransModifier = ${cfg.inLibMod}
+            AND DATEPART(hour, a.Created) >= 8 AND DATEPART(hour, a.Created) < 19
         )`
       : '';
 
@@ -41,6 +42,7 @@ export async function GET() {
                          SELECT 1 FROM ${t(p,'Audit')} a
                          WHERE a.CopyID = c.CopyID
                            AND a.TransType = ${cfg.checkInType} AND a.TransModifier = ${cfg.inLibMod}
+                           AND DATEPART(hour, a.Created) >= 8 AND DATEPART(hour, a.Created) < 19
                        )
                   THEN 1 ELSE 0 END)`
       : '0';
@@ -50,6 +52,7 @@ export async function GET() {
            SELECT 1 FROM ${t(p,'Audit')} a
            WHERE a.CopyID = c.CopyID
              AND a.TransType = ${cfg.checkInType} AND a.TransModifier = ${cfg.inLibMod}
+             AND DATEPART(hour, a.Created) >= 8 AND DATEPART(hour, a.Created) < 19
          )`
       : '';
 

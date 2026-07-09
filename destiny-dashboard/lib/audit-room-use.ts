@@ -40,8 +40,14 @@ export async function getRoomUseConfig(): Promise<RoomUseConfig | null> {
   }
 }
 
-// SQL fragment that filters Audit for in-library room use records.
-// ru = alias for Audit table in the calling query.
-export function roomUseWhere(cfg: RoomUseConfig, alias = 'ru'): string {
-  return `${alias}.TransType = ${cfg.checkInType} AND ${alias}.TransModifier = ${cfg.inLibMod}`;
+// Library operating hours — records outside this window are system artifacts.
+export const OPEN_HOUR  = 8;  // 8:00 AM
+export const CLOSE_HOUR = 19; // 7:00 PM (exclusive, i.e. DATEPART(hour,...) < 19)
+
+// SQL fragment that filters Audit for in-library room use records within operating hours.
+// alias = table alias for the Audit table in the calling query.
+export function roomUseWhere(cfg: RoomUseConfig, alias = 'a', dateCol = 'Created'): string {
+  return `${alias}.TransType = ${cfg.checkInType} AND ${alias}.TransModifier = ${cfg.inLibMod}` +
+    ` AND DATEPART(hour, ${alias}.${dateCol}) >= ${OPEN_HOUR}` +
+    ` AND DATEPART(hour, ${alias}.${dateCol}) < ${CLOSE_HOUR}`;
 }

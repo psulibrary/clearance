@@ -5,22 +5,25 @@ import { getRoomUseConfig } from '@/lib/audit-room-use';
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
-// Group hours into named periods
-const PERIOD_NAMES = ['Early Morning (6–8am)', 'Morning (8–10am)', 'Late Morning (10am–12pm)',
-  'Lunch (12–2pm)', 'Afternoon (2–4pm)', 'Late Afternoon (4–6pm)',
-  'Evening (6–8pm)', 'Night (8–10pm)'];
+// Named periods within operating hours (8am–7pm)
+const PERIOD_NAMES = [
+  'Morning (8–10am)',
+  'Late Morning (10am–12pm)',
+  'Lunch (12–2pm)',
+  'Afternoon (2–4pm)',
+  'Late Afternoon (4–6pm)',
+  'Closing (6–7pm)',
+];
 
 function hourToPeriodIndex(h: number): number {
-  if (h < 6)   return -1; // before 6am — negligible, skip
-  if (h < 8)   return 0;
-  if (h < 10)  return 1;
-  if (h < 12)  return 2;
-  if (h < 14)  return 3;
-  if (h < 16)  return 4;
-  if (h < 18)  return 5;
-  if (h < 20)  return 6;
-  if (h < 22)  return 7;
-  return -1; // after 10pm
+  if (h < 8)   return -1; // before open
+  if (h < 10)  return 0;
+  if (h < 12)  return 1;
+  if (h < 14)  return 2;
+  if (h < 16)  return 3;
+  if (h < 18)  return 4;
+  if (h < 19)  return 5;
+  return -1; // after 7pm close
 }
 
 export async function GET() {
@@ -53,6 +56,7 @@ export async function GET() {
           COUNT(*)                         AS roomUse
         FROM ${t(p,'Audit')}
         WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+          AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19
         GROUP BY DATEPART(weekday, Created)
         ORDER BY dayOfWeek
       `);
@@ -67,13 +71,14 @@ export async function GET() {
       return { day, checkouts, roomUse, totalUse: checkouts + roomUse };
     });
 
-    // ── Time-of-day: checkouts by hour from Copy.DateOut ──
+    // ── Time-of-day: checkouts by hour (operating hours only) ──
     const hourCheckoutRes = await pool.request().query(`
       SELECT
         DATEPART(hour, DateOut) AS hr,
         COUNT(*)                AS cnt
       FROM ${t(p,'Copy')}
       WHERE DateOut IS NOT NULL
+        AND DATEPART(hour, DateOut) >= 8 AND DATEPART(hour, DateOut) < 19
       GROUP BY DATEPART(hour, DateOut)
     `);
     const hourCheckoutMap: Record<number, number> = {};
@@ -91,6 +96,7 @@ export async function GET() {
             COUNT(*)                AS cnt
           FROM ${t(p,'Audit')}
           WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+            AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19
           GROUP BY DATEPART(hour, Created)
         `);
         for (const r of hrRuRes.recordset as { hr: number; cnt: number }[]) {
@@ -113,13 +119,12 @@ export async function GET() {
       return { period, checkouts: d.checkouts, roomUse: d.roomUse, totalUse: d.checkouts + d.roomUse };
     }).filter(r => r.totalUse > 0);
 
-    // Also expose raw hourly data (0–23) for a heatmap
+    // Hourly heatmap — operating hours only (8am to 7pm)
     const byHour: { hour: number; label: string; checkouts: number; roomUse: number; totalUse: number }[] = [];
-    for (let h = 0; h < 24; h++) {
+    for (let h = 8; h < 19; h++) {
       const co = hourCheckoutMap[h] ?? 0;
       const ru = hourRoomUseMap[h]  ?? 0;
-      if (co + ru === 0) continue;
-      const ampm = h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h-12}pm`;
+      const ampm = h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
       byHour.push({ hour: h, label: ampm, checkouts: co, roomUse: ru, totalUse: co + ru });
     }
 

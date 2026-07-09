@@ -62,12 +62,15 @@ async function runSync() {
         SELECT
           (SELECT COUNT(*) FROM ${t(p,'Audit')}
            WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+             AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19
              AND Created >= @ytd2)   AS roomUseYtd,
           (SELECT COUNT(*) FROM ${t(p,'Audit')}
            WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+             AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19
              AND Created >= @ago7b)  AS roomUse7d,
           (SELECT COUNT(*) FROM ${t(p,'Audit')}
            WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+             AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19
              AND Created >= @ago30b) AS roomUse30d
       `);
       const ru = ruRes.recordset[0] as { roomUseYtd: number; roomUse7d: number; roomUse30d: number };

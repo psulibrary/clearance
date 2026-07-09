@@ -43,6 +43,7 @@ export async function GET() {
           FROM ${t(p,'Audit')} a
           JOIN ${t(p,'Patron')} p ON p.PatronID = a.PatronID
           WHERE a.TransType = ${cfg.checkInType} AND a.TransModifier = ${cfg.inLibMod}
+            AND DATEPART(hour, a.Created) >= 8 AND DATEPART(hour, a.Created) < 19
           GROUP BY LTRIM(RTRIM(p.Gender))
         `);
         for (const r of ruRes.recordset as { gender: string; roomUse: number; roomUsePatrons: number }[]) {

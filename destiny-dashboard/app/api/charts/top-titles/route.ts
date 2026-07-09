@@ -44,6 +44,7 @@ export async function GET(request: Request) {
         FROM ${t(p,'Audit')} a
         JOIN ${t(p,'Copy')} c ON c.CopyID = a.CopyID
         WHERE a.TransType = ${cfg.checkInType} AND a.TransModifier = ${cfg.inLibMod}
+          AND DATEPART(hour, a.Created) >= 8 AND DATEPART(hour, a.Created) < 19
           AND c.BibID IN (${bibIds})
         GROUP BY c.BibID
       `);

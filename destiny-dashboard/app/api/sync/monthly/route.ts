@@ -93,6 +93,7 @@ export async function POST(request: Request) {
           SELECT YEAR(Created) AS yr, MONTH(Created) AS mo, COUNT(*) AS cnt
           FROM ${t(p,'Audit')}
           WHERE TransType = ${cfg.checkInType} AND TransModifier = ${cfg.inLibMod}
+            AND DATEPART(hour, Created) >= 8 AND DATEPART(hour, Created) < 19
           GROUP BY YEAR(Created), MONTH(Created)
         `);
         for (const r of ruRes.recordset as { yr: number; mo: number; cnt: number }[]) {
