@@ -1004,12 +1004,14 @@ function IsoManualSection({ unlocked }: { unlocked: boolean }) {
       const { supabase } = await import('@/lib/supabase');
       const { data, error } = await supabase
         .from('green_metrics')
-        .select('metric_id, value, notes, updated_at')
+        .select('metric_id, value, notes, recorded_on')
         .in('metric_id', allIds);
       if (error) { setSbError(error.message); } else {
         const map: IsoStored = {};
-        (data ?? []).forEach((r: { metric_id: string; value: number; notes: string; updated_at: string }) => {
-          map[r.metric_id] = { value: r.value, notes: r.notes ?? '', date: r.updated_at?.slice(0, 10) ?? '' };
+        (data ?? []).forEach((r: { metric_id: string; value: number; notes: string; recorded_on: string }) => {
+          if (!map[r.metric_id]) {
+            map[r.metric_id] = { value: Number(r.value), notes: r.notes ?? '', date: r.recorded_on ?? '' };
+          }
         });
         setStored(map);
       }
@@ -1022,13 +1024,14 @@ function IsoManualSection({ unlocked }: { unlocked: boolean }) {
     const val = parseFloat(draft.value);
     if (isNaN(val)) return;
     setSaving(id);
+    const today = new Date().toISOString().slice(0, 10);
     const { supabase } = await import('@/lib/supabase');
     const { error } = await supabase.from('green_metrics').upsert(
-      { metric_id: id, value: val, notes: draft.notes, updated_at: new Date().toISOString() },
-      { onConflict: 'metric_id' }
+      { metric_id: id, recorded_on: today, value: val, notes: draft.notes || null },
+      { onConflict: 'metric_id,recorded_on' }
     );
     if (!error) {
-      setStored(prev => ({ ...prev, [id]: { value: val, notes: draft.notes, date: new Date().toISOString().slice(0, 10) } }));
+      setStored(prev => ({ ...prev, [id]: { value: val, notes: draft.notes, date: today } }));
       setEditing(null);
       setDraft({ value: '', notes: '' });
     }
