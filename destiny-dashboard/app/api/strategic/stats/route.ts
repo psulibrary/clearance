@@ -71,7 +71,7 @@ export async function GET() {
 
         /* New patron registrations this year */
         (SELECT COUNT(*) FROM ${t(p,'Patron')}
-          WHERE YEAR(DateEntered) = @year)
+          WHERE YEAR(Created) = @year)
           AS newPatronsThisYear
     `);
 

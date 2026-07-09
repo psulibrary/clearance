@@ -973,6 +973,7 @@ export default function Dashboard() {
   const [month, setMonth]             = useState(0);
   const [gender, setGender]           = useState('');
   const [patronTypeID, setPatronTypeID] = useState(0);
+  const [showExtraFilters, setShowExtraFilters] = useState(false);
 
   type ActivityRow = { name:string; totalPatrons:number; activePatrons:number; totalCheckouts:number; overdueItems:number; activeRate:number; checkoutsPerPatron:number };
   const [genderActivity, setGenderActivity]       = useState<ActivityRow[]>([]);
@@ -1174,76 +1175,121 @@ export default function Dashboard() {
         )}
 
         {/* Filter bar */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-wrap gap-3 items-end print:hidden">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Year</label>
-            <select
-              value={year}
-              onChange={e => setYear(Number(e.target.value))}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {years.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Month</label>
-            <select
-              value={month}
-              onChange={e => setMonth(Number(e.target.value))}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-            </select>
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-4 print:hidden">
+          {/* Row 1: Year stepper + month pills + action buttons */}
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            {/* Year stepper */}
+            <div className="flex items-center gap-1 border border-gray-200 rounded-lg overflow-hidden shrink-0">
+              <button
+                onClick={() => setYear(y => Math.max(2015, y - 1))}
+                disabled={year <= 2015}
+                className="px-2 py-1.5 text-gray-600 hover:bg-gray-100 disabled:opacity-30 text-sm font-bold transition-colors"
+              >‹</button>
+              <span className="px-3 py-1.5 text-sm font-semibold text-gray-800 border-x border-gray-200 min-w-[52px] text-center">{year}</span>
+              <button
+                onClick={() => setYear(y => Math.min(currentYear, y + 1))}
+                disabled={year >= currentYear}
+                className="px-2 py-1.5 text-gray-600 hover:bg-gray-100 disabled:opacity-30 text-sm font-bold transition-colors"
+              >›</button>
+            </div>
+
+            {/* Month pills */}
+            <div className="flex flex-wrap gap-1">
+              {MONTHS.map((m, i) => (
+                <button
+                  key={i}
+                  onClick={() => setMonth(month === i ? 0 : i)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    month === i
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {i === 0 ? 'All' : m.slice(0, 3)}
+                </button>
+              ))}
+            </div>
+
+            {/* Right side: extra filters toggle + export buttons */}
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              {(genders.length > 0 || patronTypes.length > 0) && (
+                <button
+                  onClick={() => setShowExtraFilters(f => !f)}
+                  className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                    showExtraFilters || gender || patronTypeID
+                      ? 'border-blue-400 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M7 8h10M11 12h2M9 16h6" /></svg>
+                  Filters{(gender || patronTypeID > 0) ? ` (${[gender, patronTypeID > 0 ? '1' : ''].filter(Boolean).length})` : ''}
+                </button>
+              )}
+              <button
+                onClick={() => s && exportCsv(s, yearLabel, monthLabel, gender, patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription ?? '')}
+                disabled={!s || !!s.error}
+                className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              >↓ CSV</button>
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              >⎙ PDF</button>
+            </div>
           </div>
 
-          {genders.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Gender</label>
-              <select
-                value={gender}
-                onChange={e => setGender(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Genders</option>
-                {genders.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
+          {/* Row 2: expanded extra filters */}
+          {showExtraFilters && (
+            <div className="flex flex-wrap gap-3 pt-3 border-t border-gray-100">
+              {genders.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Gender</label>
+                  <div className="flex gap-1 flex-wrap">
+                    <button onClick={() => setGender('')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${!gender ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</button>
+                    {genders.map(g => (
+                      <button key={g} onClick={() => setGender(gender === g ? '' : g)} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${gender === g ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{g}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {patronTypes.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Patron Type</label>
+                  <div className="flex gap-1 flex-wrap">
+                    <button onClick={() => setPatronTypeID(0)} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${patronTypeID === 0 ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</button>
+                    {patronTypes.map(pt => (
+                      <button key={pt.PatronTypeID} onClick={() => setPatronTypeID(patronTypeID === pt.PatronTypeID ? 0 : pt.PatronTypeID)} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${patronTypeID === pt.PatronTypeID ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{pt.PatronTypeDescription}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-          {patronTypes.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Patron Type</label>
-              <select
-                value={patronTypeID}
-                onChange={e => setPatronTypeID(Number(e.target.value))}
-                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={0}>All Types</option>
-                {patronTypes.map(pt => <option key={pt.PatronTypeID} value={pt.PatronTypeID}>{pt.PatronTypeDescription}</option>)}
-              </select>
-            </div>
-          )}
-          <div className="ml-auto flex gap-2">
-            <button
-              onClick={() => s && exportCsv(s, yearLabel, monthLabel, gender, patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription ?? '')}
-              disabled={!s || !!s.error}
-              className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-            >
-              ↓ Export CSV
-            </button>
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-            >
-              ⎙ Print / PDF
-            </button>
-          </div>
-        </div>
 
-        {/* Period context banner */}
-        <div className="text-xs text-gray-400 mb-4 print:hidden">
-          Showing period-based stats for: <strong className="text-gray-600">{periodLabel}</strong>
-          {gender && <> · Gender: <strong className="text-gray-600">{gender}</strong></>}
-          {patronTypeID > 0 && <> · Type: <strong className="text-gray-600">{patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription}</strong></>}
+          {/* Active filter chips */}
+          {(gender || patronTypeID > 0 || month > 0) && (
+            <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-gray-100">
+              <span className="text-xs text-gray-400 self-center">Active:</span>
+              <span className="text-xs bg-blue-100 text-blue-800 font-medium px-2 py-0.5 rounded-full">{year}</span>
+              {month > 0 && (
+                <button onClick={() => setMonth(0)} className="flex items-center gap-1 text-xs bg-blue-100 text-blue-800 font-medium px-2 py-0.5 rounded-full hover:bg-blue-200">
+                  {MONTHS[month]} <span className="text-blue-500">×</span>
+                </button>
+              )}
+              {gender && (
+                <button onClick={() => setGender('')} className="flex items-center gap-1 text-xs bg-indigo-100 text-indigo-800 font-medium px-2 py-0.5 rounded-full hover:bg-indigo-200">
+                  {gender} <span className="text-indigo-500">×</span>
+                </button>
+              )}
+              {patronTypeID > 0 && (
+                <button onClick={() => setPatronTypeID(0)} className="flex items-center gap-1 text-xs bg-indigo-100 text-indigo-800 font-medium px-2 py-0.5 rounded-full hover:bg-indigo-200">
+                  {patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription} <span className="text-indigo-500">×</span>
+                </button>
+              )}
+              {(gender || patronTypeID > 0 || month > 0) && (
+                <button onClick={() => { setGender(''); setPatronTypeID(0); setMonth(0); }} className="text-xs text-gray-400 hover:text-red-500 px-1 py-0.5 transition-colors">Clear all</button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tab bar */}
