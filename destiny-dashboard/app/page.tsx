@@ -319,11 +319,12 @@ const COLOR = {
 type StoredValues = Record<string, { value: number; notes: string; date: string }>;
 
 function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
-  const [stored, setStored]   = useState<StoredValues>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving]   = useState<MetricID | null>(null);
-  const [editing, setEditing] = useState<MetricID | null>(null);
-  const [draft, setDraft]     = useState({ value: '', notes: '' });
+  const [stored, setStored]       = useState<StoredValues>({});
+  const [loading, setLoading]     = useState(true);
+  const [supabaseError, setSupabaseError] = useState<string | null>(null);
+  const [saving, setSaving]       = useState<MetricID | null>(null);
+  const [editing, setEditing]     = useState<MetricID | null>(null);
+  const [draft, setDraft]         = useState({ value: '', notes: '' });
 
   useEffect(() => {
     import('@/lib/supabase').then(({ supabase }) => {
@@ -331,18 +332,31 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
         .from('green_metrics')
         .select('metric_id, value, notes, recorded_on')
         .order('recorded_on', { ascending: false })
-        .then(({ data }) => {
-          if (!data) return;
-          // Keep only the most recent entry per metric
-          const map: StoredValues = {};
-          for (const row of data) {
-            if (!map[row.metric_id]) {
-              map[row.metric_id] = { value: Number(row.value), notes: row.notes ?? '', date: row.recorded_on };
-            }
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('Supabase fetch error:', error);
+            setSupabaseError(error.message);
           }
-          setStored(map);
+          if (data) {
+            const map: StoredValues = {};
+            for (const row of data) {
+              if (!map[row.metric_id]) {
+                map[row.metric_id] = { value: Number(row.value), notes: row.notes ?? '', date: row.recorded_on };
+              }
+            }
+            setStored(map);
+          }
+          setLoading(false);
+        })
+        .catch((err: unknown) => {
+          console.error('Supabase query error:', err);
+          setSupabaseError(err instanceof Error ? err.message : String(err));
           setLoading(false);
         });
+    }).catch((err: unknown) => {
+      console.error('Supabase import error:', err);
+      setSupabaseError('Supabase is not configured — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+      setLoading(false);
     });
   }, []);
 
@@ -394,6 +408,8 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
     </div>
   );
 
+  const supabaseAvailable = !supabaseError;
+
   return (
     <div>
       <div className="mb-6 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl p-5 text-white flex items-start justify-between gap-4">
@@ -405,6 +421,13 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
           ↓ Export CSV
         </button>
       </div>
+
+      {supabaseError && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-xl text-sm text-amber-800">
+          <strong>⚠️ Supabase not connected:</strong> {supabaseError}
+          <br /><span className="text-xs">Values cannot be saved until Supabase is configured. Make sure <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> are set in your Vercel environment variables and the app has been redeployed.</span>
+        </div>
+      )}
 
       {categories.map(cat => {
         const catMetrics = GREEN_METRICS.filter(m => m.cat === cat);
@@ -482,7 +505,7 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
                     </div>
 
                     {/* Edit form (manual metrics only) */}
-                    {!isAuto && (
+                    {!isAuto && supabaseAvailable && (
                       isEdit ? (
                         <div className="border-t border-gray-200 pt-3 mt-1 flex flex-wrap gap-2 items-end">
                           <div>
