@@ -177,7 +177,16 @@ interface Recommendation {
   metric?: string;
 }
 
-function buildRecommendations(s: Stats, chedStats: Record<string,number> | null, year: number): Recommendation[] {
+type PatronTiers = { totalPatrons: number; activeThisYear: number; lapsed: number; neverBorrowed: number; newThisYear: number; year: number };
+type RetentionStats = { year: number; activeLastYear: number; activeThisYear?: number; retained: number; newBorrowers: number; retentionRate: number };
+
+function buildRecommendations(
+  s: Stats,
+  chedStats: Record<string,number> | null,
+  year: number,
+  patronTiers?: PatronTiers | null,
+  retention?: RetentionStats | null,
+): Recommendation[] {
   const recs: Recommendation[] = [];
   const totalItems = s.totalItems || 1;
   const totalPatrons = s.totalPatrons || 1;
@@ -207,9 +216,37 @@ function buildRecommendations(s: Stats, chedStats: Record<string,number> | null,
   else if (refreshRate < 0.05)
     recs.push({ priority: 'medium', category: 'Collection Development', title: 'Collection refresh rate below 5% target', detail: 'Plan acquisitions focusing on subjects with high circulation turnover and on materials less than 5 years old to improve collection currency scores.', metric: `${(refreshRate*100).toFixed(1)}% refresh rate` });
 
+  // Duplicate ratio: avg copies per title
+  const uniqueTitles = s.uniqueTitles || 1;
+  const dupRatio = totalItems / uniqueTitles;
+  if (dupRatio > 4)
+    recs.push({ priority: 'medium', category: 'Collection Development', title: 'High duplicate ratio — invest in breadth, not depth', detail: `Average of ${dupRatio.toFixed(1)} copies per title. For academic libraries, breadth of titles matters more than depth of copies. Redirect acquisition budget toward new unique titles rather than additional copies, especially if pending holds are low.`, metric: `${dupRatio.toFixed(1)} copies per title (${totalItems.toLocaleString()} items ÷ ${uniqueTitles.toLocaleString()} titles)` });
+
+  // Net collection growth
+  const netGrowth = s.newItemsThisYear - s.withdrawnItems;
+  if (netGrowth < 0)
+    recs.push({ priority: 'high', category: 'Collection Development', title: 'Collection is shrinking — net loss this year', detail: `Withdrawals (${s.withdrawnItems.toLocaleString()}) exceed new acquisitions (${s.newItemsThisYear.toLocaleString()}) by ${Math.abs(netGrowth).toLocaleString()} items. Increase acquisition budget or reduce weeding pace to stabilize collection size.`, metric: `Net growth: ${netGrowth.toLocaleString()} items` });
+
+  // Monthly checkout velocity
+  const monthlyVelocity = totalItems > 0 ? (s.checkoutsLast30Days / totalItems * 100) : 0;
+  if (monthlyVelocity < 1)
+    recs.push({ priority: 'medium', category: 'Circulation', title: 'Very low monthly checkout velocity', detail: `Only ${monthlyVelocity.toFixed(2)}% of the collection circulated in the last 30 days. Run targeted promotions: new arrivals shelf, thematic book displays, and faculty reserve lists to drive checkouts.`, metric: `${s.checkoutsLast30Days.toLocaleString()} checkouts / ${totalItems.toLocaleString()} items = ${monthlyVelocity.toFixed(2)}%` });
+
   const turnover = s.checkoutsThisYear / totalItems;
   if (turnover < 0.5)
     recs.push({ priority: 'medium', category: 'Circulation', title: 'Low collection turnover — promote underused materials', detail: 'Less than half an item per item was borrowed this year. Run book displays, subject guides, and faculty reading list integrations to drive discovery of the collection.', metric: `${turnover.toFixed(2)}x turnover (checkouts ÷ items)` });
+
+  // Demand gap: holds vs collection size
+  if (s.pendingHolds > 50 && s.pendingHolds > s.readyHolds * 2)
+    recs.push({ priority: 'medium', category: 'Circulation', title: 'Many unfilled holds — consider additional copies', detail: 'A large backlog of pending holds indicates demand exceeding supply. Identify high-hold titles and request additional copies or e-book licenses.', metric: `${s.pendingHolds.toLocaleString()} pending holds vs ${s.readyHolds.toLocaleString()} ready` });
+
+  const holdRate = totalItems > 0 ? (s.pendingHolds / totalItems * 100) : 0;
+  if (holdRate > 5)
+    recs.push({ priority: 'medium', category: 'Circulation', title: 'High holds-to-collection ratio — demand outpacing supply', detail: `${holdRate.toFixed(1)}% of the collection has active pending holds. Prioritize acquisitions of high-hold titles and explore e-resource alternatives for heavily requested subjects.`, metric: `${s.pendingHolds.toLocaleString()} pending holds (${holdRate.toFixed(1)}% of collection)` });
+
+  // Avg loan duration vs policy
+  if (s.avgLoanDays > 30)
+    recs.push({ priority: 'medium', category: 'Overdue Management', title: 'Long average loan duration — review loan periods', detail: `Average loan period is ${s.avgLoanDays.toFixed(0)} days. Extended loan durations reduce item availability and increase overdue risk. Consider shortening loan periods for high-demand items or implementing tiered loan policies by patron type.`, metric: `${s.avgLoanDays.toFixed(1)}-day average loan duration` });
 
   // ── Patron Engagement ──
   const activeRate = s.activePatronsThisYear / totalPatrons;
@@ -218,17 +255,60 @@ function buildRecommendations(s: Stats, chedStats: Record<string,number> | null,
   else if (activeRate < 0.4)
     recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Patron reach below 40% — expand outreach', detail: 'Strengthen faculty liaison programs, create subject-specific reading lists, and promote new acquisitions to relevant departments.', metric: `${(activeRate*100).toFixed(1)}% patron reach rate` });
 
+  const activePatrons = s.activePatronsThisYear || 1;
+  const loansPerActivePatron = s.checkoutsThisYear / activePatrons;
+  if (loansPerActivePatron < 3)
+    recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Low borrowing depth — active patrons borrow infrequently', detail: `Active patrons averaged only ${loansPerActivePatron.toFixed(1)} loans each this year (target ≥ 5 for academic libraries). Introduce reading challenges, extended loan periods, or course-integrated library assignments to increase repeat borrowing.`, metric: `${loansPerActivePatron.toFixed(1)} loans per active patron (ISO 11620 B.2.1.2)` });
+  else if (loansPerActivePatron < 5)
+    recs.push({ priority: 'low', category: 'Patron Engagement', title: 'Borrowing depth approaching target', detail: `Active patrons averaged ${loansPerActivePatron.toFixed(1)} loans each. Increase to ≥ 5 by promoting faculty reserve lists, new arrivals, and subject-specific reading guides.`, metric: `${loansPerActivePatron.toFixed(1)} loans per active patron` });
+
   const loansPerPatron = s.checkoutsThisYear / totalPatrons;
   if (loansPerPatron < 2)
-    recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Low borrowing frequency per patron', detail: 'Average patron borrowed fewer than 2 items this year. Explore extended loan periods, reading challenges, or class-integrated library assignments to increase repeat use.', metric: `${loansPerPatron.toFixed(2)} loans per registered patron` });
+    recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Low borrowing frequency per registered patron', detail: 'Average registered patron borrowed fewer than 2 items this year. Explore extended loan periods, reading challenges, or class-integrated library assignments to increase repeat use.', metric: `${loansPerPatron.toFixed(2)} loans per registered patron` });
 
-  // ── Holds ──
-  if (s.pendingHolds > 50 && s.pendingHolds > s.readyHolds * 2)
-    recs.push({ priority: 'medium', category: 'Circulation', title: 'Many unfilled holds — consider additional copies', detail: 'A large backlog of pending holds indicates demand exceeding supply. Identify high-hold titles and request additional copies or e-book licenses.', metric: `${s.pendingHolds.toLocaleString()} pending holds vs ${s.readyHolds.toLocaleString()} ready` });
+  // Hold propensity: holdsPlacedThisYear / totalPatrons
+  const holdPropensity = s.holdsPlacedThisYear / totalPatrons;
+  if (holdPropensity > 0.5 && s.pendingHolds > 30)
+    recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'High demand for reserved items — expand high-interest titles', detail: `${(holdPropensity*100).toFixed(1)}% of patrons have placed holds this year, with ${s.pendingHolds.toLocaleString()} still pending. Identify the most-requested titles and acquire additional copies or digital editions.`, metric: `${s.holdsPlacedThisYear.toLocaleString()} holds placed (${(holdPropensity*100).toFixed(1)}% of patron base)` });
 
-  // ── Fines ──
+  // Fine burden
+  if (s.patronsWithOverdue > 0) {
+    const finePerDebtor = s.totalFinesBalance / s.patronsWithOverdue;
+    if (finePerDebtor > 500)
+      recs.push({ priority: 'medium', category: 'Revenue', title: 'High fine burden per overdue patron — run amnesty program', detail: `Average outstanding fine is ₱${finePerDebtor.toLocaleString('en-PH', {minimumFractionDigits:2})} per patron with overdue items. High fine burdens discourage returns and new borrowing. Consider a fine amnesty campaign to recover materials and re-engage lapsed patrons.`, metric: `₱${finePerDebtor.toLocaleString('en-PH', {minimumFractionDigits:2})} avg fine per debtor (${s.patronsWithOverdue.toLocaleString()} patrons)` });
+  }
+
   if (s.totalFinesBalance > 0 && s.activeFines > 100)
     recs.push({ priority: 'medium', category: 'Revenue', title: 'Outstanding fines balance — review collection process', detail: 'A significant fines balance is outstanding. Review fine notification workflows, consider amnesty programs to recover materials, and ensure fines are linked to patron accounts actively.', metric: `₱${s.totalFinesBalance.toLocaleString('en-PH', {minimumFractionDigits:2})} across ${s.activeFines.toLocaleString()} records` });
+
+  // ── Patron Tiers (from /api/charts/patron-tiers) ──
+  if (patronTiers && patronTiers.totalPatrons > 0) {
+    const lapsedPct = patronTiers.lapsed / patronTiers.totalPatrons;
+    if (lapsedPct > 0.3)
+      recs.push({ priority: 'high', category: 'Patron Engagement', title: 'Large lapsed patron segment — re-engagement campaign needed', detail: `${(lapsedPct*100).toFixed(1)}% of registered patrons (${patronTiers.lapsed.toLocaleString()}) borrowed previously but not in ${patronTiers.year}. Target these patrons with a re-engagement campaign: personalized emails, subject-specific reading lists, or return incentives.`, metric: `${patronTiers.lapsed.toLocaleString()} lapsed patrons (${(lapsedPct*100).toFixed(1)}% of ${patronTiers.totalPatrons.toLocaleString()})` });
+    else if (lapsedPct > 0.15)
+      recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Lapsed patron segment growing — proactive outreach recommended', detail: `${(lapsedPct*100).toFixed(1)}% of patrons are lapsed. Send targeted communications to patrons who have not borrowed since the previous year to prevent further disengagement.`, metric: `${patronTiers.lapsed.toLocaleString()} lapsed patrons` });
+
+    const neverBorrowedPct = patronTiers.neverBorrowed / patronTiers.totalPatrons;
+    if (neverBorrowedPct > 0.4)
+      recs.push({ priority: 'high', category: 'Patron Engagement', title: 'Large "never borrowed" segment — library registration not converting to use', detail: `${(neverBorrowedPct*100).toFixed(1)}% of registered patrons (${patronTiers.neverBorrowed.toLocaleString()}) have never borrowed a single item. Investigate whether these are inactive/graduated accounts. For active students, run new-student library orientation and integrate library assignments in first-year courses.`, metric: `${patronTiers.neverBorrowed.toLocaleString()} patrons with zero borrowing history` });
+    else if (neverBorrowedPct > 0.25)
+      recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'High proportion of non-borrowing patrons', detail: `${(neverBorrowedPct*100).toFixed(1)}% of patrons have never borrowed. Review if patron database is inflated with inactive records. For current students, integrate library use into orientation and coursework.`, metric: `${patronTiers.neverBorrowed.toLocaleString()} non-borrowing patrons (${(neverBorrowedPct*100).toFixed(1)}%)` });
+
+    const newPatronGrowth = patronTiers.totalPatrons > 0 ? (patronTiers.newThisYear / patronTiers.totalPatrons * 100) : 0;
+    if (newPatronGrowth < 3)
+      recs.push({ priority: 'low', category: 'Patron Engagement', title: 'Low patron base growth — review registration process', detail: `Only ${newPatronGrowth.toFixed(1)}% patron growth this year (${patronTiers.newThisYear.toLocaleString()} new patrons). Ensure library registration is part of student enrollment and faculty onboarding. A stagnant patron base limits future circulation growth.`, metric: `${patronTiers.newThisYear.toLocaleString()} new patrons in ${patronTiers.year}` });
+  }
+
+  // ── Retention (from /api/charts/patron-retention) ──
+  if (retention) {
+    if (retention.retentionRate < 40)
+      recs.push({ priority: 'high', category: 'Patron Engagement', title: 'Low patron retention — majority of borrowers not returning', detail: `Only ${retention.retentionRate}% of patrons active in ${retention.year - 1} borrowed again in ${retention.year}. This indicates a systemic engagement failure. Investigate loan satisfaction, collection relevance, and library accessibility. Introduce re-engagement campaigns before the new academic year.`, metric: `${retention.retained.toLocaleString()} retained of ${retention.activeLastYear.toLocaleString()} prior-year borrowers (${retention.retentionRate}% retention)` });
+    else if (retention.retentionRate < 60)
+      recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Patron retention below 60% — strengthen repeat engagement', detail: `${retention.retentionRate}% of last year's borrowers returned this year. Build on this with regular communication: new acquisition alerts, reading recommendations, and renewed faculty liaison programs.`, metric: `${retention.retentionRate}% year-over-year retention rate` });
+    else
+      recs.push({ priority: 'low', category: 'Patron Engagement', title: 'Healthy patron retention — maintain engagement programs', detail: `${retention.retentionRate}% of previous-year borrowers returned this year. Continue current outreach activities and document this metric in AACCUP/ISO library impact reports.`, metric: `${retention.retentionRate}% retention, ${retention.newBorrowers.toLocaleString()} new borrowers in ${retention.year}` });
+  }
 
   // ── CHED Requirements ──
   if (chedStats && !chedStats.error) {
@@ -241,15 +321,49 @@ function buildRecommendations(s: Stats, chedStats: Record<string,number> | null,
 
     if ((chedStats.withdrawnThisYear ?? 0) === 0)
       recs.push({ priority: 'low', category: 'CHED Compliance', title: 'No weeding recorded this year (§4.a.6)', detail: 'CHED CMO 22 §4.a.6 expects an active weeding program. Document and record withdrawals in Destiny. Even a small, systematic weeding effort satisfies this requirement and demonstrates good collection management.', metric: '0 items withdrawn this year' });
+
+    // Collection currency: items last 5 years (CHED §4.b.4 ≥ 20%)
+    const chedTotalItems = chedStats.totalItems || 1;
+    const currency5yr = chedStats.itemsLast5Years ? chedStats.itemsLast5Years / chedTotalItems : null;
+    if (currency5yr !== null && currency5yr < 0.20)
+      recs.push({ priority: 'high', category: 'CHED Compliance', title: 'Collection currency critically low — <20% acquired last 5 years (§4.b.4)', detail: `Only ${(currency5yr*100).toFixed(1)}% of the collection was acquired in the last 5 years. CHED CMO 22 §4.b.4 expects at least 20% of items to be recent. Prioritize purchasing materials published within the last 5 years, especially in rapidly changing fields.`, metric: `${(currency5yr*100).toFixed(1)}% of items acquired last 5 years (${(chedStats.itemsLast5Years ?? 0).toLocaleString()} of ${chedTotalItems.toLocaleString()})` });
+    else if (currency5yr !== null && currency5yr < 0.30)
+      recs.push({ priority: 'medium', category: 'CHED Compliance', title: 'Collection currency below 30% — boost recent acquisitions', detail: `${(currency5yr*100).toFixed(1)}% of items are from the last 5 years. Aim for ≥ 30% to demonstrate an active, current collection. Focus acquisitions on new editions and recently published research in core disciplines.`, metric: `${(currency5yr*100).toFixed(1)}% of items from last 5 years` });
+
+    // Collection currency: items last 10 years (≥ 35%)
+    const currency10yr = chedStats.itemsLast10Years ? chedStats.itemsLast10Years / chedTotalItems : null;
+    if (currency10yr !== null && currency10yr < 0.35)
+      recs.push({ priority: 'medium', category: 'CHED Compliance', title: 'Long-term collection currency below 35% (§4.b.4)', detail: `Only ${(currency10yr*100).toFixed(1)}% of the collection is from the last 10 years (target ≥ 35%). Schedule a systematic weeding program targeting materials older than 15 years, starting with science, technology, and professional subjects where currency matters most.`, metric: `${(currency10yr*100).toFixed(1)}% of items from last 10 years` });
+
+    // Acquisition spend trend
+    if ((chedStats.acquisitionSpendThisYear ?? 0) < (chedStats.acquisitionSpendLastYear ?? 0) * 0.8 && (chedStats.acquisitionSpendLastYear ?? 0) > 0)
+      recs.push({ priority: 'medium', category: 'CHED Compliance', title: 'Acquisition budget declining year-over-year', detail: `This year's acquisition spend (₱${(chedStats.acquisitionSpendThisYear ?? 0).toLocaleString('en-PH', {minimumFractionDigits:2})}) is more than 20% below last year (₱${(chedStats.acquisitionSpendLastYear ?? 0).toLocaleString('en-PH', {minimumFractionDigits:2})}). A sustained decline will affect collection currency scores and CHED compliance ratings. Present trend data to administration to justify budget restoration.`, metric: `₱${(chedStats.acquisitionSpendThisYear ?? 0).toLocaleString('en-PH', {minimumFractionDigits:2})} this year vs ₱${(chedStats.acquisitionSpendLastYear ?? 0).toLocaleString('en-PH', {minimumFractionDigits:2})} last year` });
   }
 
-  // ── ISO Targets ──
+  // ── ISO / Cross-Standard Targets ──
   const itemsPerPatron = totalItems / totalPatrons;
   if (itemsPerPatron < 3)
     recs.push({ priority: 'medium', category: 'ISO Standards', title: 'Low items-per-patron ratio (ISO 2789 §6.3.2)', detail: 'ISO 2789 benchmarks suggest at least 3–5 items per registered user for academic libraries. Increase acquisitions or review if patron registration is inflated by inactive records.', metric: `${itemsPerPatron.toFixed(2)} items per patron` });
 
+  // Breadth: titles per patron (ISO ≥ 3)
+  const titlesPerPatron = uniqueTitles / totalPatrons;
+  if (titlesPerPatron < 3)
+    recs.push({ priority: 'medium', category: 'ISO Standards', title: 'Collection breadth below ISO benchmark (< 3 titles per patron)', detail: `Only ${titlesPerPatron.toFixed(2)} unique titles per registered patron (ISO target ≥ 3). Focus acquisitions on unique titles across subject areas rather than additional copies of existing titles.`, metric: `${uniqueTitles.toLocaleString()} titles ÷ ${totalPatrons.toLocaleString()} patrons = ${titlesPerPatron.toFixed(2)}` });
+
+  // New items per patron — resource growth signal
+  const newPerPatron = s.newItemsThisYear / totalPatrons;
+  if (newPerPatron < 0.5)
+    recs.push({ priority: 'medium', category: 'ISO Standards', title: 'Very few new items per patron added this year', detail: `Only ${newPerPatron.toFixed(2)} new items per patron were added this year. IFLA/ISO standards recommend continuous collection growth relative to user population. Advocate for acquisition budget increases citing this ratio in budget proposals.`, metric: `${s.newItemsThisYear.toLocaleString()} new items ÷ ${totalPatrons.toLocaleString()} patrons = ${newPerPatron.toFixed(2)}` });
+
+  // ── Positive / Benchmarked Excellence ──
   if (activeRate > 0.6 && turnover > 2)
     recs.push({ priority: 'low', category: 'ISO Standards', title: 'Strong performance — document for accreditation', detail: 'High patron reach and collection turnover are excellent accreditation evidence. Prepare an annual library report citing ISO 16439 impact indicators and ISO 11620 performance metrics for submission to AACCUP/PACUCOA.', metric: `${(activeRate*100).toFixed(1)}% reach, ${turnover.toFixed(2)}x turnover` });
+
+  if (deadStockPct < 0.1 && refreshRate >= 0.05)
+    recs.push({ priority: 'low', category: 'Collection Development', title: 'Collection is well-maintained and current', detail: 'Low dead stock and a healthy refresh rate indicate disciplined collection management. Document the weeding and acquisition process for AACCUP §D accreditation evidence.', metric: `${(deadStockPct*100).toFixed(1)}% dead stock, ${(refreshRate*100).toFixed(1)}% refresh rate` });
+
+  if (s.totalFinesBalance === 0 && s.activeFines === 0)
+    recs.push({ priority: 'low', category: 'Revenue', title: 'No outstanding fines — clean accounts', detail: 'No active fine records found. Ensure the system is actively recording fines so that patron accountability is maintained. If fines are not enforced, review policy to avoid patron account inflation.', metric: '₱0.00 outstanding fines' });
 
   // Sort: high → medium → low
   const order = { high: 0, medium: 1, low: 2 };
@@ -262,8 +376,8 @@ const PRIORITY_STYLE: Record<string, { badge: string; border: string; icon: stri
   low:    { badge: 'bg-blue-100 text-blue-700',   border: 'border-l-4 border-blue-400',  icon: '🔵' },
 };
 
-function RecommendedActions({ stats, chedStats, year }: { stats: Stats; chedStats: Record<string,number> | null; year: number }) {
-  const recs = buildRecommendations(stats, chedStats, year);
+function RecommendedActions({ stats, chedStats, year, patronTiers, retention }: { stats: Stats; chedStats: Record<string,number> | null; year: number; patronTiers?: PatronTiers | null; retention?: RetentionStats | null }) {
+  const recs = buildRecommendations(stats, chedStats, year, patronTiers, retention);
   const high   = recs.filter(r => r.priority === 'high');
   const medium = recs.filter(r => r.priority === 'medium');
   const low    = recs.filter(r => r.priority === 'low');
@@ -4539,7 +4653,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Recommended Actions ── */}
-          {s && !s.error && <RecommendedActions stats={s} chedStats={chedStats} year={year} />}
+          {s && !s.error && <RecommendedActions stats={s} chedStats={chedStats} year={year} patronTiers={patronTiers} retention={retention} />}
         </div>
 
         {/* Tab: Trends */}
