@@ -306,7 +306,7 @@ function StrategicTab({
   year: number;
 }) {
   const [stored, setStored]           = useState<StrategicStored>({ enrolledStudents: null, annualBudget: null });
-  const [sbLoading, setSbLoading]     = useState(true);
+  const [sbLoading, setSbLoading]     = useState(false);
   const [sbError, setSbError]         = useState<string | null>(null);
   const [editing, setEditing]         = useState<'enrolledStudents' | 'annualBudget' | null>(null);
   const [draft, setDraft]             = useState('');
@@ -543,9 +543,7 @@ function StrategicTab({
             ⚠️ Could not load saved values from Supabase ({sbError}). You can still enter values below — create the <code>green_metrics</code> table in Supabase first to enable saving.
           </div>
         )}
-        {sbLoading ? (
-          <div className="text-sm text-gray-400">Loading saved values…</div>
-        ) : (
+        {sbLoading ? null : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <ManualInput fieldKey="enrolledStudents" label="Total Enrolled Students" placeholder="e.g. 3500" />
             <ManualInput fieldKey="annualBudget" label="Annual Library Budget (₱)" placeholder="e.g. 500000" prefix="₱" />
@@ -688,7 +686,7 @@ type StoredValues = Record<string, { value: number; notes: string; date: string 
 
 function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
   const [stored, setStored]       = useState<StoredValues>({});
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading]     = useState(false);
   const [supabaseError, setSupabaseError] = useState<string | null>(null);
   const [saving, setSaving]       = useState<MetricID | null>(null);
   const [editing, setEditing]     = useState<MetricID | null>(null);
@@ -766,12 +764,6 @@ function GreenLibraryTab({ reuseRate }: { reuseRate: number | null }) {
 
   const categories = [...new Set(GREEN_METRICS.map(m => m.cat))];
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-20 text-gray-400">
-      <svg className="animate-spin w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-      Loading Green Library metrics from Supabase…
-    </div>
-  );
 
 
   return (
