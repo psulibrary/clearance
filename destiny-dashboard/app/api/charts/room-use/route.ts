@@ -45,12 +45,30 @@ export async function GET(request: NextRequest) {
     // Find the most common TransType (likely check-in = highest volume)
     const topType = combos[0]?.TransType ?? 1;
 
-    // Among that TransType, find non-zero modifiers (in-library candidates)
-    const inLibCandidates = combos.filter(c => c.TransType === topType && c.TransModifier !== 0);
+    // Aggregate non-zero modifiers across ALL TransTypes to find the in-library flag.
+    // TransType 30 uses unique large modifier values (looks like timestamps/IDs), so exclude it.
+    // The in-library modifier is whichever non-zero value appears most frequently.
+    const modifierTotals: Record<number, number> = {};
+    for (const c of combos) {
+      if (c.TransType === 30) continue;
+      if (c.TransModifier === 0) continue;
+      modifierTotals[c.TransModifier] = (modifierTotals[c.TransModifier] ?? 0) + c.cnt;
+    }
+    const sortedModifiers = Object.entries(modifierTotals)
+      .map(([mod, total]) => ({ mod: Number(mod), total }))
+      .sort((a, b) => b.total - a.total);
 
-    // Use the first non-zero modifier as the in-library modifier (most common pattern in Destiny)
-    // If none found, fall back to a WHERE clause that finds any non-zero modifier
-    const inLibModifier: number | null = inLibCandidates.length > 0 ? inLibCandidates[0].TransModifier : null;
+    // In-library candidates: all entries for the top modifier value
+    const inLibCandidates = sortedModifiers.length > 0
+      ? combos.filter(c => c.TransModifier === sortedModifiers[0].mod && c.TransType !== 30)
+      : [];
+
+    // The in-library modifier (most common non-zero modifier across all TransTypes)
+    const inLibModifier: number | null = sortedModifiers.length > 0 ? sortedModifiers[0].mod : null;
+
+    // In Destiny, in-library use = Check In (TransType 2) with the in-library modifier.
+    // If TransType 2 exists with this modifier, use it; otherwise use all TransTypes with that modifier.
+    const checkInType = inLibCandidates.find(c => c.TransType === 2)?.TransType ?? inLibCandidates[0]?.TransType ?? topType;
 
     const req = pool.request();
     req.input('year', sql.Int, year);
@@ -63,7 +81,7 @@ export async function GET(request: NextRequest) {
 
     if (inLibModifier !== null) {
       req.input('mod', sql.Int, inLibModifier);
-      req.input('typ', sql.TinyInt, topType);
+      req.input('typ', sql.TinyInt, checkInType);
 
       const summaryRes = await req.query(`
         SELECT COUNT(*) AS totalThisYear
@@ -123,8 +141,10 @@ export async function GET(request: NextRequest) {
       inLibEnabled,
       debug: {
         inLibModifier,
+        checkInType,
         topType,
         inLibCandidates,
+        sortedModifiers,
         allCombos: combos,
       },
     });
