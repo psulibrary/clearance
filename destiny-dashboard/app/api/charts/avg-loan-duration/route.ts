@@ -7,38 +7,44 @@ export async function GET() {
     const pool = await getPool();
     const p = await getSchemaPrefix();
 
+    // Current checkouts: DateOut is set while item is out, cleared on return
     const result = await pool.request().query(`
       SELECT
         ISNULL(pt.PatronTypeDescription, 'Unknown') AS patronType,
-        COUNT(*)                                     AS totalReturned,
-        AVG(CAST(DATEDIFF(day, c.DateOut, c.DateReturned) AS float)) AS avgDays,
-        AVG(CAST(DATEDIFF(day, c.DateOut, c.DateDue) AS float))      AS avgLoanPeriod
+        COUNT(*)                                     AS currentlyOut,
+        AVG(CAST(DATEDIFF(day, c.DateOut, GETDATE()) AS float))  AS avgDaysOut,
+        AVG(CAST(DATEDIFF(day, c.DateOut, c.DateDue) AS float))  AS avgLoanPeriod,
+        SUM(CASE WHEN DATEDIFF(day, c.DateDue, GETDATE()) > 0 THEN 1 ELSE 0 END) AS overdueCount
       FROM ${t(p,'Copy')} c
       JOIN ${t(p,'SitePatron')} sp ON sp.PatronID = c.PatronID AND sp.SiteID = c.SiteID
       LEFT JOIN ${t(p,'PatronType')} pt ON pt.PatronTypeID = sp.PatronTypeID
-      WHERE c.DateReturned IS NOT NULL
-        AND c.DateOut IS NOT NULL
+      WHERE c.PatronID IS NOT NULL
+        AND c.DateReturned IS NULL
         AND c.DateWithdrawn IS NULL
-        AND DATEDIFF(day, c.DateOut, c.DateReturned) BETWEEN 0 AND 365
+        AND c.DateOut IS NOT NULL
+        AND c.DateDue IS NOT NULL
       GROUP BY pt.PatronTypeDescription
-      ORDER BY avgDays DESC
+      ORDER BY avgDaysOut DESC
     `);
 
     const overall = await pool.request().query(`
       SELECT
-        AVG(CAST(DATEDIFF(day, DateOut, DateReturned) AS float)) AS avgDays,
-        AVG(CAST(DATEDIFF(day, DateOut, DateDue) AS float))      AS avgLoanPeriod,
-        COUNT(*) AS totalReturned
+        COUNT(*)                                                   AS currentlyOut,
+        AVG(CAST(DATEDIFF(day, DateOut, GETDATE()) AS float))     AS avgDaysOut,
+        AVG(CAST(DATEDIFF(day, DateOut, DateDue) AS float))       AS avgLoanPeriod,
+        SUM(CASE WHEN DATEDIFF(day, DateDue, GETDATE()) > 0 THEN 1 ELSE 0 END) AS overdueCount
       FROM ${t(p,'Copy')}
-      WHERE DateReturned IS NOT NULL
-        AND DateOut IS NOT NULL
+      WHERE PatronID IS NOT NULL
+        AND DateReturned IS NULL
         AND DateWithdrawn IS NULL
-        AND DATEDIFF(day, DateOut, DateReturned) BETWEEN 0 AND 365
+        AND DateOut IS NOT NULL
+        AND DateDue IS NOT NULL
     `);
 
     return NextResponse.json({
       byPatronType: result.recordset,
       overall: overall.recordset[0],
+      note: 'Based on currently checked-out items (DateOut is cleared on return in Destiny)',
     });
   } catch (err: unknown) {
     return NextResponse.json(

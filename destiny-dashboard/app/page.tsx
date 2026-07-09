@@ -986,7 +986,7 @@ export default function Dashboard() {
   type OverdueItem    = { CopyBarcode: string; Title: string; Author: string; PatronBarcode: string; PatronType: string; DateDue: string; DaysOverdue: number; ReplacementCost: number };
   type CallNumRow     = { range: string; firstDigit: string; items: number; titles: number; checkouts: number; utilRate: number };
   type PeakDayRow    = { day: string; checkouts: number };
-  type LoanDurRow    = { patronType: string; totalReturned: number; avgDays: number; avgLoanPeriod: number };
+  type LoanDurRow    = { patronType: string; currentlyOut: number; avgDaysOut: number; avgLoanPeriod: number; overdueCount: number };
   type WeedItem      = { Title: string; Author: string; CallNumber: string; CopyBarcode: string; Acquired: string; LastBorrowed: string; daysSinceActivity: number; Price: number };
   type NeverBorrowedRow = { firstDigit: string; neverBorrowedTitles: number; neverBorrowedItems: number };
   type LapsedRow     = { patronType: string; lapsedCount: number };
@@ -1003,7 +1003,7 @@ export default function Dashboard() {
   const [extraLoaded, setExtraLoaded]     = useState({ collection: false, patrons: false });
 
   const [peakDays, setPeakDays]           = useState<PeakDayRow[]>([]);
-  const [loanDur, setLoanDur]             = useState<{ byPatronType: LoanDurRow[]; overall: { avgDays: number; avgLoanPeriod: number; totalReturned: number } } | null>(null);
+  const [loanDur, setLoanDur]             = useState<{ byPatronType: LoanDurRow[]; overall: { avgDaysOut: number; avgLoanPeriod: number; currentlyOut: number; overdueCount: number }; note: string } | null>(null);
   const [weedData, setWeedData]           = useState<{ items: WeedItem[]; summary: { candidateCount: number; totalValue: number }; yearsThreshold: number } | null>(null);
   const [neverBorrowed, setNeverBorrowed] = useState<{ byDewey: NeverBorrowedRow[]; totals: { totalTitles: number; totalItems: number; neverBorrowedItems: number; neverBorrowedTitles: number } } | null>(null);
   const [lapsedData, setLapsedData]       = useState<{ activeLastYear: number; activeThisYear: number; lapsedCount: number; lapsedRate: number; year: number; byType: LapsedRow[] } | null>(null);
@@ -1517,25 +1517,29 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>⏱</span>Average Loan Duration by Patron Type
             </h2>
-            <p className="text-xs text-gray-400 mb-4">How long patrons actually keep items vs. the loan period. High ratios may signal needed loan period adjustments.</p>
+            <p className="text-xs text-gray-400 mb-4">How long current checkouts have been out vs. the scheduled loan period — based on items currently checked out.</p>
             {extra2Loading.loanDur ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.loanDur ? (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.loanDur}</div>
             ) : loanDur ? (
               <>
-                <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-4 gap-4 mb-4">
                   <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                    <div className="text-3xl font-bold text-blue-700">{loanDur.overall.avgDays?.toFixed(1) ?? '—'}</div>
-                    <div className="text-sm text-gray-500 mt-1">Avg Days Kept</div>
+                    <div className="text-3xl font-bold text-blue-700">{loanDur.overall.avgDaysOut?.toFixed(1) ?? '—'}</div>
+                    <div className="text-sm text-gray-500 mt-1">Avg Days Out (current)</div>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm p-4 text-center">
                     <div className="text-3xl font-bold text-indigo-700">{loanDur.overall.avgLoanPeriod?.toFixed(1) ?? '—'}</div>
                     <div className="text-sm text-gray-500 mt-1">Avg Loan Period (days)</div>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-                    <div className="text-3xl font-bold text-gray-700">{loanDur.overall.totalReturned?.toLocaleString() ?? '—'}</div>
-                    <div className="text-sm text-gray-500 mt-1">Total Returns Analyzed</div>
+                    <div className="text-3xl font-bold text-gray-700">{loanDur.overall.currentlyOut?.toLocaleString() ?? '—'}</div>
+                    <div className="text-sm text-gray-500 mt-1">Items Currently Out</div>
+                  </div>
+                  <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-bold text-red-600">{loanDur.overall.overdueCount?.toLocaleString() ?? '—'}</div>
+                    <div className="text-sm text-red-500 mt-1">Overdue Now</div>
                   </div>
                 </div>
                 {loanDur.byPatronType.length > 0 && (
@@ -1544,18 +1548,20 @@ export default function Dashboard() {
                       <thead>
                         <tr className="bg-blue-700 text-white">
                           <th className="text-left p-2">Patron Type</th>
-                          <th className="text-right p-2">Avg Days Kept</th>
+                          <th className="text-right p-2">Currently Out</th>
+                          <th className="text-right p-2">Avg Days Out</th>
                           <th className="text-right p-2">Avg Loan Period</th>
-                          <th className="text-right p-2">Returns</th>
+                          <th className="text-right p-2">Overdue</th>
                         </tr>
                       </thead>
                       <tbody>
                         {loanDur.byPatronType.map((r, i) => (
                           <tr key={r.patronType} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                             <td className="p-2 border-b border-gray-100 font-medium">{r.patronType}</td>
-                            <td className="p-2 border-b border-gray-100 text-right">{r.avgDays?.toFixed(1)}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.currentlyOut?.toLocaleString()}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.avgDaysOut?.toFixed(1)}</td>
                             <td className="p-2 border-b border-gray-100 text-right">{r.avgLoanPeriod?.toFixed(1)}</td>
-                            <td className="p-2 border-b border-gray-100 text-right">{r.totalReturned?.toLocaleString()}</td>
+                            <td className="p-2 border-b border-gray-100 text-right font-semibold text-red-600">{r.overdueCount?.toLocaleString()}</td>
                           </tr>
                         ))}
                       </tbody>
