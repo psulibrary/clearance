@@ -252,16 +252,21 @@ function buildRecommendations(
     recs.push({ priority: 'medium', category: 'Overdue Management', title: 'Long average loan duration — review loan periods', detail: `Average loan period is ${s.avgLoanDays.toFixed(0)} days. Extended loan durations reduce item availability and increase overdue risk. Consider shortening loan periods for high-demand items or implementing tiered loan policies by patron type.`, metric: `${s.avgLoanDays.toFixed(1)}-day average loan duration` });
 
   // ── Patron Engagement ──
+  // "Borrow" = checkout OR in-library room use
+  const combinedActiveUsers = roomUseThisYear != null
+    ? Math.max(s.activePatronsThisYear, s.activePatronsThisYear) // placeholder — actual combined count comes from combinedUse API
+    : s.activePatronsThisYear;
   const activeRate = s.activePatronsThisYear / totalPatrons;
+  const roomUseNote = (roomUseThisYear ?? 0) > 0 ? ` Room use adds ${(roomUseThisYear ?? 0).toLocaleString()} additional transactions — check Active Users (combined) card for true reach.` : '';
   if (activeRate < 0.2)
-    recs.push({ priority: 'high', category: 'Patron Engagement', title: 'Low patron reach — library is underused', detail: `Only ${(activeRate*100).toFixed(1)}% of registered patrons borrowed at least once this year. Run orientation sessions, literacy programs, and coordinate with faculty to integrate library use into coursework.`, metric: `${s.activePatronsThisYear.toLocaleString()} of ${totalPatrons.toLocaleString()} patrons active` });
+    recs.push({ priority: 'high', category: 'Patron Engagement', title: 'Low patron reach — library may be underused', detail: `Only ${(activeRate*100).toFixed(1)}% of registered patrons checked out at least once this year. If room use (in-library reading) is significant, actual reach may be higher.${roomUseNote} Run orientation sessions, literacy programs, and integrate library use into coursework.`, metric: `${s.activePatronsThisYear.toLocaleString()} checkout-active patrons of ${totalPatrons.toLocaleString()} total` });
   else if (activeRate < 0.4)
-    recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Patron reach below 40% — expand outreach', detail: 'Strengthen faculty liaison programs, create subject-specific reading lists, and promote new acquisitions to relevant departments.', metric: `${(activeRate*100).toFixed(1)}% patron reach rate` });
+    recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Patron reach below 40% (checkout only)', detail: `${(activeRate*100).toFixed(1)}% of patrons checked out this year.${roomUseNote} Strengthen faculty liaison programs, create subject-specific reading lists, and promote new acquisitions.`, metric: `${(activeRate*100).toFixed(1)}% checkout reach rate` });
 
   const activePatrons = s.activePatronsThisYear || 1;
-  const loansPerActivePatron = s.checkoutsThisYear / activePatrons;
+  const loansPerActivePatron = totalUseThisYear / activePatrons;
   if (loansPerActivePatron < 3)
-    recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Low borrowing depth — active patrons borrow infrequently', detail: `Active patrons averaged only ${loansPerActivePatron.toFixed(1)} loans each this year (target ≥ 5 for academic libraries). Introduce reading challenges, extended loan periods, or course-integrated library assignments to increase repeat borrowing.`, metric: `${loansPerActivePatron.toFixed(1)} loans per active patron (ISO 11620 B.2.1.2)` });
+    recs.push({ priority: 'medium', category: 'Patron Engagement', title: 'Low use depth — active patrons use library infrequently', detail: `Active patrons averaged only ${loansPerActivePatron.toFixed(1)} uses (checkouts + room use) each this year (target ≥ 5 for academic libraries). Introduce reading challenges, extended loan periods, or course-integrated library assignments to increase repeat use.`, metric: `${loansPerActivePatron.toFixed(1)} uses per active patron (ISO 11620 B.2.1.2)` });
   else if (loansPerActivePatron < 5)
     recs.push({ priority: 'low', category: 'Patron Engagement', title: 'Borrowing depth approaching target', detail: `Active patrons averaged ${loansPerActivePatron.toFixed(1)} loans each. Increase to ≥ 5 by promoting faculty reserve lists, new arrivals, and subject-specific reading guides.`, metric: `${loansPerActivePatron.toFixed(1)} loans per active patron` });
 
@@ -2293,6 +2298,18 @@ export default function Dashboard() {
   const [roomUse, setRoomUse]             = useState<RoomUseData | null>(null);
   const [roomUseLoaded, setRoomUseLoaded] = useState(false);
 
+  type CombinedUseData = {
+    year: number;
+    roomUseAware: boolean;
+    checkoutPatronsThisYear: number;
+    roomUsePatronsThisYear: number;
+    roomUseOnlyUsersThisYear: number;
+    activeUsersThisYear: number;
+    neverUsedItems: number;
+    roomUseOnlyItems: number;
+  };
+  const [combinedUse, setCombinedUse] = useState<CombinedUseData | null>(null);
+
   type MonthlyRow = { year: number; month: number; checkouts: number; checkins: number; active_patrons: number; new_patrons: number; new_items: number };
   type DailySnap  = { snapshot_date: string; total_items: number; checked_out: number; active_patrons_30d: number; checkouts_30d: number; total_patrons: number };
   const [trendsLoaded,    setTrendsLoaded]    = useState(false);
@@ -2420,6 +2437,7 @@ export default function Dashboard() {
     if (activeTab === 'patrons' && !roomUseLoaded) {
       setRoomUseLoaded(true);
       fetch(`/api/charts/room-use?year=${year}`).then(r => r.json()).then(setRoomUse).catch(() => {});
+      fetch(`/api/charts/combined-use?year=${year}`).then(r => r.json()).then(d => { if (!d.error) setCombinedUse(d); }).catch(() => {});
     }
   }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded, roomUseLoaded]);
 
@@ -2645,7 +2663,7 @@ export default function Dashboard() {
             <Card label="New Items This Month" value={fmt(s?.newItemsThisMonth)} sub="added to catalog" />
             <Card label={`New Items in ${year}`} value={fmt(s?.newItemsThisYear)} sub="added to catalog" />
             <Card label="Withdrawn Items"      value={fmt(s?.withdrawnItems)}    sub="removed from collection" color="text-gray-500" />
-            <Card label="Never Checked Out"    value={fmt(s?.neverCheckedOut)}   sub={`${deadStockPct} of collection — verify room use before weeding`} color="text-orange-600" />
+            <Card label="No Checkout (verify room use)" value={fmt(s?.neverCheckedOut)} sub={`${deadStockPct} of collection — some may be room-use only`} color="text-orange-600" />
           </Section>
 
           <Section title={`Circulation Activity — ${periodLabel}`} icon="📤">
@@ -2742,12 +2760,23 @@ export default function Dashboard() {
         {/* Tab: Patrons */}
         <div className={activeTab === 'patrons' ? 'block' : 'hidden print:block'}>
           <Section title={`Patron Engagement & Impact — ${periodLabel}`} icon="👥">
-            <Card label="Active Borrowers Now"          value={fmt(s?.patronsWithCheckouts)}    sub="currently have items out" color="text-blue-700" />
-            <Card label="Active Patrons (Last 30 Days)" value={fmt(s?.activePatronsLast30Days)} sub="borrowed in last 30 days" color="text-blue-700" />
-            <Card label={`Active Patrons — ${periodLabel}`} value={fmt(s?.activePatronsThisYear)} sub="borrowed at least once" color="text-green-700" />
+            <Card label="Active Users Now"              value={fmt(s?.patronsWithCheckouts)}    sub="currently have items checked out" color="text-blue-700" />
+            <Card label="Active Users (Last 30 Days)"   value={fmt(s?.activePatronsLast30Days)} sub="checked out in last 30 days (checkout only)" color="text-blue-700" />
+            <Card label={`Active Users — ${periodLabel}`}
+              value={combinedUse ? fmt(combinedUse.activeUsersThisYear) : fmt(s?.activePatronsThisYear)}
+              sub={combinedUse ? `used library (checkout or room use) — ${periodLabel}` : `checked out at least once — ${periodLabel}`}
+              color="text-green-700" />
+            {combinedUse && combinedUse.roomUseOnlyUsersThisYear > 0 && (
+              <Card label="Room-Use-Only Users"
+                value={fmt(combinedUse.roomUseOnlyUsersThisYear)}
+                sub={`used library in-room only, no checkout — ${periodLabel}`}
+                color="text-violet-700" />
+            )}
             <Card label={`New Patrons — ${periodLabel}`} value={fmt(s?.newPatronsThisYear)} color="text-green-700" />
-            <Card label="Patron Reach Rate"           value={pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)} sub={`% of patrons who borrowed (${periodLabel})`} color="text-indigo-700" />
-            <Card label="Patron Activation Rate"      value={pct(s?.patronsWithCheckouts ?? 0, s?.totalPatrons ?? 0)} sub="% currently borrowing" color="text-amber-700" />
+            <Card label="Patron Reach Rate"
+              value={combinedUse && s?.totalPatrons ? pct(combinedUse.activeUsersThisYear, s.totalPatrons) : pct(s?.activePatronsThisYear ?? 0, s?.totalPatrons ?? 0)}
+              sub={combinedUse ? `% of patrons who used library (checkout or room use) — ${periodLabel}` : `% of patrons who checked out (${periodLabel})`}
+              color="text-indigo-700" />
             <Card label="Patrons with Overdue"        value={fmt(s?.patronsWithOverdue)}       sub="need follow-up" color="text-red-700" />
             <Card label="Overdue Rate"                value={pct(s?.overdue ?? 0, s?.checkedOut ?? 0)} sub="% of checkouts overdue" color="text-red-600" />
           </Section>
@@ -2793,7 +2822,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🎯</span>Patron Engagement Tiers ({patronTiers.year})
               </h2>
-              <p className="text-xs text-gray-600 mb-4">Breakdown of your patron base by engagement level — active borrowers, lapsed, and never-borrowed.</p>
+              <p className="text-xs text-gray-600 mb-4">Breakdown of your patron base by engagement level — active users (checkout or room use), lapsed, and never used. Note: &ldquo;Active&rdquo; here counts checkout history only; see Active Users card above for combined checkout + room use count.</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
                 <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
                   <div className="text-3xl font-bold text-green-700">{patronTiers.activeThisYear.toLocaleString()}</div>
@@ -2807,7 +2836,7 @@ export default function Dashboard() {
                 </div>
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
                   <div className="text-3xl font-bold text-red-600">{patronTiers.neverBorrowed.toLocaleString()}</div>
-                  <div className="text-sm font-medium text-gray-600">Never Borrowed</div>
+                  <div className="text-sm font-medium text-gray-600">No Checkout History</div>
                   <div className="text-xs text-gray-600">{patronTiers.totalPatrons > 0 ? (patronTiers.neverBorrowed/patronTiers.totalPatrons*100).toFixed(1) : '—'}% of total</div>
                 </div>
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
@@ -2820,7 +2849,7 @@ export default function Dashboard() {
                 const tierData = [
                   { name: 'Active',        value: patronTiers.activeThisYear, color: '#10b981' },
                   { name: 'Lapsed',        value: patronTiers.lapsed,         color: '#f59e0b' },
-                  { name: 'Never Borrowed',value: patronTiers.neverBorrowed,  color: '#ef4444' },
+                  { name: 'No Checkout',   value: patronTiers.neverBorrowed,  color: '#ef4444' },
                 ];
                 return (
                   <div className="bg-white rounded-xl shadow-sm p-4">
@@ -2835,7 +2864,7 @@ export default function Dashboard() {
                       </BarChart>
                     </ResponsiveContainer>
                     <p className="text-xs text-gray-500 mt-2 text-center">
-                      Lapsed = registered patrons who borrowed before {patronTiers.year} but not this year. Never Borrowed = no borrowing history on record.
+                      Lapsed = checked out before {patronTiers.year} but not this year. No Checkout = no checkout history (may still have room use recorded). For combined borrow count (checkout + room use) see Active Users card above.
                     </p>
                   </div>
                 );
@@ -2884,11 +2913,19 @@ export default function Dashboard() {
               </h2>
               <p className="text-xs text-gray-600 mb-4">Decision metrics for outreach, fine collection policy, and demand planning.</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${s.activePatronsThisYear > 0 && s.checkoutsThisYear / s.activePatronsThisYear >= 5 ? 'border-green-400' : 'border-amber-400'}`}>
-                  <div className="text-3xl font-bold text-indigo-700">{s.activePatronsThisYear > 0 ? (s.checkoutsThisYear / s.activePatronsThisYear).toFixed(1) : '—'}</div>
-                  <div className="text-sm font-medium text-gray-600">Avg Loans per Active Borrower</div>
-                  <div className="text-xs text-gray-500">{periodLabel} · {s.activePatronsThisYear > 0 && s.checkoutsThisYear / s.activePatronsThisYear >= 5 ? '✓ High engagement' : '⚠ Low — consider outreach programs'}</div>
-                </div>
+                {(() => {
+                  const activeUsers = combinedUse?.activeUsersThisYear || s.activePatronsThisYear;
+                  const totalUse = s.checkoutsThisYear + (roomUse?.totalThisYear ?? 0);
+                  const usePerUser = activeUsers > 0 ? (totalUse / activeUsers).toFixed(1) : '—';
+                  const isHigh = activeUsers > 0 && totalUse / activeUsers >= 5;
+                  return (
+                    <div className={`bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 border-l-4 ${isHigh ? 'border-green-400' : 'border-amber-400'}`}>
+                      <div className="text-3xl font-bold text-indigo-700">{usePerUser}</div>
+                      <div className="text-sm font-medium text-gray-600">Avg Uses per Active User</div>
+                      <div className="text-xs text-gray-500">(checkouts + room use) ÷ active users · {periodLabel} · {isHigh ? '✓ High engagement' : '⚠ Low — consider outreach'}</div>
+                    </div>
+                  );
+                })()}
                 <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1">
                   <div className="text-3xl font-bold text-purple-700">{s.totalPatrons > 0 ? pct(s.holdsPlacedThisYear, s.totalPatrons) : '—'}</div>
                   <div className="text-sm font-medium text-gray-600">Hold Propensity Rate</div>
@@ -4180,11 +4217,11 @@ export default function Dashboard() {
                     action: s.activePatronsThisYear > 0 && s.checkoutsThisYear / s.activePatronsThisYear < 5 ? 'Low — run borrowing campaigns, reading challenges, or book displays to increase per-patron loans' : 'High engagement — sustain with new acquisitions and holds system',
                   },
                   {
-                    label: 'Patron Activation Gap (Dormant / Never-Borrowed %)',
+                    label: 'Patron Activation Gap (checkout only — room-use-only users counted in Active Users card)',
                     value: s.totalPatrons > 0 ? pct(s.totalPatrons - s.activePatronsThisYear, s.totalPatrons) : '—',
-                    benchmark: '< 30% non-active = healthy utilization (ISO 16439)',
+                    benchmark: '< 30% non-active = healthy utilization (ISO 16439) — "borrow" = checkout or room use',
                     pass: s.totalPatrons > 0 ? (s.totalPatrons - s.activePatronsThisYear) / s.totalPatrons < 0.30 : null,
-                    action: s.totalPatrons > 0 && (s.totalPatrons - s.activePatronsThisYear) / s.totalPatrons >= 0.30 ? `${fmt(s.totalPatrons - s.activePatronsThisYear)} non-active patrons — target with re-engagement outreach, email lists, or library orientation` : 'Most patrons are active — focus on deepening borrowing frequency',
+                    action: s.totalPatrons > 0 && (s.totalPatrons - s.activePatronsThisYear) / s.totalPatrons >= 0.30 ? `${fmt(s.totalPatrons - s.activePatronsThisYear)} patrons without a checkout — some may have room use. Target non-users with re-engagement outreach, orientation, or coursework integration` : 'Most patrons have checked out — also track room-use-only patrons in the Active Users (combined) card',
                   },
                   {
                     label: 'Never Checked Out Rate (checkout only — some may have room use)',
