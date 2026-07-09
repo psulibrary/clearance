@@ -2278,7 +2278,8 @@ export default function Dashboard() {
   const [extraLoaded2, setExtraLoaded2]   = useState({ collection: false, patrons: false });
   const [extra2Errors, setExtra2Errors]   = useState<Record<string, string>>({});
   const [extra2Loading, setExtra2Loading] = useState<Record<string, boolean>>({});
-  const [yoyData, setYoyData]             = useState<{year:number;checkouts:number;newPatrons:number;newItems:number}[]>([]);
+  const [yoyData, setYoyData]             = useState<{year:number;checkouts:number;roomUse:number;totalUse:number;activeUsers:number;newPatrons:number;newItems:number}[]>([]);
+  const [yoyRoomUseAware, setYoyRoomUseAware] = useState(false);
   const [patronTiers, setPatronTiers]     = useState<{totalPatrons:number;activeThisYear:number;lapsed:number;neverBorrowed:number;newThisYear:number;year:number}|null>(null);
   const [yoyLoaded, setYoyLoaded]         = useState(false);
 
@@ -2408,7 +2409,7 @@ export default function Dashboard() {
     }
     if ((activeTab === 'overview') && !yoyLoaded) {
       setYoyLoaded(true);
-      fetch('/api/charts/yoy-circulation').then(r=>r.json()).then(d=>{ if(d.years) setYoyData(d.years); }).catch(() => {});
+      fetch('/api/charts/yoy-circulation').then(r=>r.json()).then(d=>{ if(d.years) { setYoyData(d.years); setYoyRoomUseAware(!!d.roomUseAware); } }).catch(() => {});
     }
     if (activeTab === 'patrons' && !extraLoaded.patrons && !patronTiers) {
       fetch(`/api/charts/patron-tiers?year=${year}`).then(r=>r.json()).then(d=>{ if(d && !d.error) setPatronTiers(d); }).catch(() => {});
@@ -2434,7 +2435,7 @@ export default function Dashboard() {
         });
       })();
     }
-    if (activeTab === 'patrons' && !roomUseLoaded) {
+    if ((activeTab === 'patrons' || activeTab === 'overview') && !roomUseLoaded) {
       setRoomUseLoaded(true);
       fetch(`/api/charts/room-use?year=${year}`).then(r => r.json()).then(setRoomUse).catch(() => {});
       fetch(`/api/charts/combined-use?year=${year}`).then(r => r.json()).then(d => { if (!d.error) setCombinedUse(d); }).catch(() => {});
@@ -2634,28 +2635,45 @@ export default function Dashboard() {
         {/* Tab: Overview */}
         <div className={activeTab === 'overview' ? 'block' : 'hidden print:block'}>
           {/* Hero row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-            <div className="bg-blue-700 text-white rounded-xl p-5 flex flex-col gap-1">
-              <div className="text-4xl font-bold">{fmt(s?.totalItems)}</div>
-              <div className="text-sm font-medium text-blue-100">Total Items</div>
-              <div className="text-xs text-blue-300">{fmt(s?.uniqueTitles)} unique titles</div>
-            </div>
-            <div className="bg-amber-500 text-white rounded-xl p-5 flex flex-col gap-1">
-              <div className="text-4xl font-bold">{fmt(s?.checkedOut)}</div>
-              <div className="text-sm font-medium text-amber-100">Checked Out</div>
-              <div className="text-xs text-amber-200">{pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)} utilization</div>
-            </div>
-            <div className="bg-red-600 text-white rounded-xl p-5 flex flex-col gap-1">
-              <div className="text-4xl font-bold">{fmt(s?.overdue)}</div>
-              <div className="text-sm font-medium text-red-100">Overdue</div>
-              <div className="text-xs text-red-200">{fmt(s?.overdueOver30Days)} over 30 days</div>
-            </div>
-            <div className="bg-green-600 text-white rounded-xl p-5 flex flex-col gap-1">
-              <div className="text-4xl font-bold">{fmt(s?.totalPatrons)}</div>
-              <div className="text-sm font-medium text-green-100">Total Patrons</div>
-              <div className="text-xs text-green-200">{fmt(s?.newPatronsThisYear)} new in {year}</div>
-            </div>
-          </div>
+          {(() => {
+            const roomThisYear = roomUse?.totalThisYear ?? 0;
+            const totalUse = (s?.checkoutsThisYear ?? 0) + roomThisYear;
+            const activeUsersCount = combinedUse?.activeUsersThisYear ?? s?.activePatronsThisYear;
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+                <div className="bg-blue-700 text-white rounded-xl p-5 flex flex-col gap-1 col-span-1">
+                  <div className="text-4xl font-bold">{fmt(s?.totalItems)}</div>
+                  <div className="text-sm font-medium text-blue-100">Total Items</div>
+                  <div className="text-xs text-blue-300">{fmt(s?.uniqueTitles)} unique titles</div>
+                </div>
+                <div className="bg-indigo-600 text-white rounded-xl p-5 flex flex-col gap-1 col-span-1">
+                  <div className="text-4xl font-bold">{totalUse.toLocaleString()}</div>
+                  <div className="text-sm font-medium text-indigo-100">Total Uses {year}</div>
+                  <div className="text-xs text-indigo-200">{(s?.checkoutsThisYear ?? 0).toLocaleString()} checkouts + {roomThisYear.toLocaleString()} room use</div>
+                </div>
+                <div className="bg-amber-500 text-white rounded-xl p-5 flex flex-col gap-1 col-span-1">
+                  <div className="text-4xl font-bold">{fmt(s?.checkedOut)}</div>
+                  <div className="text-sm font-medium text-amber-100">Currently Out</div>
+                  <div className="text-xs text-amber-200">{pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)} of collection</div>
+                </div>
+                <div className="bg-red-600 text-white rounded-xl p-5 flex flex-col gap-1 col-span-1">
+                  <div className="text-4xl font-bold">{fmt(s?.overdue)}</div>
+                  <div className="text-sm font-medium text-red-100">Overdue</div>
+                  <div className="text-xs text-red-200">{fmt(s?.overdueOver30Days)} over 30 days</div>
+                </div>
+                <div className="bg-green-600 text-white rounded-xl p-5 flex flex-col gap-1 col-span-1">
+                  <div className="text-4xl font-bold">{fmt(s?.totalPatrons)}</div>
+                  <div className="text-sm font-medium text-green-100">Total Patrons</div>
+                  <div className="text-xs text-green-200">{fmt(s?.newPatronsThisYear)} new in {year}</div>
+                </div>
+                <div className="bg-violet-600 text-white rounded-xl p-5 flex flex-col gap-1 col-span-1">
+                  <div className="text-4xl font-bold">{fmt(activeUsersCount)}</div>
+                  <div className="text-sm font-medium text-violet-100">Active Users {year}</div>
+                  <div className="text-xs text-violet-200">checkout or room use · {s?.totalPatrons ? pct(activeUsersCount ?? 0, s.totalPatrons) : '—'} reach</div>
+                </div>
+              </div>
+            );
+          })()}
 
           <Section title="Collection Health" icon="📚">
             <Card label="Available Now"        value={fmt(s?.available)}         color="text-green-700" />
@@ -2670,20 +2688,32 @@ export default function Dashboard() {
             <Card label="Checkouts (Last 7 Days)"  value={fmt(s?.checkoutsLast7Days)}  color="text-blue-700" />
             <Card label="Checkouts (Last 30 Days)" value={fmt(s?.checkoutsLast30Days)} color="text-blue-700" />
             <Card label={`Checkouts — ${periodLabel}`} value={fmt(s?.checkoutsThisYear)} color="text-blue-700" />
-            <Card label="Collection Turnover"      value={turnoverRate}                  sub={`checkouts ÷ total items (${periodLabel})`} color="text-indigo-700" />
+            <Card label={`Room Use — ${periodLabel}`}
+              value={roomUse?.totalThisYear != null ? fmt(roomUse.totalThisYear) : (roomUseLoaded ? '0' : '…')}
+              sub="in-library reads (no checkout)" color="text-violet-700" />
+            <Card label={`Total Borrows — ${periodLabel}`}
+              value={fmt((s?.checkoutsThisYear ?? 0) + (roomUse?.totalThisYear ?? 0))}
+              sub="checkouts + room use" color="text-emerald-700" />
+            <Card label="Combined Use Turnover"
+              value={s?.totalItems ? (((s.checkoutsThisYear ?? 0) + (roomUse?.totalThisYear ?? 0)) / s.totalItems).toFixed(2) + 'x' : '—'}
+              sub={`total borrows ÷ total items (${periodLabel})`} color="text-indigo-700" />
             <Card label="Check-ins (Last 7 Days)"  value={fmt(s?.checkinsLast7Days)}    />
             <Card label="Check-ins (Last 30 Days)" value={fmt(s?.checkinsLast30Days)}   />
             <Card label="Avg Loan Duration"        value={days(s?.avgLoanDays)}          sub={`average days per loan (${periodLabel})`} color="text-purple-700" />
-            <Card label="Utilization Rate"         value={pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)} sub="items checked out vs total right now" color="text-amber-700" />
+            <Card label="Utilization Rate"         value={pct(s?.checkedOut ?? 0, s?.totalItems ?? 0)} sub="items currently checked out ÷ total" color="text-amber-700" />
           </Section>
 
           <Section title="Efficiency & Engagement Ratios" icon="📊">
             <Card label="Items per Patron"          value={s && s.totalPatrons ? (s.totalItems / s.totalPatrons).toFixed(2) : '—'} sub="ISO 2789 target: ≥ 3" color="text-indigo-700" />
-            <Card label="Loans per Patron"          value={s && s.totalPatrons ? (s.checkoutsThisYear / s.totalPatrons).toFixed(2) : '—'} sub={`checkouts ÷ patrons (${periodLabel})`} color="text-blue-700" />
+            <Card label="Borrows per Patron"
+              value={s && s.totalPatrons ? (((s.checkoutsThisYear ?? 0) + (roomUse?.totalThisYear ?? 0)) / s.totalPatrons).toFixed(2) : '—'}
+              sub={`(checkouts + room use) ÷ patrons — ${periodLabel}`} color="text-blue-700" />
             <Card label="Holds Satisfaction Rate"   value={s ? pct(s.readyHolds, (s.pendingHolds + s.readyHolds) || 0) : '—'} sub="ready holds ÷ all active holds" color="text-green-700" />
-            <Card label="Patron Reach Rate"         value={s && s.totalPatrons ? pct(s.activePatronsThisYear, s.totalPatrons) : '—'} sub={`active borrowers vs total (${periodLabel})`} color="text-teal-700" />
+            <Card label="Patron Reach Rate"
+              value={s && s.totalPatrons ? pct(combinedUse?.activeUsersThisYear ?? s.activePatronsThisYear, s.totalPatrons) : '—'}
+              sub={`active users (checkout or room use) ÷ total patrons — ${periodLabel}`} color="text-teal-700" />
             <Card label="Hold-to-Checkout Rate"     value={s && s.checkoutsThisYear ? pct(s.holdsPlacedThisYear, s.checkoutsThisYear) : '—'} sub={`holds placed ÷ checkouts — demand signal (${periodLabel})`} color="text-purple-700" />
-            <Card label="Never Checked Out Rate"     value={s && s.totalItems ? pct(s.neverCheckedOut, s.totalItems) : '—'} sub="checkout only — some may have room use" color={s && s.neverCheckedOut/s.totalItems > 0.3 ? 'text-red-600' : 'text-amber-600'} />
+            <Card label="No Checkout Rate"          value={s && s.totalItems ? pct(s.neverCheckedOut, s.totalItems) : '—'} sub="checkout only — items with room use may still be active" color={s && s.neverCheckedOut/s.totalItems > 0.3 ? 'text-red-600' : 'text-amber-600'} />
           </Section>
 
           <Section title="Holds & Reservations" icon="🔖">
@@ -2704,9 +2734,9 @@ export default function Dashboard() {
           {yoyData.length > 0 && (
             <div className="mb-8">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span>📈</span>Year-over-Year Circulation Trend (Last 5 Years)
+                <span>📈</span>Year-over-Year Use Trend (Last 5 Years)
               </h2>
-              <p className="text-xs text-gray-600 mb-4">Annual checkouts, new patron registrations, and new acquisitions — shows library growth trajectory.</p>
+              <p className="text-xs text-gray-600 mb-4">Annual borrows (checkouts + room use), active users, new patron registrations, and new acquisitions. Total Borrows is the true measure of library use.</p>
               <div className="bg-white rounded-xl shadow-sm p-5">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={yoyData} margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
@@ -2715,9 +2745,10 @@ export default function Dashboard() {
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={n => n >= 1000 ? (n/1000).toFixed(0)+'k' : String(n)} />
                     <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
                     <Legend />
-                    <Bar dataKey="checkouts"  name="Checkouts"    fill="#3b82f6" radius={[3,3,0,0]} />
-                    <Bar dataKey="newPatrons" name="New Patrons"  fill="#10b981" radius={[3,3,0,0]} />
-                    <Bar dataKey="newItems"   name="New Items"    fill="#f59e0b" radius={[3,3,0,0]} />
+                    <Bar dataKey="checkouts"  name="Checkouts"       fill="#3b82f6" radius={[3,3,0,0]} />
+                    {yoyRoomUseAware && <Bar dataKey="roomUse" name="Room Use (in-library)" fill="#7c3aed" radius={[3,3,0,0]} />}
+                    <Bar dataKey="newPatrons" name="New Patrons"     fill="#10b981" radius={[3,3,0,0]} />
+                    <Bar dataKey="newItems"   name="New Items"       fill="#f59e0b" radius={[3,3,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="mt-4 overflow-x-auto">
@@ -2726,7 +2757,10 @@ export default function Dashboard() {
                       <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
                         <th className="text-left p-2 border border-gray-200">Year</th>
                         <th className="text-right p-2 border border-gray-200">Checkouts</th>
-                        <th className="text-right p-2 border border-gray-200">YoY Change</th>
+                        {yoyRoomUseAware && <th className="text-right p-2 border border-gray-200">Room Use</th>}
+                        {yoyRoomUseAware && <th className="text-right p-2 border border-gray-200">Total Borrows</th>}
+                        <th className="text-right p-2 border border-gray-200">YoY (Total)</th>
+                        {yoyRoomUseAware && <th className="text-right p-2 border border-gray-200">Active Users</th>}
                         <th className="text-right p-2 border border-gray-200">New Patrons</th>
                         <th className="text-right p-2 border border-gray-200">New Items</th>
                       </tr>
@@ -2734,16 +2768,21 @@ export default function Dashboard() {
                     <tbody>
                       {yoyData.map((r, i) => {
                         const prev = yoyData[i - 1];
-                        const change = prev && prev.checkouts > 0 ? ((r.checkouts - prev.checkouts) / prev.checkouts * 100) : null;
+                        const totalUse = r.totalUse ?? r.checkouts;
+                        const prevTotal = prev ? (prev.totalUse ?? prev.checkouts) : 0;
+                        const change = prev && prevTotal > 0 ? ((totalUse - prevTotal) / prevTotal * 100) : null;
                         return (
                           <tr key={r.year} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                             <td className="p-2 border border-gray-200 font-semibold text-gray-900">{r.year}</td>
-                            <td className="p-2 border border-gray-200 text-right font-bold text-blue-700">{r.checkouts.toLocaleString()}</td>
+                            <td className="p-2 border border-gray-200 text-right text-blue-700">{r.checkouts.toLocaleString()}</td>
+                            {yoyRoomUseAware && <td className="p-2 border border-gray-200 text-right text-violet-700">{(r.roomUse ?? 0).toLocaleString()}</td>}
+                            {yoyRoomUseAware && <td className="p-2 border border-gray-200 text-right font-bold text-emerald-700">{totalUse.toLocaleString()}</td>}
                             <td className="p-2 border border-gray-200 text-right">
                               {change !== null
                                 ? <span className={`font-semibold ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>{change >= 0 ? '+' : ''}{change.toFixed(1)}%</span>
                                 : <span className="text-gray-400">—</span>}
                             </td>
+                            {yoyRoomUseAware && <td className="p-2 border border-gray-200 text-right text-teal-700">{(r.activeUsers ?? 0).toLocaleString()}</td>}
                             <td className="p-2 border border-gray-200 text-right text-emerald-700">{r.newPatrons.toLocaleString()}</td>
                             <td className="p-2 border border-gray-200 text-right text-amber-700">{r.newItems.toLocaleString()}</td>
                           </tr>
