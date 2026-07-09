@@ -4321,6 +4321,92 @@ export default function Dashboard() {
               </div>
             )}
 
+            {patronTypeActivity.length > 0 && (() => {
+              const sorted  = [...patronTypeActivity].sort((a, b) => b.activePatrons - a.activePatrons);
+              const medals  = ['🥇','🥈','🥉'];
+              const colors  = [
+                'from-yellow-50 to-amber-50 border-yellow-300',
+                'from-gray-50 to-slate-100 border-gray-300',
+                'from-orange-50 to-amber-50 border-orange-300',
+              ];
+              const textCol = ['text-yellow-700','text-gray-600','text-orange-700'];
+              const topByCheckouts = [...patronTypeActivity].sort((a, b) => b.totalCheckouts - a.totalCheckouts)[0];
+              const topByRate      = [...patronTypeActivity].filter(r => r.totalPatrons >= 10).sort((a, b) => b.activeRate - a.activeRate)[0];
+              return (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <span>🏆</span>Library Patron Leaderboard — {year}
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-4">Ranked by active borrowers this year. Use for recognition, awards, and targeted engagement.</p>
+
+                  {/* Top 3 podium */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                    {sorted.slice(0, 3).map((r, i) => (
+                      <div key={r.name} className={`rounded-xl border-2 bg-gradient-to-br ${colors[i]} p-4 flex flex-col items-center text-center`}>
+                        <div className="text-3xl mb-1">{medals[i]}</div>
+                        <div className={`text-sm font-bold ${textCol[i]} leading-tight mb-2`}>{r.name}</div>
+                        <div className="text-2xl font-bold text-gray-800">{r.activePatrons.toLocaleString()}</div>
+                        <div className="text-xs text-gray-500">active borrowers</div>
+                        <div className="mt-2 grid grid-cols-2 gap-2 w-full text-xs">
+                          <div className="bg-white/70 rounded-lg p-1.5">
+                            <div className="font-semibold text-gray-700">{r.totalCheckouts.toLocaleString()}</div>
+                            <div className="text-gray-500">checkouts</div>
+                          </div>
+                          <div className="bg-white/70 rounded-lg p-1.5">
+                            <div className="font-semibold text-gray-700">{r.activeRate}%</div>
+                            <div className="text-gray-500">active rate</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Other ranks */}
+                  {sorted.length > 3 && (
+                    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-4">
+                      {sorted.slice(3).map((r, i) => (
+                        <div key={r.name} className={`flex items-center justify-between px-4 py-2.5 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b border-gray-100 last:border-0`}>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-gray-400 w-5 text-center">#{i + 4}</span>
+                            <span className="text-sm font-medium text-gray-700">{r.name}</span>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-gray-500">
+                            <span><span className="font-semibold text-green-700">{r.activePatrons.toLocaleString()}</span> active</span>
+                            <span><span className="font-semibold text-blue-700">{r.totalCheckouts.toLocaleString()}</span> checkouts</span>
+                            <span>{r.activeRate}% rate</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Special awards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {topByCheckouts && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+                        <span className="text-2xl">📚</span>
+                        <div>
+                          <div className="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-0.5">Most Checkouts Award</div>
+                          <div className="font-bold text-blue-800">{topByCheckouts.name}</div>
+                          <div className="text-xs text-blue-600">{topByCheckouts.totalCheckouts.toLocaleString()} total checkouts · {topByCheckouts.checkoutsPerPatron} per patron</div>
+                        </div>
+                      </div>
+                    )}
+                    {topByRate && (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+                        <span className="text-2xl">⭐</span>
+                        <div>
+                          <div className="text-xs font-semibold text-emerald-500 uppercase tracking-wide mb-0.5">Highest Engagement Rate</div>
+                          <div className="font-bold text-emerald-800">{topByRate.name}</div>
+                          <div className="text-xs text-emerald-600">{topByRate.activeRate}% of registered patrons actively borrowed</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             {patronTypeActivity.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
                 <p className="text-sm font-semibold text-gray-700 mb-1">Activity by Patron Type</p>
