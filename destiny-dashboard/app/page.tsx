@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, Component } from 'react';
 import type { ReactNode } from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
   constructor(props: { children: ReactNode }) {
@@ -985,6 +985,13 @@ export default function Dashboard() {
   type ActivePatron   = { PatronBarcode: string; LastName: string; FirstName: string; PatronType: string; totalCheckouts: number; checkoutsThisYear: number; overdueCount: number };
   type OverdueItem    = { CopyBarcode: string; Title: string; Author: string; PatronBarcode: string; PatronType: string; DateDue: string; DaysOverdue: number; ReplacementCost: number };
   type CallNumRow     = { range: string; firstDigit: string; items: number; titles: number; checkouts: number; utilRate: number };
+  type PeakDayRow    = { day: string; checkouts: number };
+  type LoanDurRow    = { patronType: string; totalReturned: number; avgDays: number; avgLoanPeriod: number };
+  type WeedItem      = { Title: string; Author: string; CallNumber: string; CopyBarcode: string; Acquired: string; LastBorrowed: string; daysSinceActivity: number; Price: number };
+  type NeverBorrowedRow = { firstDigit: string; neverBorrowedTitles: number; neverBorrowedItems: number };
+  type LapsedRow     = { patronType: string; lapsedCount: number };
+  type FineByTypeRow = { patronType: string; patronsWithFines: number; fineCount: number; totalFines: number; avgFine: number };
+  type AvgAgeRow     = { range: string; firstDigit: string; avgAgeYears: number; itemCount: number; oldestYear: number; newestYear: number };
 
   const [topTitles, setTopTitles]         = useState<TopTitle[]>([]);
   const [collAge, setCollAge]             = useState<CollAgeRow[]>([]);
@@ -994,6 +1001,15 @@ export default function Dashboard() {
   const [longestOverdue, setLongestOverdue] = useState<OverdueItem[]>([]);
   const [callNumData, setCallNumData]     = useState<CallNumRow[]>([]);
   const [extraLoaded, setExtraLoaded]     = useState({ collection: false, patrons: false });
+
+  const [peakDays, setPeakDays]           = useState<PeakDayRow[]>([]);
+  const [loanDur, setLoanDur]             = useState<{ byPatronType: LoanDurRow[]; overall: { avgDays: number; avgLoanPeriod: number; totalReturned: number } } | null>(null);
+  const [weedData, setWeedData]           = useState<{ items: WeedItem[]; summary: { candidateCount: number; totalValue: number }; yearsThreshold: number } | null>(null);
+  const [neverBorrowed, setNeverBorrowed] = useState<{ byDewey: NeverBorrowedRow[]; totals: { totalTitles: number; totalItems: number; neverBorrowedItems: number; neverBorrowedTitles: number } } | null>(null);
+  const [lapsedData, setLapsedData]       = useState<{ activeLastYear: number; activeThisYear: number; lapsedCount: number; lapsedRate: number; year: number; byType: LapsedRow[] } | null>(null);
+  const [finesByType, setFinesByType]     = useState<FineByTypeRow[]>([]);
+  const [avgColAge, setAvgColAge]         = useState<AvgAgeRow[]>([]);
+  const [extraLoaded2, setExtraLoaded2]   = useState({ collection: false, patrons: false });
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1044,6 +1060,19 @@ export default function Dashboard() {
       fetch('/api/charts/patron-retention').then(r=>r.json()).then(d=>{ if(d && !d.error) setRetention(d); }).catch(() => {});
       fetch('/api/charts/top-active-patrons?limit=10').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setActivePatrons(d); }).catch(() => {});
     }
+    if (activeTab === 'collection' && !extraLoaded2.collection) {
+      setExtraLoaded2(p => ({ ...p, collection: true }));
+      fetch('/api/charts/weeding-candidates?years=3&limit=20').then(r=>r.json()).then(d=>{ if(d && !d.error) setWeedData(d); }).catch(() => {});
+      fetch('/api/charts/never-borrowed').then(r=>r.json()).then(d=>{ if(d && !d.error) setNeverBorrowed(d); }).catch(() => {});
+      fetch('/api/charts/avg-collection-age').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setAvgColAge(d); }).catch(() => {});
+    }
+    if (activeTab === 'patrons' && !extraLoaded2.patrons) {
+      setExtraLoaded2(p => ({ ...p, patrons: true }));
+      fetch('/api/charts/peak-checkout-days').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setPeakDays(d); }).catch(() => {});
+      fetch('/api/charts/avg-loan-duration').then(r=>r.json()).then(d=>{ if(d && !d.error) setLoanDur(d); }).catch(() => {});
+      fetch('/api/charts/lapsed-patrons').then(r=>r.json()).then(d=>{ if(d && !d.error) setLapsedData(d); }).catch(() => {});
+      fetch('/api/charts/fines-by-patrontype').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setFinesByType(d); }).catch(() => {});
+    }
     if (activeTab === 'collection' && !chartsLoaded.collection) {
       fetch('/api/charts/collection-by-sublocation').then(r=>r.json()).then(d=>{ if(d.data) setSublocData(d.data); }).catch(() => {});
       fetch('/api/charts/collection-by-category').then(r=>r.json()).then(d=>{ if(d.data) setCatData(d.data); }).catch(() => {});
@@ -1064,7 +1093,7 @@ export default function Dashboard() {
       fetch('/api/ched/stats').then(r=>r.json()).then(d=>{ setChedStats(d); }).catch(() => {});
       fetch('/api/ched/acquisition-by-year').then(r=>r.json()).then(d=>{ if(d.data) setAcqData(d.data); }).catch(() => {});
     }
-  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded]);
+  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2]);
 
   const s = stats;
   const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
@@ -1433,6 +1462,148 @@ export default function Dashboard() {
                             ? <span className="font-semibold text-red-600">{ap.overdueCount}</span>
                             : <span className="text-gray-400">—</span>}
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Peak Checkout Days ── */}
+          {peakDays.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>📅</span>Peak Checkout Days (All-Time)
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Which days of the week see the most returns/checkouts — use this for staffing decisions.</p>
+              <div className="bg-white rounded-xl shadow-sm p-4">
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={peakDays} margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={n => n.toLocaleString()} />
+                    <Tooltip formatter={(v) => typeof v === "number" ? v.toLocaleString() : String(v)} />
+                    <Bar dataKey="checkouts" name="Checkouts" fill="#6366f1" radius={[4,4,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* ── Average Loan Duration ── */}
+          {loanDur && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>⏱</span>Average Loan Duration by Patron Type
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">How long patrons actually keep items vs. the loan period. High ratios may signal needed loan period adjustments.</p>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                  <div className="text-3xl font-bold text-blue-700">{loanDur.overall.avgDays?.toFixed(1) ?? '—'}</div>
+                  <div className="text-sm text-gray-500 mt-1">Avg Days Kept</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                  <div className="text-3xl font-bold text-indigo-700">{loanDur.overall.avgLoanPeriod?.toFixed(1) ?? '—'}</div>
+                  <div className="text-sm text-gray-500 mt-1">Avg Loan Period (days)</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                  <div className="text-3xl font-bold text-gray-700">{loanDur.overall.totalReturned?.toLocaleString() ?? '—'}</div>
+                  <div className="text-sm text-gray-500 mt-1">Total Returns Analyzed</div>
+                </div>
+              </div>
+              {loanDur.byPatronType.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-blue-700 text-white">
+                        <th className="text-left p-2">Patron Type</th>
+                        <th className="text-right p-2">Avg Days Kept</th>
+                        <th className="text-right p-2">Avg Loan Period</th>
+                        <th className="text-right p-2">Returns</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loanDur.byPatronType.map((r, i) => (
+                        <tr key={r.patronType} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="p-2 border-b border-gray-100 font-medium">{r.patronType}</td>
+                          <td className="p-2 border-b border-gray-100 text-right">{r.avgDays?.toFixed(1)}</td>
+                          <td className="p-2 border-b border-gray-100 text-right">{r.avgLoanPeriod?.toFixed(1)}</td>
+                          <td className="p-2 border-b border-gray-100 text-right">{r.totalReturned?.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Lapsed Patrons ── */}
+          {lapsedData && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>😴</span>Lapsed Patrons ({lapsedData.year})
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Patrons who borrowed last year but not this year — prime targets for re-engagement outreach.</p>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                  <div className="text-3xl font-bold text-gray-700">{lapsedData.activeLastYear.toLocaleString()}</div>
+                  <div className="text-sm text-gray-500 mt-1">Active {lapsedData.year - 1}</div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-bold text-red-600">{lapsedData.lapsedCount.toLocaleString()}</div>
+                  <div className="text-sm text-red-500 mt-1">Lapsed ({lapsedData.lapsedRate}%)</div>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-bold text-green-700">{lapsedData.activeThisYear.toLocaleString()}</div>
+                  <div className="text-sm text-green-600 mt-1">Active {lapsedData.year}</div>
+                </div>
+              </div>
+              {lapsedData.byType.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead><tr className="bg-red-600 text-white"><th className="text-left p-2">Patron Type</th><th className="text-right p-2">Lapsed</th></tr></thead>
+                    <tbody>
+                      {lapsedData.byType.map((r, i) => (
+                        <tr key={r.patronType} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="p-2 border-b border-gray-100 font-medium">{r.patronType}</td>
+                          <td className="p-2 border-b border-gray-100 text-right text-red-600 font-semibold">{r.lapsedCount.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Fines by Patron Type ── */}
+          {finesByType.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>💰</span>Fine Revenue by Patron Type (This Year)
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Which patron groups generate the most fines — useful for policy review and targeted reminders.</p>
+              <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-amber-600 text-white">
+                      <th className="text-left p-2">Patron Type</th>
+                      <th className="text-right p-2">Patrons w/ Fines</th>
+                      <th className="text-right p-2">Fine Count</th>
+                      <th className="text-right p-2">Total (₱)</th>
+                      <th className="text-right p-2">Avg Fine (₱)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {finesByType.map((r, i) => (
+                      <tr key={r.patronType} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="p-2 border-b border-gray-100 font-medium">{r.patronType}</td>
+                        <td className="p-2 border-b border-gray-100 text-right">{r.patronsWithFines.toLocaleString()}</td>
+                        <td className="p-2 border-b border-gray-100 text-right">{r.fineCount.toLocaleString()}</td>
+                        <td className="p-2 border-b border-gray-100 text-right font-semibold text-amber-700">₱{r.totalFines.toFixed(2)}</td>
+                        <td className="p-2 border-b border-gray-100 text-right">₱{r.avgFine.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1927,6 +2098,135 @@ export default function Dashboard() {
                             : <span className="text-gray-400">—</span>
                           }
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Average Collection Age by Dewey ── */}
+          {avgColAge.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>🕰</span>Average Collection Age by Dewey Range
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Which subject areas have the oldest collections — helps prioritize acquisition budgets for outdated sections.</p>
+              <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+                <ResponsiveContainer width="100%" height={Math.max(220, avgColAge.length * 36)}>
+                  <BarChart data={avgColAge} layout="vertical" margin={{ left: 200, right: 80, top: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={n => `${n}y`} />
+                    <YAxis type="category" dataKey="range" tick={{ fontSize: 11 }} width={195} />
+                    <Tooltip formatter={(v) => typeof v === "number" ? `${v} years` : String(v)} />
+                    <Bar dataKey="avgAgeYears" name="Avg Age (years)" fill="#f59e0b" radius={[0,4,4,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-amber-600 text-white">
+                      <th className="text-left p-2">Dewey Range</th>
+                      <th className="text-right p-2">Avg Age (yrs)</th>
+                      <th className="text-right p-2">Items</th>
+                      <th className="text-right p-2">Oldest Year</th>
+                      <th className="text-right p-2">Newest Year</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {avgColAge.map((r, i) => (
+                      <tr key={r.firstDigit} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="p-2 border-b border-gray-100 font-medium">{r.range}</td>
+                        <td className={`p-2 border-b border-gray-100 text-right font-bold ${r.avgAgeYears >= 15 ? 'text-red-600' : r.avgAgeYears >= 10 ? 'text-amber-600' : 'text-green-600'}`}>{r.avgAgeYears}</td>
+                        <td className="p-2 border-b border-gray-100 text-right">{r.itemCount.toLocaleString()}</td>
+                        <td className="p-2 border-b border-gray-100 text-right text-gray-400">{r.oldestYear}</td>
+                        <td className="p-2 border-b border-gray-100 text-right">{r.newestYear}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Never-Borrowed Items ── */}
+          {neverBorrowed && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>📦</span>Items Never Borrowed
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Titles/items acquired but never checked out — signals poor acquisitions or poor discoverability.</p>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-bold text-red-600">{neverBorrowed.totals.neverBorrowedItems.toLocaleString()}</div>
+                  <div className="text-sm text-red-500 mt-1">Items Never Borrowed</div>
+                  <div className="text-xs text-gray-400">{pct(neverBorrowed.totals.neverBorrowedItems, neverBorrowed.totals.totalItems)} of collection</div>
+                </div>
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-bold text-orange-600">{neverBorrowed.totals.neverBorrowedTitles.toLocaleString()}</div>
+                  <div className="text-sm text-orange-500 mt-1">Titles Never Borrowed</div>
+                  <div className="text-xs text-gray-400">{pct(neverBorrowed.totals.neverBorrowedTitles, neverBorrowed.totals.totalTitles)} of titles</div>
+                </div>
+              </div>
+              {neverBorrowed.byDewey.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead><tr className="bg-orange-600 text-white"><th className="text-left p-2">Dewey</th><th className="text-right p-2">Titles</th><th className="text-right p-2">Items</th></tr></thead>
+                    <tbody>
+                      {neverBorrowed.byDewey.map((r, i) => (
+                        <tr key={r.firstDigit} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="p-2 border-b border-gray-100 font-medium">{r.firstDigit}00s</td>
+                          <td className="p-2 border-b border-gray-100 text-right">{r.neverBorrowedTitles.toLocaleString()}</td>
+                          <td className="p-2 border-b border-gray-100 text-right font-semibold text-orange-700">{r.neverBorrowedItems.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Weeding Candidates ── */}
+          {weedData && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>🌿</span>Weeding Candidates (Not Borrowed in {weedData.yearsThreshold}+ Years)
+              </h2>
+              <p className="text-xs text-gray-400 mb-4">Items inactive for {weedData.yearsThreshold}+ years — candidates for withdrawal to free shelf space.</p>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-bold text-yellow-700">{weedData.summary.candidateCount.toLocaleString()}</div>
+                  <div className="text-sm text-yellow-600 mt-1">Total Weeding Candidates</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                  <div className="text-3xl font-bold text-gray-700">₱{weedData.summary.totalValue?.toFixed(2)}</div>
+                  <div className="text-sm text-gray-500 mt-1">Estimated Value on Shelf</div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-yellow-600 text-white">
+                      <th className="text-left p-2">Title</th>
+                      <th className="text-left p-2">Author</th>
+                      <th className="text-left p-2">Call #</th>
+                      <th className="text-right p-2">Acquired</th>
+                      <th className="text-right p-2">Last Borrowed</th>
+                      <th className="text-right p-2">Days Idle</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {weedData.items.map((w, i) => (
+                      <tr key={w.CopyBarcode} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="p-2 border-b border-gray-100 font-medium max-w-xs truncate">{w.Title}</td>
+                        <td className="p-2 border-b border-gray-100 text-gray-500">{w.Author}</td>
+                        <td className="p-2 border-b border-gray-100 font-mono text-xs">{w.CallNumber}</td>
+                        <td className="p-2 border-b border-gray-100 text-right text-gray-400">{w.Acquired}</td>
+                        <td className="p-2 border-b border-gray-100 text-right text-gray-400">{w.LastBorrowed ?? '—'}</td>
+                        <td className="p-2 border-b border-gray-100 text-right font-semibold text-yellow-700">{w.daysSinceActivity.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
