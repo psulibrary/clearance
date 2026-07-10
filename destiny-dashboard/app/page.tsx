@@ -2468,7 +2468,7 @@ export default function Dashboard() {
       fetch(`/api/charts/staff-transactions?year=${year}`)
         .then(r => r.json())
         .then((d) => { setStaffTx(d); setStaffTxLoaded(true); })
-        .catch(() => { setStaffTx({ source: 'none', year, staffUserIds: [572608, 963453], message: 'Failed to load staff transactions.' }); setStaffTxLoaded(true); });
+        .catch(() => { setStaffTx({ source: 'none', year, staffUserIds: [572608, 963453, 882550], message: 'Failed to load staff transactions.' }); setStaffTxLoaded(true); });
     }
   }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded, roomUseLoaded, staffTxYear]);
 
@@ -3382,7 +3382,7 @@ export default function Dashboard() {
               <span>👤</span>Staff Transactions
             </h2>
             <p className="text-xs text-gray-500 mb-4">
-              Destiny Audit transactions performed by staff user IDs <strong>572608</strong> and <strong>963453</strong>, totaled by month for {year}.
+              Destiny Audit transactions performed by staff user IDs <strong>572608</strong>, <strong>963453</strong>, and <strong>882550</strong>, totaled by month for {year}.
             </p>
 
             {!staffTxLoaded && (
@@ -3422,7 +3422,7 @@ export default function Dashboard() {
                   <p className="text-sm font-semibold text-gray-700 mb-3">Monthly Totals — {year}</p>
                   {(() => {
                     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                    const staffIds = staffTx.staffUserIds ?? [572608, 963453];
+                    const staffIds = staffTx.staffUserIds ?? [572608, 963453, 882550];
                     const byStaff = staffTx.byMonthByStaff ?? [];
                     const monthTotal = (mo: number) =>
                       staffTx.byMonth?.find((r) => r.mo === mo)?.transactions

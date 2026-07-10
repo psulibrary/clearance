@@ -5,7 +5,7 @@ import { getSchemaPrefix, t } from '@/lib/schema';
 import { labelTransCombo } from '@/lib/audit-trans';
 
 /** Staff user IDs to include in the Staff Transactions report */
-const STAFF_USER_IDS = [572608, 963453];
+const STAFF_USER_IDS = [572608, 963453, 882550];
 
 export async function GET(request: NextRequest) {
   const year = parseInt(request.nextUrl.searchParams.get('year') || String(new Date().getFullYear()));
