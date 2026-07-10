@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { labelTransCombo } from '@/lib/audit-trans';
 
 /** Staff user IDs to include in the Staff Transactions report */
 const STAFF_USER_IDS = [572608, 963453];
@@ -14,7 +15,6 @@ export async function GET(request: NextRequest) {
     const p = await getSchemaPrefix();
     const schema = p.replace(/^\[|\]\.?$|\.$/g, '');
 
-    // Confirm Audit table exists
     const tablesRes = await pool.request().query(`
       SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
       WHERE TABLE_SCHEMA = N'${schema}' AND TABLE_NAME = N'Audit'
@@ -28,45 +28,14 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Discover columns (case-safe)
-    const colsRes = await pool.request().query(`
-      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = N'${schema}' AND TABLE_NAME = N'Audit'
-      ORDER BY ORDINAL_POSITION
-    `);
-    const colsOrig: string[] = colsRes.recordset.map((r: { COLUMN_NAME: string }) => r.COLUMN_NAME);
-    const actual = (candidates: string[]): string | null => {
-      for (const c of candidates) {
-        const found = colsOrig.find((col) => col.toLowerCase() === c.toLowerCase());
-        if (found) return found;
-      }
-      return null;
-    };
-
-    const dateCol = actual(['Created', 'TransDate', 'TransactionDate', 'Date']);
-    const userCol = actual(['OriginatorUserID', 'OriginatorUserId', 'UserID']);
-    const typeCol = actual(['TransType', 'TransactionType', 'Type']);
-    const modCol = actual(['TransModifier', 'Modifier']);
-
-    if (!dateCol || !userCol) {
-      return NextResponse.json({
-        source: 'none',
-        year,
-        staffUserIds: STAFF_USER_IDS,
-        message: 'Audit table is missing Created or OriginatorUserID columns.',
-        debug: { cols: colsOrig },
-      });
-    }
-
     const audit = t(p, 'Audit');
     const req = pool.request();
     req.input('year', sql.Int, year);
     STAFF_USER_IDS.forEach((id, i) => req.input(`uid${i}`, sql.Int, id));
     const uidList = STAFF_USER_IDS.map((_, i) => `@uid${i}`).join(', ');
 
-    const whereYear = `WHERE a.${userCol} IN (${uidList}) AND YEAR(a.${dateCol}) = @year`;
+    const whereYear = `WHERE a.OriginatorUserID IN (${uidList}) AND YEAR(a.Created) = @year`;
 
-    // Summary totals
     const summary = await req.query(`
       SELECT COUNT(*) AS totalThisYear
       FROM ${audit} a
@@ -78,55 +47,54 @@ export async function GET(request: NextRequest) {
     const allTime = await allTimeReq.query(`
       SELECT COUNT(*) AS totalAllTime
       FROM ${audit} a
-      WHERE a.${userCol} IN (${uidList})
+      WHERE a.OriginatorUserID IN (${uidList})
     `);
 
-    // Monthly totals (combined + per staff)
     const byMonth = await req.query(`
       SELECT
-        MONTH(a.${dateCol}) AS mo,
-        a.${userCol} AS originatorUserID,
+        MONTH(a.Created) AS mo,
+        a.OriginatorUserID AS originatorUserID,
         COUNT(*) AS transactions
       FROM ${audit} a
       ${whereYear}
-      GROUP BY MONTH(a.${dateCol}), a.${userCol}
+      GROUP BY MONTH(a.Created), a.OriginatorUserID
       ORDER BY mo, originatorUserID
     `);
 
     const byMonthTotal = await req.query(`
-      SELECT MONTH(a.${dateCol}) AS mo, COUNT(*) AS transactions
+      SELECT MONTH(a.Created) AS mo, COUNT(*) AS transactions
       FROM ${audit} a
       ${whereYear}
-      GROUP BY MONTH(a.${dateCol})
+      GROUP BY MONTH(a.Created)
       ORDER BY mo
     `);
 
-    // By staff user
     const byStaff = await req.query(`
-      SELECT a.${userCol} AS originatorUserID, COUNT(*) AS transactions
+      SELECT a.OriginatorUserID AS originatorUserID, COUNT(*) AS transactions
       FROM ${audit} a
       ${whereYear}
-      GROUP BY a.${userCol}
+      GROUP BY a.OriginatorUserID
       ORDER BY transactions DESC
     `);
 
-    // By transaction type
-    let byTransType: { transType: string; transactions: number }[] = [];
-    if (typeCol) {
-      const typeSelect = modCol
-        ? `CONCAT(a.${typeCol}, CASE WHEN a.${modCol} IS NULL OR a.${modCol} = '' THEN '' ELSE ' / ' + a.${modCol} END)`
-        : `a.${typeCol}`;
-      const tt = await req.query(`
-        SELECT ${typeSelect} AS transType, COUNT(*) AS transactions
-        FROM ${audit} a
-        ${whereYear}
-        GROUP BY ${typeSelect}
-        ORDER BY transactions DESC
-      `);
-      byTransType = tt.recordset;
-    }
+    // TransType/TransModifier are tinyint/int — cast before concatenating
+    const tt = await req.query(`
+      SELECT
+        a.TransType AS transTypeCode,
+        a.TransModifier AS transModifier,
+        COUNT(*) AS transactions
+      FROM ${audit} a
+      ${whereYear}
+      GROUP BY a.TransType, a.TransModifier
+      ORDER BY transactions DESC
+    `);
+    const byTransType = (tt.recordset as { transTypeCode: number; transModifier: number; transactions: number }[]).map((r) => ({
+      transType: labelTransCombo(Number(r.transTypeCode), Number(r.transModifier)),
+      transTypeCode: Number(r.transTypeCode),
+      transModifier: Number(r.transModifier),
+      transactions: Number(r.transactions),
+    }));
 
-    // Resolve login IDs from Users if available
     const loginByUser: Record<number, string> = {};
     try {
       const usersTable = await pool.request().query(`
@@ -145,7 +113,7 @@ export async function GET(request: NextRequest) {
         }
       }
     } catch {
-      /* optional join */
+      /* optional */
     }
 
     const staff = STAFF_USER_IDS.map((id) => ({

@@ -2,57 +2,86 @@ import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 
+const IN_LIB_TYPE_CANDIDATES = [19, 25, 26, 27, 28];
+
 async function findInLibraryCopySubquery(
   pool: Awaited<ReturnType<typeof getPool>>,
   schema: string,
 ): Promise<{ subquery: string | null; txTableName: string | null }> {
-  const allTablesRes = await pool.request().query(`
-    SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
-    WHERE TABLE_SCHEMA = '${schema}' ORDER BY TABLE_NAME
+  // Destiny stores in-library use in Audit (numeric TransType/TransModifier)
+  const auditExists = await pool.request().query(`
+    SELECT 1 AS ok FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_SCHEMA = N'${schema}' AND TABLE_NAME = N'Audit'
   `);
-  const allTables: string[] = allTablesRes.recordset.map((r: { TABLE_NAME: string }) => r.TABLE_NAME);
+  if (auditExists.recordset.length === 0) return { subquery: null, txTableName: null };
 
-  const TX_CANDIDATES = [
-    'CopyTransaction', 'CopyTrans', 'CircTransaction', 'CircTrans',
-    'Transaction', 'CopyHistory', 'CircHistory', 'CopyLog', 'CircLog',
-  ];
-  const txTableName = TX_CANDIDATES.find((n) => allTables.includes(n)) ?? null;
-  if (!txTableName) return { subquery: null, txTableName: null };
+  const audit = `[${schema}].[Audit]`;
 
-  const ctColsRes = await pool.request().query(`
-    SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = '${schema}' AND TABLE_NAME = '${txTableName}'
-    ORDER BY ORDINAL_POSITION
+  // Prefer known in-library TransType codes
+  const known = await pool.request().query(`
+    SELECT TOP 1 a.TransType AS transType, COUNT(*) AS cnt
+    FROM ${audit} a
+    WHERE a.TransType IN (${IN_LIB_TYPE_CANDIDATES.join(',')}) AND a.CopyID IS NOT NULL
+    GROUP BY a.TransType
+    ORDER BY cnt DESC
   `);
-  const colsOrig: string[] = ctColsRes.recordset.map((r: { COLUMN_NAME: string }) => r.COLUMN_NAME);
-  const actual = (candidates: string[]): string | null => {
-    for (const c of candidates) {
-      const found = colsOrig.find((col) => col.toLowerCase() === c);
-      if (found) return found;
-    }
-    return null;
-  };
+  if (known.recordset[0]) {
+    const tt = Number(known.recordset[0].transType);
+    return {
+      subquery: `
+        SELECT DISTINCT a.CopyID
+        FROM ${audit} a
+        WHERE a.TransType = ${tt} AND a.CopyID IS NOT NULL
+      `,
+      txTableName: 'Audit',
+    };
+  }
 
-  const copyIdCol = actual(['copyid']);
-  const modCol = actual(['transmodifier', 'modifier', 'transmod', 'transactionmodifier']);
-  const typeCol = actual(['transtype', 'transactiontype', 'type', 'circtranstype']);
-  if (!copyIdCol) return { subquery: null, txTableName };
+  // Heuristic: non-checkout/renew combos that usually have no patron
+  const heuristic = await pool.request().query(`
+    SELECT TOP 1 a.TransType AS transType, a.TransModifier AS transModifier, COUNT(*) AS cnt
+    FROM ${audit} a
+    WHERE a.CopyID IS NOT NULL
+      AND a.TransType NOT IN (1, 3)
+      AND a.PatronID IS NULL
+    GROUP BY a.TransType, a.TransModifier
+    HAVING COUNT(*) >= 5
+    ORDER BY cnt DESC
+  `);
+  if (heuristic.recordset[0]) {
+    const tt = Number(heuristic.recordset[0].transType);
+    const tm = Number(heuristic.recordset[0].transModifier);
+    return {
+      subquery: `
+        SELECT DISTINCT a.CopyID
+        FROM ${audit} a
+        WHERE a.TransType = ${tt} AND a.TransModifier = ${tm} AND a.CopyID IS NOT NULL
+      `,
+      txTableName: 'Audit',
+    };
+  }
 
-  const inLibFilter = modCol
-    ? `${modCol} = 'In-Library'`
-    : typeCol
-      ? `${typeCol} = 'Checked in'`
-      : null;
-  if (!inLibFilter) return { subquery: null, txTableName };
+  // Check-in with non-zero modifier
+  const checkIn = await pool.request().query(`
+    SELECT TOP 1 a.TransModifier AS transModifier, COUNT(*) AS cnt
+    FROM ${audit} a
+    WHERE a.TransType = 2 AND a.TransModifier <> 0 AND a.CopyID IS NOT NULL
+    GROUP BY a.TransModifier
+    ORDER BY cnt DESC
+  `);
+  if (checkIn.recordset[0]) {
+    const tm = Number(checkIn.recordset[0].transModifier);
+    return {
+      subquery: `
+        SELECT DISTINCT a.CopyID
+        FROM ${audit} a
+        WHERE a.TransType = 2 AND a.TransModifier = ${tm} AND a.CopyID IS NOT NULL
+      `,
+      txTableName: 'Audit',
+    };
+  }
 
-  return {
-    subquery: `
-      SELECT DISTINCT ${copyIdCol} AS CopyID
-      FROM [${schema}].[${txTableName}]
-      WHERE ${inLibFilter} AND ${copyIdCol} IS NOT NULL
-    `,
-    txTableName,
-  };
+  return { subquery: null, txTableName: 'Audit' };
 }
 
 export async function GET() {

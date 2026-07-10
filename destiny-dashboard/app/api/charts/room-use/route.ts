@@ -2,11 +2,102 @@ import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { labelTransCombo, labelTransType } from '@/lib/audit-trans';
 
-// In Destiny, in-library use transactions have:
-//   TransType    = 'Checked in'
-//   TransModifier = 'In-Library'
-// This is set when staff use Check In with "Record in-library use" checked.
+// Destiny stores circulation history in Audit (not CopyTransaction).
+// TransType / TransModifier are numeric. In-library use is typically its own
+// TransType (often 19/25/26) or a check-in (2) with a non-zero modifier.
+// We auto-detect from live data when possible.
+
+const IN_LIB_TYPE_CANDIDATES = [19, 25, 26, 27, 28];
+
+type TypeRow = { transType: number; transModifier: number; cnt: number; nullPatron: number };
+
+async function detectInLibraryFilter(
+  pool: Awaited<ReturnType<typeof getPool>>,
+  audit: string,
+  year: number,
+): Promise<{ where: string; detected: { transType: number; transModifier: number | null; method: string }; breakdown: TypeRow[] }> {
+  const req = pool.request();
+  req.input('year', sql.Int, year);
+
+  const breakdownRes = await req.query(`
+    SELECT TOP 40
+      a.TransType AS transType,
+      a.TransModifier AS transModifier,
+      COUNT(*) AS cnt,
+      SUM(CASE WHEN a.PatronID IS NULL THEN 1 ELSE 0 END) AS nullPatron
+    FROM ${audit} a
+    WHERE YEAR(a.Created) = @year AND a.CopyID IS NOT NULL
+    GROUP BY a.TransType, a.TransModifier
+    ORDER BY cnt DESC
+  `);
+  const breakdown: TypeRow[] = breakdownRes.recordset.map((r: TypeRow) => ({
+    transType: Number(r.transType),
+    transModifier: Number(r.transModifier),
+    cnt: Number(r.cnt),
+    nullPatron: Number(r.nullPatron),
+  }));
+
+  // 1) Known in-library TransType codes present in data
+  const known = breakdown.filter((r) => IN_LIB_TYPE_CANDIDATES.includes(r.transType));
+  if (known.length > 0) {
+    const types = [...new Set(known.map((r) => r.transType))];
+    return {
+      where: `a.TransType IN (${types.join(',')})`,
+      detected: { transType: types[0], transModifier: null, method: 'known_transtype' },
+      breakdown,
+    };
+  }
+
+  // 2) Heuristic: combo with CopyID, mostly null PatronID, not checkout (1) / renew (3)
+  const heuristic = breakdown
+    .filter((r) => r.transType !== 1 && r.transType !== 3 && r.cnt >= 5)
+    .filter((r) => r.nullPatron / r.cnt >= 0.8)
+    .sort((a, b) => b.cnt - a.cnt)[0];
+  if (heuristic) {
+    return {
+      where: `a.TransType = ${heuristic.transType} AND a.TransModifier = ${heuristic.transModifier}`,
+      detected: { transType: heuristic.transType, transModifier: heuristic.transModifier, method: 'null_patron_heuristic' },
+      breakdown,
+    };
+  }
+
+  // 3) Check-in (2) with non-zero modifier
+  const checkInMod = breakdown
+    .filter((r) => r.transType === 2 && r.transModifier !== 0)
+    .sort((a, b) => b.cnt - a.cnt)[0];
+  if (checkInMod) {
+    return {
+      where: `a.TransType = 2 AND a.TransModifier = ${checkInMod.transModifier}`,
+      detected: { transType: 2, transModifier: checkInMod.transModifier, method: 'checkin_modifier' },
+      breakdown,
+    };
+  }
+
+  // 4) Fallback: any TransType labeled as in-library in our map that appears at all (all-time probe)
+  const allTime = await pool.request().query(`
+    SELECT TOP 1 a.TransType AS transType, COUNT(*) AS cnt
+    FROM ${audit} a
+    WHERE a.TransType IN (${IN_LIB_TYPE_CANDIDATES.join(',')}) AND a.CopyID IS NOT NULL
+    GROUP BY a.TransType
+    ORDER BY cnt DESC
+  `);
+  if (allTime.recordset[0]) {
+    const tt = Number(allTime.recordset[0].transType);
+    return {
+      where: `a.TransType = ${tt}`,
+      detected: { transType: tt, transModifier: null, method: 'alltime_known_transtype' },
+      breakdown,
+    };
+  }
+
+  return {
+    where: '1 = 0',
+    detected: { transType: -1, transModifier: null, method: 'none' },
+    breakdown,
+  };
+}
 
 export async function GET(request: NextRequest) {
   const year = parseInt(request.nextUrl.searchParams.get('year') || String(new Date().getFullYear()));
@@ -15,158 +106,109 @@ export async function GET(request: NextRequest) {
     const pool = await getPool();
     const p = await getSchemaPrefix();
     const schema = p.replace(/^\[|\]\.?$|\.$/g, '');
-    const req = pool.request();
-    req.input('year', sql.Int, year);
 
-    // Find all tables — try CopyTransaction and common alternate names
-    const allTablesRes = await pool.request().query(`
+    const tablesRes = await pool.request().query(`
       SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_SCHEMA = '${schema}' ORDER BY TABLE_NAME
+      WHERE TABLE_SCHEMA = N'${schema}' AND TABLE_NAME = N'Audit'
     `);
-    const allTables: string[] = allTablesRes.recordset.map((r: { TABLE_NAME: string }) => r.TABLE_NAME);
-
-    // Pick the transaction table — Destiny uses CopyTransaction but some versions differ
-    const TX_CANDIDATES = ['CopyTransaction','CopyTrans','CircTransaction','CircTrans','Transaction','CopyHistory','CircHistory','CopyLog','CircLog'];
-    const txTableName = TX_CANDIDATES.find(n => allTables.includes(n)) ?? null;
-
-    if (!txTableName) {
+    if (tablesRes.recordset.length === 0) {
       return NextResponse.json({
         source: 'none',
         year,
-        message: 'Transaction table not found. See debug.allTables for all tables in this Destiny schema.',
-        debug: { allTables },
+        message: 'Audit table not found. Destiny stores in-library use in CircCatAdmin.Audit.',
       });
     }
 
-    // Discover column names on the found table
-    const ctColsRes = await pool.request().query(`
-      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = '${schema}' AND TABLE_NAME = '${txTableName}'
-      ORDER BY ORDINAL_POSITION
-    `);
-    const ctCols: string[] = ctColsRes.recordset.map((r: { COLUMN_NAME: string }) => r.COLUMN_NAME.toLowerCase());
+    const audit = t(p, 'Audit');
+    const { where: inLibWhere, detected, breakdown } = await detectInLibraryFilter(pool, audit, year);
 
-    if (ctCols.length === 0) {
-      return NextResponse.json({ source: 'none', year, message: `Table ${txTableName} found but has no columns.`, debug: { allTables } });
+    if (detected.method === 'none') {
+      return NextResponse.json({
+        source: 'none',
+        year,
+        message: 'Could not identify in-library use TransType/TransModifier in Audit for this year. See debug.typeBreakdown.',
+        debug: {
+          typeBreakdown: breakdown.map((r) => ({
+            ...r,
+            label: labelTransCombo(r.transType, r.transModifier),
+          })),
+        },
+      });
     }
 
-    // Map to actual column names (case-sensitive for SQL Server)
-    const actual = (candidates: string[]): string | null => {
-      const colsOrig: string[] = ctColsRes.recordset.map((r: { COLUMN_NAME: string }) => r.COLUMN_NAME);
-      for (const c of candidates) {
-        const found = colsOrig.find((col: string) => col.toLowerCase() === c);
-        if (found) return found;
-      }
-      return null;
-    };
+    const req = pool.request();
+    req.input('year', sql.Int, year);
+    const yearFilter = `YEAR(a.Created) = @year AND ${inLibWhere}`;
 
-    const dateCol     = actual(['transdate','transactiondate','date','dateout','created','datecreated']);
-    const typeCol     = actual(['transtype','transactiontype','type','circtranstype']);
-    const modCol      = actual(['transmodifier','modifier','transmod','transactionmodifier']);
-    const copyIdCol   = actual(['copyid']);
-    const patronIdCol = actual(['patronid']);
-    const titleCol    = actual(['title']);
-    const authorCol   = actual(['author']);
-    const patronTypeCol = actual(['patrontype','patrontyped','patrontypedescription']);
-
-    if (!dateCol) {
-      return NextResponse.json({ source: 'none', year, message: `No date column found on ${txTableName}.`, debug: { allTables, txTableName, ctCols } });
-    }
-
-    // WHERE clause: TransModifier = 'In-Library' (and optionally TransType = 'Checked in')
-    const inLibWhere = modCol
-      ? `WHERE ${modCol} = 'In-Library' AND YEAR(${dateCol}) = @year`
-      : typeCol
-        ? `WHERE ${typeCol} = 'Checked in' AND YEAR(${dateCol}) = @year`
-        : `WHERE YEAR(${dateCol}) = @year`;
-
-    const inLibWhereAllTime = modCol
-      ? `WHERE ${modCol} = 'In-Library'`
-      : typeCol
-        ? `WHERE ${typeCol} = 'Checked in'`
-        : '';
-
-    // ── Summary ──
     const summary = await req.query(`
-      SELECT COUNT(*) AS totalThisYear FROM ${`[${schema}].[${txTableName}]`} ${inLibWhere}
-    `);
-    const allTime = await req.query(`
-      SELECT COUNT(*) AS totalAllTime FROM ${`[${schema}].[${txTableName}]`} ${inLibWhereAllTime}
+      SELECT COUNT(*) AS totalThisYear FROM ${audit} a WHERE ${yearFilter}
     `);
 
-    // ── Monthly breakdown ──
+    const allTimeReq = pool.request();
+    const allTime = await allTimeReq.query(`
+      SELECT COUNT(*) AS totalAllTime FROM ${audit} a WHERE ${inLibWhere}
+    `);
+
     const byMonth = await req.query(`
-      SELECT MONTH(${dateCol}) AS mo, COUNT(*) AS uses
-      FROM ${`[${schema}].[${txTableName}]`} ${inLibWhere}
-      GROUP BY MONTH(${dateCol}) ORDER BY mo
+      SELECT MONTH(a.Created) AS mo, COUNT(*) AS uses
+      FROM ${audit} a
+      WHERE ${yearFilter}
+      GROUP BY MONTH(a.Created)
+      ORDER BY mo
     `);
 
-    // ── By patron type ──
     let byPatronType: { patronType: string; uses: number }[] = [];
-    if (patronTypeCol) {
-      // patron type stored directly on CopyTransaction
+    try {
       const pt = await req.query(`
-        SELECT ${patronTypeCol} AS patronType, COUNT(*) AS uses
-        FROM ${`[${schema}].[${txTableName}]`} ${inLibWhere}
-        GROUP BY ${patronTypeCol} ORDER BY uses DESC
+        SELECT ISNULL(pt.PatronTypeDescription, '(no patron)') AS patronType, COUNT(*) AS uses
+        FROM ${audit} a
+        LEFT JOIN ${t(p, 'PatronType')} pt ON pt.PatronTypeID = a.PatronTypeID
+        WHERE ${yearFilter}
+        GROUP BY pt.PatronTypeDescription
+        ORDER BY uses DESC
       `);
       byPatronType = pt.recordset;
-    } else if (patronIdCol) {
-      // join to SitePatron → PatronType
-      try {
-        const pt = await req.query(`
-          SELECT sp.PatronTypeDescription AS patronType, COUNT(*) AS uses
-          FROM ${`[${schema}].[${txTableName}]`} ct
-          JOIN ${t(p,'SitePatron')} spt ON spt.PatronID = ct.${patronIdCol}
-          JOIN ${t(p,'PatronType')} sp ON sp.PatronTypeID = spt.PatronTypeID
-          ${inLibWhere.replace('WHERE', 'WHERE ct.'+ dateCol + ' IS NOT NULL AND').replace('YEAR('+dateCol+')', 'YEAR(ct.'+dateCol+')')}
-          GROUP BY sp.PatronTypeDescription ORDER BY uses DESC
-        `);
-        byPatronType = pt.recordset;
-      } catch (_) { /* skip if join fails */ }
+    } catch {
+      /* optional */
     }
 
-    // ── Top titles ──
-    let topTitles: { Title: string; Author: string; inLibraryUses: number }[] = [];
-    if (titleCol) {
-      // Title stored directly on CopyTransaction
+    let topTitles: { Title: string; Author: string; inLibraryUses: number; copies: number }[] = [];
+    try {
       const tt = await req.query(`
         SELECT TOP 20
-          ${titleCol} AS Title,
-          ${authorCol ? authorCol + ' AS Author' : 'NULL AS Author'},
-          COUNT(*) AS inLibraryUses
-        FROM ${`[${schema}].[${txTableName}]`} ${inLibWhere}
-        GROUP BY ${titleCol}${authorCol ? ', ' + authorCol : ''}
+          bm.Title,
+          bm.Author,
+          COUNT(*) AS inLibraryUses,
+          COUNT(DISTINCT a.CopyID) AS copies
+        FROM ${audit} a
+        JOIN ${t(p, 'BibMaster')} bm ON bm.BibID = a.BibID
+        WHERE ${yearFilter}
+        GROUP BY bm.Title, bm.Author
         ORDER BY inLibraryUses DESC
       `);
       topTitles = tt.recordset;
-    } else if (copyIdCol) {
-      // Join CopyID → Copy → BibMaster
-      try {
-        const tt = await req.query(`
-          SELECT TOP 20 bm.Title, bm.Author, COUNT(*) AS inLibraryUses
-          FROM ${`[${schema}].[${txTableName}]`} ct
-          JOIN ${t(p,'Copy')} c ON c.CopyID = ct.${copyIdCol}
-          JOIN ${t(p,'BibMaster')} bm ON bm.BibID = c.BibID
-          ${inLibWhere.replace('WHERE','WHERE ct.'+ dateCol + ' IS NOT NULL AND').replace('YEAR('+dateCol+')','YEAR(ct.'+dateCol+')')}
-          GROUP BY bm.Title, bm.Author
-          ORDER BY inLibraryUses DESC
-        `);
-        topTitles = tt.recordset;
-      } catch (_) { /* skip */ }
+    } catch {
+      /* optional */
     }
 
     return NextResponse.json({
-      source: 'copy_transaction',
+      source: 'audit',
       year,
       totalThisYear: summary.recordset[0]?.totalThisYear ?? 0,
       totalAllTime: allTime.recordset[0]?.totalAllTime ?? 0,
       byMonth: byMonth.recordset,
       byPatronType,
       topTitles,
-      debug: { txTableName, ctCols, dateCol, typeCol, modCol, patronTypeCol, copyIdCol, titleCol },
+      debug: {
+        detected,
+        detectedLabel: labelTransType(detected.transType),
+        inLibWhere,
+        typeBreakdown: breakdown.slice(0, 15).map((r) => ({
+          ...r,
+          label: labelTransCombo(r.transType, r.transModifier),
+        })),
+      },
     });
-
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }

@@ -2291,17 +2291,28 @@ export default function Dashboard() {
   const [yoyLoaded, setYoyLoaded]         = useState(false);
 
   type RoomUseData = {
-    source: 'transaction_table' | 'copy_transaction' | 'copy_column' | 'none';
+    source: 'audit' | 'transaction_table' | 'copy_transaction' | 'copy_column' | 'none';
     year: number;
     totalThisYear?: number;
     totalAllTime?: number;
     titlesWithUse?: number;
     yearTotal?: number | null;
-    topTitles?: { Title: string; Author: string; inLibraryUses: number; copies: number }[];
+    topTitles?: { Title: string; Author: string; inLibraryUses: number; copies?: number }[];
     byMonth?: { mo: number; uses: number }[];
     byPatronType?: { patronType: string; uses: number }[];
     message?: string;
-    debug?: { copyCols?: string[]; allTables?: string[]; patternsSearched?: string[]; ctCols?: string[]; dateCol?: string; inLibFlag?: string | null; inLibWhere?: string; typeBreakdown?: { type: unknown; cnt: number }[] };
+    debug?: {
+      copyCols?: string[];
+      allTables?: string[];
+      patternsSearched?: string[];
+      ctCols?: string[];
+      dateCol?: string;
+      inLibFlag?: string | null;
+      inLibWhere?: string;
+      detected?: { transType: number; transModifier: number | null; method: string };
+      detectedLabel?: string;
+      typeBreakdown?: { type?: unknown; transType?: number; transModifier?: number; cnt: number; label?: string }[];
+    };
   };
   const [roomUse, setRoomUse]             = useState<RoomUseData | null>(null);
   const [roomUseLoaded, setRoomUseLoaded] = useState(false);
@@ -3352,7 +3363,7 @@ export default function Dashboard() {
                               <td className="p-2 border border-gray-200 font-medium text-gray-900">{r.Title}</td>
                               <td className="p-2 border border-gray-200 text-gray-600">{r.Author}</td>
                               <td className="p-2 border border-gray-200 text-right font-bold text-violet-700">{r.inLibraryUses.toLocaleString()}</td>
-                              <td className="p-2 border border-gray-200 text-right text-gray-600">{r.copies}</td>
+                              <td className="p-2 border border-gray-200 text-right text-gray-600">{r.copies ?? '—'}</td>
                             </tr>
                           ))}
                         </tbody>
