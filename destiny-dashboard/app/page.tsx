@@ -2306,6 +2306,23 @@ export default function Dashboard() {
   const [roomUse, setRoomUse]             = useState<RoomUseData | null>(null);
   const [roomUseLoaded, setRoomUseLoaded] = useState(false);
 
+  type StaffTxData = {
+    source: 'audit' | 'none';
+    year: number;
+    staffUserIds: number[];
+    totalThisYear?: number;
+    totalAllTime?: number;
+    staff?: { originatorUserID: number; loginID: string | null; transactions: number }[];
+    byMonth?: { mo: number; transactions: number }[];
+    byMonthByStaff?: { mo: number; originatorUserID: number; transactions: number }[];
+    byTransType?: { transType: string; transactions: number }[];
+    message?: string;
+    error?: string;
+  };
+  const [staffTx, setStaffTx]             = useState<StaffTxData | null>(null);
+  const [staffTxLoaded, setStaffTxLoaded] = useState(false);
+  const [staffTxYear, setStaffTxYear]     = useState<number | null>(null);
+
   type MonthlyRow = { year: number; month: number; checkouts: number; checkins: number; active_patrons: number; new_patrons: number; new_items: number };
   type DailySnap  = { snapshot_date: string; total_items: number; checked_out: number; active_patrons_30d: number; checkouts_30d: number; total_patrons: number };
   const [trendsLoaded,    setTrendsLoaded]    = useState(false);
@@ -2434,7 +2451,15 @@ export default function Dashboard() {
       setRoomUseLoaded(true);
       fetch(`/api/charts/room-use?year=${year}`).then(r => r.json()).then(setRoomUse).catch(() => {});
     }
-  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded, roomUseLoaded]);
+    if (activeTab === 'patrons' && staffTxYear !== year) {
+      setStaffTxYear(year);
+      setStaffTxLoaded(false);
+      fetch(`/api/charts/staff-transactions?year=${year}`)
+        .then(r => r.json())
+        .then((d) => { setStaffTx(d); setStaffTxLoaded(true); })
+        .catch(() => { setStaffTx({ source: 'none', year, staffUserIds: [572608, 963453], message: 'Failed to load staff transactions.' }); setStaffTxLoaded(true); });
+    }
+  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded, roomUseLoaded, staffTxYear]);
 
   const s = stats;
   const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
@@ -3334,6 +3359,164 @@ export default function Dashboard() {
                       </table>
                     </div>
                     <p className="text-xs text-gray-400 mt-2">High in-library use with no checkouts = strong candidate for additional copies or course reserve listing.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Staff Transactions ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <span>👤</span>Staff Transactions
+            </h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Destiny Audit transactions performed by staff user IDs <strong>572608</strong> and <strong>963453</strong>, totaled by month for {year}.
+            </p>
+
+            {!staffTxLoaded && (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading staff transactions…</div>
+            )}
+
+            {staffTxLoaded && staffTx && (staffTx.source === 'none' || staffTx.error) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                <div className="font-semibold text-amber-800 mb-1">⚠ Unable to load Staff Transactions</div>
+                <p className="text-sm text-amber-700">{staffTx.error || staffTx.message}</p>
+              </div>
+            )}
+
+            {staffTxLoaded && staffTx && staffTx.source === 'audit' && (
+              <div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                  <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-700">{(staffTx.totalThisYear ?? 0).toLocaleString()}</div>
+                    <div className="text-xs text-gray-500 mt-1">Transactions {year}</div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <div className="text-2xl font-bold text-indigo-700">{(staffTx.totalAllTime ?? 0).toLocaleString()}</div>
+                    <div className="text-xs text-gray-500 mt-1">Total All-Time</div>
+                  </div>
+                  {(staffTx.staff ?? []).map((s) => (
+                    <div key={s.originatorUserID} className="bg-white rounded-xl shadow-sm p-4 text-center">
+                      <div className="text-2xl font-bold text-teal-700">{s.transactions.toLocaleString()}</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        User {s.originatorUserID}{s.loginID ? ` · ${s.loginID}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Monthly totals table */}
+                <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-3">Monthly Totals — {year}</p>
+                  {(() => {
+                    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    const staffIds = staffTx.staffUserIds ?? [572608, 963453];
+                    const byStaff = staffTx.byMonthByStaff ?? [];
+                    const monthTotal = (mo: number) =>
+                      staffTx.byMonth?.find((r) => r.mo === mo)?.transactions
+                      ?? byStaff.filter((r) => r.mo === mo).reduce((a, r) => a + r.transactions, 0);
+                    const cell = (mo: number, uid: number) =>
+                      byStaff.find((r) => r.mo === mo && Number(r.originatorUserID) === uid)?.transactions ?? 0;
+                    const yearTotal = staffTx.totalThisYear ?? 0;
+                    const staffYear = (uid: number) =>
+                      staffTx.staff?.find((s) => s.originatorUserID === uid)?.transactions ?? 0;
+
+                    return (
+                      <>
+                        <div className="overflow-x-auto mb-4">
+                          <table className="w-full text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
+                                <th className="text-left p-2 border border-gray-200">Month</th>
+                                {staffIds.map((uid) => (
+                                  <th key={uid} className="text-right p-2 border border-gray-200">
+                                    {uid}
+                                    {staffTx.staff?.find((s) => s.originatorUserID === uid)?.loginID
+                                      ? ` (${staffTx.staff.find((s) => s.originatorUserID === uid)!.loginID})`
+                                      : ''}
+                                  </th>
+                                ))}
+                                <th className="text-right p-2 border border-gray-200 font-bold">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {months.map((label, i) => {
+                                const mo = i + 1;
+                                const total = monthTotal(mo);
+                                return (
+                                  <tr key={mo} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                    <td className="p-2 border border-gray-200 font-medium">{label}</td>
+                                    {staffIds.map((uid) => (
+                                      <td key={uid} className="p-2 border border-gray-200 text-right">
+                                        {cell(mo, uid) ? cell(mo, uid).toLocaleString() : '—'}
+                                      </td>
+                                    ))}
+                                    <td className="p-2 border border-gray-200 text-right font-semibold text-blue-700">
+                                      {total ? total.toLocaleString() : '—'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              <tr className="bg-blue-50 font-semibold">
+                                <td className="p-2 border border-gray-200">Year Total</td>
+                                {staffIds.map((uid) => (
+                                  <td key={uid} className="p-2 border border-gray-200 text-right">
+                                    {staffYear(uid).toLocaleString()}
+                                  </td>
+                                ))}
+                                <td className="p-2 border border-gray-200 text-right text-blue-800">
+                                  {yearTotal.toLocaleString()}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Monthly bar chart */}
+                        <div className="flex items-end gap-1 h-28">
+                          {(() => {
+                            const max = Math.max(...months.map((_, i) => monthTotal(i + 1)), 1);
+                            return months.map((label, i) => {
+                              const total = monthTotal(i + 1);
+                              const h = total ? Math.max(4, (total / max) * 90) : 0;
+                              return (
+                                <div key={label} className="flex-1 flex flex-col items-center gap-1">
+                                  <div className="text-xs text-gray-500 leading-none">{total ? total.toLocaleString() : ''}</div>
+                                  <div
+                                    className="w-full rounded-t transition-all"
+                                    style={{ height: `${h}px`, backgroundColor: total ? '#2563eb' : '#e5e7eb' }}
+                                    title={`${label}: ${total.toLocaleString()}`}
+                                  />
+                                  <div className="text-xs text-gray-400">{label}</div>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {/* By transaction type */}
+                {staffTx.byTransType && staffTx.byTransType.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm p-5">
+                    <p className="text-sm font-semibold text-gray-700 mb-3">By Transaction Type — {year}</p>
+                    <div className="space-y-2 max-h-72 overflow-y-auto">
+                      {(() => {
+                        const max = Math.max(...staffTx.byTransType!.map((r) => r.transactions), 1);
+                        return staffTx.byTransType!.map((r, i) => (
+                          <div key={i} className="flex items-center gap-3">
+                            <div className="w-48 text-xs text-gray-700 font-medium truncate shrink-0" title={r.transType}>{r.transType || '(blank)'}</div>
+                            <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                              <div className="h-4 rounded-full bg-blue-500" style={{ width: `${(r.transactions / max * 100).toFixed(1)}%` }} />
+                            </div>
+                            <div className="text-xs font-semibold text-gray-700 w-14 text-right">{r.transactions.toLocaleString()}</div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>
