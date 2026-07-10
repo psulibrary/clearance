@@ -2246,7 +2246,23 @@ export default function Dashboard() {
   type PeakDayRow    = { day: string; checkouts: number };
   type LoanDurRow    = { patronType: string; currentlyOut: number; avgDaysOut: number; avgLoanPeriod: number; overdueCount: number };
   type WeedItem      = { Title: string; Author: string; CallNumber: string; CopyBarcode: string; Acquired: string; LastBorrowed: string; daysSinceActivity: number; Price: number };
-  type NeverBorrowedRow = { firstDigit: string; neverBorrowedTitles: number; neverBorrowedItems: number };
+  type NeverBorrowedRow = { firstDigit: string; neverBorrowedTitles: number; neverBorrowedItems: number; titles?: number; items?: number };
+  type NeverBorrowedSplit = {
+    neverUsed: { byDewey: NeverBorrowedRow[]; totals: { items: number; titles: number } };
+    roomUseOnly: { byDewey: NeverBorrowedRow[]; totals: { items: number; titles: number } };
+    byDewey: NeverBorrowedRow[];
+    totals: {
+      totalTitles: number;
+      totalItems: number;
+      neverBorrowedItems: number;
+      neverBorrowedTitles: number;
+      neverUsedItems?: number;
+      neverUsedTitles?: number;
+      roomUseOnlyItems?: number;
+      roomUseOnlyTitles?: number;
+    };
+    roomUseAvailable?: boolean;
+  };
   type LapsedRow     = { patronType: string; lapsedCount: number };
   type FineByTypeRow = { patronType: string; patronsWithFines: number; fineCount: number; totalFines: number; avgFine: number };
   type AvgAgeRow     = { range: string; firstDigit: string; avgAgeYears: number; itemCount: number; oldestYear: number; newestYear: number };
@@ -2263,7 +2279,7 @@ export default function Dashboard() {
   const [peakDays, setPeakDays]           = useState<PeakDayRow[]>([]);
   const [loanDur, setLoanDur]             = useState<{ byPatronType: LoanDurRow[]; overall: { avgDaysOut: number; avgLoanPeriod: number; currentlyOut: number; overdueCount: number }; note: string } | null>(null);
   const [weedData, setWeedData]           = useState<{ items: WeedItem[]; summary: { candidateCount: number; totalValue: number }; yearsThreshold: number } | null>(null);
-  const [neverBorrowed, setNeverBorrowed] = useState<{ byDewey: NeverBorrowedRow[]; totals: { totalTitles: number; totalItems: number; neverBorrowedItems: number; neverBorrowedTitles: number } } | null>(null);
+  const [neverBorrowed, setNeverBorrowed] = useState<NeverBorrowedSplit | null>(null);
   const [lapsedData, setLapsedData]       = useState<{ activeLastYear: number; activeThisYear: number; lapsedCount: number; lapsedRate: number; year: number; byType: LapsedRow[] } | null>(null);
   const [finesByType, setFinesByType]     = useState<FineByTypeRow[]>([]);
   const [avgColAge, setAvgColAge]         = useState<AvgAgeRow[]>([]);
@@ -3971,46 +3987,124 @@ export default function Dashboard() {
             ) : null}
           </div>
 
-          {/* ── Never-Borrowed Items ── */}
+          {/* ── Never Borrowed / Never Used ── */}
           <div className="mb-8">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>📦</span>Items Never Borrowed
             </h2>
-            <p className="text-xs text-gray-600 mb-4">Titles/items acquired but never checked out — signals poor acquisitions or poor discoverability.</p>
+            <p className="text-xs text-gray-600 mb-4">
+              Split into never used (no checkout and no in-library use) vs room-use only (in-library use, never checked out).
+            </p>
             {extra2Loading.neverBorrowed ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading…</div>
             ) : extra2Errors.neverBorrowed ? (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-600">Error: {extra2Errors.neverBorrowed}</div>
             ) : neverBorrowed ? (
               <>
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-                    <div className="text-3xl font-bold text-red-600">{neverBorrowed.totals.neverBorrowedItems.toLocaleString()}</div>
-                    <div className="text-sm text-red-500 mt-1">Items Never Borrowed</div>
-                    <div className="text-xs text-gray-600">{pct(neverBorrowed.totals.neverBorrowedItems, neverBorrowed.totals.totalItems)} of collection</div>
+                    <div className="text-3xl font-bold text-red-600">
+                      {(neverBorrowed.totals.neverUsedItems ?? neverBorrowed.neverUsed?.totals.items ?? neverBorrowed.totals.neverBorrowedItems).toLocaleString()}
+                    </div>
+                    <div className="text-sm text-red-500 mt-1">Never Used Items</div>
+                    <div className="text-xs text-gray-600">No checkout + no in-library use</div>
                   </div>
                   <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
-                    <div className="text-3xl font-bold text-orange-600">{neverBorrowed.totals.neverBorrowedTitles.toLocaleString()}</div>
-                    <div className="text-sm text-orange-500 mt-1">Titles Never Borrowed</div>
-                    <div className="text-xs text-gray-600">{pct(neverBorrowed.totals.neverBorrowedTitles, neverBorrowed.totals.totalTitles)} of titles</div>
+                    <div className="text-3xl font-bold text-orange-600">
+                      {(neverBorrowed.totals.neverUsedTitles ?? neverBorrowed.neverUsed?.totals.titles ?? neverBorrowed.totals.neverBorrowedTitles).toLocaleString()}
+                    </div>
+                    <div className="text-sm text-orange-500 mt-1">Never Used Titles</div>
+                    <div className="text-xs text-gray-600">
+                      {pct(
+                        neverBorrowed.totals.neverUsedTitles ?? neverBorrowed.neverUsed?.totals.titles ?? neverBorrowed.totals.neverBorrowedTitles,
+                        neverBorrowed.totals.totalTitles,
+                      )} of titles
+                    </div>
+                  </div>
+                  <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-bold text-violet-700">
+                      {(neverBorrowed.totals.roomUseOnlyItems ?? neverBorrowed.roomUseOnly?.totals.items ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-sm text-violet-600 mt-1">Room-Use Only Items</div>
+                    <div className="text-xs text-gray-600">In-library use, never checked out</div>
+                  </div>
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-bold text-indigo-700">
+                      {(neverBorrowed.totals.roomUseOnlyTitles ?? neverBorrowed.roomUseOnly?.totals.titles ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-sm text-indigo-600 mt-1">Room-Use Only Titles</div>
+                    <div className="text-xs text-gray-600">
+                      {neverBorrowed.roomUseAvailable === false
+                        ? 'In-library table not detected'
+                        : pct(
+                            neverBorrowed.totals.roomUseOnlyTitles ?? neverBorrowed.roomUseOnly?.totals.titles ?? 0,
+                            neverBorrowed.totals.totalTitles,
+                          ) + ' of titles'}
+                    </div>
                   </div>
                 </div>
-                {neverBorrowed.byDewey.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
-                    <table className="w-full text-xs border-collapse">
-                      <thead><tr className="bg-orange-600 text-white"><th className="text-left p-2">Dewey</th><th className="text-right p-2">Titles</th><th className="text-right p-2">Items</th></tr></thead>
-                      <tbody>
-                        {neverBorrowed.byDewey.map((r, i) => (
-                          <tr key={r.firstDigit} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="p-2 border-b border-gray-100 font-medium">{r.firstDigit}00s</td>
-                            <td className="p-2 border-b border-gray-100 text-right">{r.neverBorrowedTitles.toLocaleString()}</td>
-                            <td className="p-2 border-b border-gray-100 text-right font-semibold text-orange-700">{r.neverBorrowedItems.toLocaleString()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">Never Used — no checkout, no in-library use</p>
+                    {(neverBorrowed.neverUsed?.byDewey ?? neverBorrowed.byDewey).length > 0 ? (
+                      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                        <table className="w-full text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-red-600 text-white">
+                              <th className="text-left p-2">Dewey</th>
+                              <th className="text-right p-2">Titles</th>
+                              <th className="text-right p-2">Items</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(neverBorrowed.neverUsed?.byDewey ?? neverBorrowed.byDewey).map((r, i) => (
+                              <tr key={`nu-${r.firstDigit}`} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="p-2 border-b border-gray-100 font-medium">{r.firstDigit}00s</td>
+                                <td className="p-2 border-b border-gray-100 text-right">{(r.titles ?? r.neverBorrowedTitles).toLocaleString()}</td>
+                                <td className="p-2 border-b border-gray-100 text-right font-semibold text-red-700">{(r.items ?? r.neverBorrowedItems).toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded-xl shadow-sm p-4 text-center text-gray-400 text-sm">No never-used items in Dewey ranges</div>
+                    )}
                   </div>
-                )}
+
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">Room-Use Only — in-library use, never checked out</p>
+                    {neverBorrowed.roomUseAvailable === false ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800">
+                        In-library use table not found in Destiny, so room-use-only cannot be separated yet. All never-checked-out items are shown under Never Used.
+                      </div>
+                    ) : (neverBorrowed.roomUseOnly?.byDewey ?? []).length > 0 ? (
+                      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                        <table className="w-full text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-violet-600 text-white">
+                              <th className="text-left p-2">Dewey</th>
+                              <th className="text-right p-2">Titles</th>
+                              <th className="text-right p-2">Items</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {neverBorrowed.roomUseOnly.byDewey.map((r, i) => (
+                              <tr key={`ru-${r.firstDigit}`} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="p-2 border-b border-gray-100 font-medium">{r.firstDigit}00s</td>
+                                <td className="p-2 border-b border-gray-100 text-right">{(r.titles ?? r.neverBorrowedTitles).toLocaleString()}</td>
+                                <td className="p-2 border-b border-gray-100 text-right font-semibold text-violet-700">{(r.items ?? r.neverBorrowedItems).toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded-xl shadow-sm p-4 text-center text-gray-400 text-sm">No room-use-only items in Dewey ranges</div>
+                    )}
+                  </div>
+                </div>
               </>
             ) : extraLoaded2.collection ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available</div>
