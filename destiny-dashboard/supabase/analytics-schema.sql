@@ -40,3 +40,21 @@ create table if not exists api_cache (
   payload    jsonb not null,
   synced_at  timestamptz not null default now()
 );
+
+-- The dashboard reads daily_snapshots/monthly_circulation directly from the
+-- browser using the public anon key (see lib/supabase.ts), while the sync
+-- routes write using the service-role key (lib/supabase-server.ts), which
+-- bypasses RLS. If RLS is enabled on these tables with no SELECT policy,
+-- writes succeed silently but the dashboard's read-back returns zero rows
+-- and the Trends tab looks empty even though the sync worked. These tables
+-- hold only aggregate library stats (no PII), so a public read policy is
+-- safe. api_cache is server-only (read/written via the service-role key
+-- from lib/cache.ts) and does not need a public policy.
+alter table daily_snapshots enable row level security;
+alter table monthly_circulation enable row level security;
+
+drop policy if exists "Public read access" on daily_snapshots;
+create policy "Public read access" on daily_snapshots for select using (true);
+
+drop policy if exists "Public read access" on monthly_circulation;
+create policy "Public read access" on monthly_circulation for select using (true);
