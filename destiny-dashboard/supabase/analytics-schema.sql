@@ -29,3 +29,14 @@ create table if not exists monthly_circulation (
   created_at      timestamptz default now(),
   primary key (year, month)
 );
+
+-- Generic read-through cache: every dashboard API route that queries Destiny
+-- (MS SQL Server) writes its last-good response here on success. When the
+-- SQL Server is unreachable, the route falls back to the newest row for its
+-- key instead of failing, so the dashboard still shows (stale) data.
+-- Keyed by route path + query string, e.g. "/api/stats?year=2026".
+create table if not exists api_cache (
+  route      text primary key,
+  payload    jsonb not null,
+  synced_at  timestamptz not null default now()
+);

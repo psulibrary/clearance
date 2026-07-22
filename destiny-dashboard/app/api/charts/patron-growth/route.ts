@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const years = Math.min(5, Math.max(1, parseInt(searchParams.get('years') ?? '3', 10)));
+  const key = cacheKey('/api/charts/patron-growth', searchParams);
 
   try {
     const pool = await getPool();
@@ -32,8 +34,11 @@ export async function GET(request: Request) {
       newPatrons: r.newPatrons,
     }));
 
+    cacheSet(key, rows);
     return NextResponse.json(rows);
   } catch (err: unknown) {
+    const cached = await cacheGet(key);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 },

@@ -2231,6 +2231,7 @@ export default function Dashboard() {
   const [insightsUnlocked, setInsightsUnlocked] = useState(false);
   const [pwDraft, setPwDraft] = useState('');
   const [pwError, setPwError] = useState(false);
+  const [dbHealth, setDbHealth] = useState<{ mssqlOk: boolean; cacheAsOf: string | null } | null>(null);
 
   type ActivityRow = { name:string; totalPatrons:number; activePatrons:number; totalCheckouts:number; overdueItems:number; activeRate:number; checkoutsPerPatron:number };
   const [genderActivity, setGenderActivity]       = useState<ActivityRow[]>([]);
@@ -2336,6 +2337,21 @@ export default function Dashboard() {
   }, [year, month, gender, patronTypeID]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Poll Destiny (MS SQL Server) connectivity so the dashboard can flag when
+  // it's showing cached data from Supabase instead of a live query.
+  useEffect(() => {
+    let cancelled = false;
+    const check = () => {
+      fetch('/api/health')
+        .then(r => r.json())
+        .then(d => { if (!cancelled) setDbHealth({ mssqlOk: !!d.mssqlOk, cacheAsOf: d.cacheAsOf ?? null }); })
+        .catch(() => { if (!cancelled) setDbHealth({ mssqlOk: false, cacheAsOf: null }); });
+    };
+    check();
+    const interval = setInterval(check, 60000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   // Fetch filter dropdown data on mount (small queries, needed for filters)
   useEffect(() => {
@@ -2503,6 +2519,13 @@ export default function Dashboard() {
       </div>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
+        {dbHealth && !dbHealth.mssqlOk && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm print:hidden">
+            <strong>⚠️ Destiny database is currently unreachable.</strong> This dashboard is showing the last cached
+            data{dbHealth.cacheAsOf ? ` (as of ${new Date(dbHealth.cacheAsOf).toLocaleString()})` : ''} instead of live numbers.
+          </div>
+        )}
+
         {s?.error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             <strong>Connection error:</strong> {s.error}

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheGet, cacheSet } from '@/lib/cache';
+
+const CACHE_KEY = '/api/charts/collection-by-category';
 
 // Maps Dewey hundreds to class name
 const DEWEY: Record<number, string> = {
@@ -41,8 +44,11 @@ export async function GET() {
       checkedOut: r.checkedOut,
     }));
 
+    cacheSet(CACHE_KEY, { data });
     return NextResponse.json({ data });
   } catch (err: unknown) {
+    const cached = await cacheGet(CACHE_KEY);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 import { getRoomUseConfig } from '@/lib/audit-room-use';
+import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(50, Math.max(5, parseInt(searchParams.get('limit') ?? '10', 10)));
   const year  = new Date().getFullYear();
+  const key = cacheKey('/api/charts/top-active-patrons', searchParams);
 
   try {
     const pool = await getPool();
@@ -69,7 +71,7 @@ export async function GET(request: Request) {
           ruMap[r.PatronID] = r;
         }
         roomUseAware = true;
-        return NextResponse.json({
+        const json = {
           roomUseAware: true,
           patrons: rows.map(r => ({
             PatronBarcode: r.PatronBarcode,
@@ -84,11 +86,13 @@ export async function GET(request: Request) {
             totalUse: r.totalCheckouts + (ruMap[r.PatronID]?.totalRoomUse ?? 0),
             totalUseThisYear: r.checkoutsThisYear + (ruMap[r.PatronID]?.roomUseThisYear ?? 0),
           })).sort((a, b) => b.totalUse - a.totalUse),
-        });
+        };
+        cacheSet(key, json);
+        return NextResponse.json(json);
       } catch { /* fall through to checkout-only */ }
     }
 
-    return NextResponse.json({
+    const json = {
       roomUseAware,
       patrons: rows.map(r => ({
         PatronBarcode: r.PatronBarcode,
@@ -103,8 +107,12 @@ export async function GET(request: Request) {
         totalUse: r.totalCheckouts,
         totalUseThisYear: r.checkoutsThisYear,
       })),
-    });
+    };
+    cacheSet(key, json);
+    return NextResponse.json(json);
   } catch (err: unknown) {
+    const cached = await cacheGet(key);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 },

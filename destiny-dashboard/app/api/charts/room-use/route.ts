@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 
 // Destiny stores in-library use in the Audit table.
 // TransType (tinyint) = check-in action code
@@ -11,6 +12,7 @@ import { getSchemaPrefix, t } from '@/lib/schema';
 
 export async function GET(request: NextRequest) {
   const year = parseInt(request.nextUrl.searchParams.get('year') || String(new Date().getFullYear()));
+  const key = cacheKey('/api/charts/room-use', request.nextUrl.searchParams);
 
   try {
     const pool = await getPool();
@@ -130,7 +132,7 @@ export async function GET(request: NextRequest) {
       } catch (_) { /* skip if join fails */ }
     }
 
-    return NextResponse.json({
+    const json = {
       source: 'audit',
       year,
       totalThisYear,
@@ -147,9 +149,13 @@ export async function GET(request: NextRequest) {
         sortedModifiers,
         allCombos: combos,
       },
-    });
+    };
+    cacheSet(key, json);
+    return NextResponse.json(json);
 
   } catch (err: unknown) {
+    const cached = await cacheGet(key);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

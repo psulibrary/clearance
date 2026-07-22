@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(50, Math.max(5, parseInt(searchParams.get('limit') ?? '10', 10)));
+  const key = cacheKey('/api/charts/longest-overdue', searchParams);
 
   try {
     const pool = await getPool();
@@ -34,8 +36,11 @@ export async function GET(request: Request) {
       ORDER BY DaysOverdue DESC
     `);
 
+    cacheSet(key, result.recordset);
     return NextResponse.json(result.recordset);
   } catch (err: unknown) {
+    const cached = await cacheGet(key);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 },

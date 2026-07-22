@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheGet, cacheSet, withCacheMeta } from '@/lib/cache';
+
+const CACHE_KEY = '/api/strategic/stats';
 
 export async function GET() {
   try {
@@ -75,8 +78,12 @@ export async function GET() {
           AS newPatronsThisYear
     `);
 
-    return NextResponse.json({ ...result.recordset[0], year });
+    const json = { ...result.recordset[0], year };
+    cacheSet(CACHE_KEY, json);
+    return NextResponse.json(json);
   } catch (err: unknown) {
+    const cached = await cacheGet(CACHE_KEY);
+    if (cached) return NextResponse.json(withCacheMeta(cached));
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 },

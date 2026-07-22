@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheGet, cacheSet, withCacheMeta } from '@/lib/cache';
+
+const CACHE_KEY = '/api/ched/stats';
 
 export async function GET() {
   try {
@@ -73,8 +76,11 @@ export async function GET() {
       // CrossDistrictLoan columns unknown — leave as 0
     }
 
+    cacheSet(CACHE_KEY, stats);
     return NextResponse.json(stats);
   } catch (err: unknown) {
+    const cached = await cacheGet(CACHE_KEY);
+    if (cached) return NextResponse.json(withCacheMeta(cached));
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

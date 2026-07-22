@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheGet, cacheSet } from '@/lib/cache';
+
+const CACHE_KEY = '/api/charts/collection-by-materialtype';
 
 const BIB_TYPE_LABELS: Record<number, string> = {
   0:  'Equipment',
@@ -41,8 +44,11 @@ export async function GET() {
       utilRate:   r.items ? parseFloat((r.checkedOut / r.items * 100).toFixed(1)) : 0,
     }));
 
+    cacheSet(CACHE_KEY, { data });
     return NextResponse.json({ data });
   } catch (err: unknown) {
+    const cached = await cacheGet(CACHE_KEY);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

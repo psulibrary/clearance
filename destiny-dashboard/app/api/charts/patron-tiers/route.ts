@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 import { getRoomUseConfig } from '@/lib/audit-room-use';
+import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const year = parseInt(searchParams.get('year') ?? String(new Date().getFullYear()), 10);
+  const key = cacheKey('/api/charts/patron-tiers', searchParams);
 
   if (isNaN(year) || year < 1900 || year > 9999) {
     return NextResponse.json({ error: 'Invalid year parameter' }, { status: 400 });
@@ -92,7 +94,7 @@ export async function GET(request: Request) {
 
     const lapsed = Math.max(0, totalPatrons - activeThisYear - neverBorrowed);
 
-    return NextResponse.json({
+    const json = {
       totalPatrons,
       activeThisYear,
       lapsed,
@@ -101,8 +103,12 @@ export async function GET(request: Request) {
       year,
       roomUseAware: cfg !== null,
       roomUsePatronsThisYear,
-    });
+    };
+    cacheSet(key, json);
+    return NextResponse.json(json);
   } catch (err: unknown) {
+    const cached = await cacheGet(key);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 },

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheGet, cacheSet, withCacheMeta } from '@/lib/cache';
+
+const CACHE_KEY = '/api/ched/acquisition-by-year';
 
 export async function GET() {
   try {
@@ -19,8 +22,12 @@ export async function GET() {
       GROUP BY YEAR(Acquired)
       ORDER BY year ASC
     `);
-    return NextResponse.json({ data: result.recordset });
+    const json = { data: result.recordset };
+    cacheSet(CACHE_KEY, json);
+    return NextResponse.json(json);
   } catch (err: unknown) {
+    const cached = await cacheGet(CACHE_KEY);
+    if (cached) return NextResponse.json(withCacheMeta(cached));
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

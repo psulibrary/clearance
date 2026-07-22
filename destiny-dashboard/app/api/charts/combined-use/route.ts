@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheGet, cacheSet } from '@/lib/cache';
+
+const CACHE_KEY = '/api/charts/combined-use';
 
 // Returns combined use statistics where "borrow" = checkout OR in-library room use.
 // Used to correct metrics that previously only counted checkouts.
@@ -51,7 +54,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN ${t(p, 'Audit')} a ON a.CopyID = c.CopyID
         WHERE c.DateWithdrawn IS NULL
       `);
-      return NextResponse.json({
+      const json = {
         year,
         roomUseAware: false,
         activeUsersThisYear: r.recordset[0]?.activeUsersThisYear ?? 0,
@@ -59,7 +62,9 @@ export async function GET(request: NextRequest) {
         roomUseOnlyUsersThisYear: 0,
         neverUsedItems: r.recordset[0]?.neverUsedItems ?? 0,
         totalItems: r.recordset[0]?.totalItems ?? 0,
-      });
+      };
+      cacheSet(CACHE_KEY, json);
+      return NextResponse.json(json);
     }
 
     req.input('mod', sql.Int, inLibMod);
@@ -133,7 +138,7 @@ export async function GET(request: NextRequest) {
         AND c.DateWithdrawn IS NULL
     `);
 
-    return NextResponse.json({
+    const json = {
       year,
       roomUseAware: true,
       checkoutPatronsThisYear: checkoutPatrons.recordset[0]?.cnt ?? 0,
@@ -143,9 +148,13 @@ export async function GET(request: NextRequest) {
       neverUsedItems: neverUsed.recordset[0]?.cnt ?? 0,
       roomUseOnlyItems: roomUseOnlyItems.recordset[0]?.cnt ?? 0,
       debug: { inLibMod, checkInType },
-    });
+    };
+    cacheSet(CACHE_KEY, json);
+    return NextResponse.json(json);
 
   } catch (err: unknown) {
+    const cached = await cacheGet(CACHE_KEY);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 import { getRoomUseConfig } from '@/lib/audit-room-use';
+import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(50, Math.max(5, parseInt(searchParams.get('limit') ?? '20', 10)));
+  const key = cacheKey('/api/charts/top-titles', searchParams);
 
   try {
     const pool = await getPool();
@@ -33,7 +35,9 @@ export async function GET(request: Request) {
     const rows: TitleRow[] = checkoutResult.recordset;
 
     if (!cfg || rows.length === 0) {
-      return NextResponse.json(rows.map(r => ({ ...r, roomUse: 0, totalUse: r.checkoutCount, roomUseAware: false })));
+      const json = rows.map(r => ({ ...r, roomUse: 0, totalUse: r.checkoutCount, roomUseAware: false }));
+      cacheSet(key, json);
+      return NextResponse.json(json);
     }
 
     // Enrich with room use by BibID via Audit → CopyID → Copy.BibID
@@ -57,11 +61,17 @@ export async function GET(request: Request) {
         roomUse: ruMap[r.BibID] ?? 0,
         totalUse: r.checkoutCount + (ruMap[r.BibID] ?? 0),
       })).sort((a, b) => b.totalUse - a.totalUse);
-      return NextResponse.json({ data: enriched, roomUseAware: true });
+      const json = { data: enriched, roomUseAware: true };
+      cacheSet(key, json);
+      return NextResponse.json(json);
     } catch {
-      return NextResponse.json({ data: rows.map(r => ({ ...r, roomUse: 0, totalUse: r.checkoutCount })), roomUseAware: false });
+      const json = { data: rows.map(r => ({ ...r, roomUse: 0, totalUse: r.checkoutCount })), roomUseAware: false };
+      cacheSet(key, json);
+      return NextResponse.json(json);
     }
   } catch (err: unknown) {
+    const cached = await cacheGet(key);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 },

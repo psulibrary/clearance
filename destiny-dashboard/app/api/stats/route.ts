@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheKey, cacheGet, cacheSet, withCacheMeta } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   const sp          = request.nextUrl.searchParams;
@@ -9,6 +10,7 @@ export async function GET(request: NextRequest) {
   const month       = parseInt(sp.get('month') || '0');
   const gender      = sp.get('gender')      || '';
   const patronTypeID = parseInt(sp.get('patronTypeID') || '0');  // 0 = all types
+  const key = cacheKey('/api/stats', sp);
 
   try {
     const pool = await getPool();
@@ -121,8 +123,12 @@ export async function GET(request: NextRequest) {
           AS totalFinesEverCollected
     `);
 
-    return NextResponse.json({ ...result.recordset[0], year, month, gender, patronTypeID });
+    const json = { ...result.recordset[0], year, month, gender, patronTypeID };
+    cacheSet(key, json);
+    return NextResponse.json(json);
   } catch (err: unknown) {
+    const cached = await cacheGet(key);
+    if (cached) return NextResponse.json(withCacheMeta(cached));
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

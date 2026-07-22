@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const years  = Math.min(10, Math.max(1, parseInt(searchParams.get('years') ?? '3', 10)));
   const limit  = Math.min(100, Math.max(10, parseInt(searchParams.get('limit') ?? '20', 10)));
+  const key = cacheKey('/api/charts/weeding-candidates', searchParams);
 
   try {
     const pool = await getPool();
@@ -141,14 +143,18 @@ export async function GET(request: Request) {
         `);
     }
 
-    return NextResponse.json({
+    const json = {
       items: result.recordset,
       summary: summary.recordset[0],
       yearsThreshold: years,
       roomUseAware: inLibMod !== null,
       debug: { inLibMod, checkInType },
-    });
+    };
+    cacheSet(key, json);
+    return NextResponse.json(json);
   } catch (err: unknown) {
+    const cached = await cacheGet(key);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 },

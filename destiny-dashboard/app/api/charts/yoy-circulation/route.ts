@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
+import { cacheGet, cacheSet } from '@/lib/cache';
+
+const CACHE_KEY = '/api/charts/yoy-circulation';
 
 export async function GET() {
   try {
@@ -116,8 +119,12 @@ export async function GET() {
       newItems:    r.newItems,
     }));
 
-    return NextResponse.json({ years, roomUseAware: inLibMod !== null });
+    const json = { years, roomUseAware: inLibMod !== null };
+    cacheSet(CACHE_KEY, json);
+    return NextResponse.json(json);
   } catch (err: unknown) {
+    const cached = await cacheGet(CACHE_KEY);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 },

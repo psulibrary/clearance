@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 import { getRoomUseConfig } from '@/lib/audit-room-use';
+import { cacheGet, cacheSet } from '@/lib/cache';
+
+const CACHE_KEY = '/api/charts/patron-retention';
 
 export async function GET() {
   try {
@@ -77,8 +80,12 @@ export async function GET() {
     const retentionRate = r.activeLastYear > 0
       ? parseFloat(((r.retained / r.activeLastYear) * 100).toFixed(1))
       : 0;
-    return NextResponse.json({ ...r, retentionRate, year, roomUseAware });
+    const json = { ...r, retentionRate, year, roomUseAware };
+    cacheSet(CACHE_KEY, json);
+    return NextResponse.json(json);
   } catch (err: unknown) {
+    const cached = await cacheGet(CACHE_KEY);
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 },
