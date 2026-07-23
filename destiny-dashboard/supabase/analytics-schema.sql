@@ -15,8 +15,24 @@ create table if not exists daily_snapshots (
   total_fines_balance  numeric(10,2),
   pending_holds        integer,
   never_checked_out    integer,
+  room_use_ytd         integer,
+  room_use_7d          integer,
+  room_use_30d         integer,
+  total_borrows_ytd    integer,
+  total_borrows_7d     integer,
+  total_borrows_30d    integer,
   created_at           timestamptz default now()
 );
+
+-- Room-use / total-borrows columns were added to app/api/sync/daily/route.ts
+-- after this table was first created in some environments. Run these on an
+-- existing database (no-ops if the columns already exist).
+alter table daily_snapshots add column if not exists room_use_ytd      integer;
+alter table daily_snapshots add column if not exists room_use_7d       integer;
+alter table daily_snapshots add column if not exists room_use_30d      integer;
+alter table daily_snapshots add column if not exists total_borrows_ytd integer;
+alter table daily_snapshots add column if not exists total_borrows_7d  integer;
+alter table daily_snapshots add column if not exists total_borrows_30d integer;
 
 create table if not exists monthly_circulation (
   year            integer,
@@ -26,9 +42,15 @@ create table if not exists monthly_circulation (
   active_patrons  integer,
   new_patrons     integer,
   new_items       integer,
+  room_use        integer,
+  total_borrows   integer,
   created_at      timestamptz default now(),
   primary key (year, month)
 );
+
+-- Same drift as above, for app/api/sync/monthly/route.ts.
+alter table monthly_circulation add column if not exists room_use      integer;
+alter table monthly_circulation add column if not exists total_borrows integer;
 
 -- Generic read-through cache: every dashboard API route that queries Destiny
 -- (MS SQL Server) writes its last-good response here on success. When the
