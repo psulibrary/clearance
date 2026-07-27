@@ -2325,6 +2325,8 @@ export default function Dashboard() {
   const [syncMonthStatus, setSyncMonthStatus] = useState<string | null>(null);
   const [syncingDaily,    setSyncingDaily]    = useState(false);
   const [syncingMonthly,  setSyncingMonthly]  = useState(false);
+  const [syncCatalogStatus, setSyncCatalogStatus] = useState<string | null>(null);
+  const [syncingCatalog,    setSyncingCatalog]    = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -5222,9 +5224,32 @@ export default function Dashboard() {
                 >
                   {syncingMonthly ? 'Syncing…' : '🗃️ Backfill 5 Years'}
                 </button>
+                <button
+                  disabled={syncingCatalog}
+                  onClick={async () => {
+                    setSyncingCatalog(true);
+                    setSyncCatalogStatus(null);
+                    try {
+                      const res = await fetch('/api/sync/catalog', { method: 'POST' });
+                      const d = await res.json();
+                      setSyncCatalogStatus(d.ok ? `✅ Synced ${d.upserted} items (${d.removed} removed)` : `❌ ${d.error}`);
+                    } catch { setSyncCatalogStatus('❌ Network error'); }
+                    setSyncingCatalog(false);
+                  }}
+                  className="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  {syncingCatalog ? 'Syncing…' : '📚 Sync Full Catalog'}
+                </button>
               </div>
               {syncDailyStatus && <p className="mt-3 text-sm">{syncDailyStatus}</p>}
               {syncMonthStatus && <p className="mt-2 text-sm">{syncMonthStatus}</p>}
+              {syncCatalogStatus && <p className="mt-2 text-sm">{syncCatalogStatus}</p>}
+              <p className="mt-3 text-xs text-gray-500">
+                Full Catalog syncs call number/title/author/publisher/year/sublocation/barcode for every non-withdrawn
+                item into the <code className="bg-gray-100 px-1 rounded">library_catalog</code> Supabase table, for
+                other apps to read without connecting to Destiny directly. Not on a schedule (Hobby plan cron slots are
+                full) — run manually here whenever the catalog changes.
+              </p>
             </div>
           </div>
 

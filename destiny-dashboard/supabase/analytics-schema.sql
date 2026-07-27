@@ -80,3 +80,27 @@ create policy "Public read access" on daily_snapshots for select using (true);
 
 drop policy if exists "Public read access" on monthly_circulation;
 create policy "Public read access" on monthly_circulation for select using (true);
+
+-- Full catalog mirror, kept in sync by app/api/sync/catalog/route.ts. Lets
+-- other webapps read call number / title / author / publisher / year /
+-- sublocation / barcode straight from Supabase instead of connecting to
+-- Destiny (MS SQL Server) directly.
+create table if not exists library_catalog (
+  copy_id           integer primary key,
+  barcode           text,
+  call_number       text,
+  title             text,
+  author            text,
+  publisher         text,
+  publication_year  integer,
+  sublocation       text,
+  synced_at         timestamptz not null default now()
+);
+
+create index if not exists library_catalog_title_idx     on library_catalog (title);
+create index if not exists library_catalog_call_number_idx on library_catalog (call_number);
+create index if not exists library_catalog_barcode_idx    on library_catalog (barcode);
+
+alter table library_catalog enable row level security;
+drop policy if exists "Public read access" on library_catalog;
+create policy "Public read access" on library_catalog for select using (true);
