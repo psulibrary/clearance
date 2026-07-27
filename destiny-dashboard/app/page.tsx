@@ -2318,9 +2318,14 @@ export default function Dashboard() {
 
   type MonthlyRow = { year: number; month: number; checkouts: number; checkins: number; active_patrons: number; new_patrons: number; new_items: number };
   type DailySnap  = { snapshot_date: string; total_items: number; checked_out: number; active_patrons_30d: number; checkouts_30d: number; total_patrons: number };
+  type SublocRow  = { sublocation: string; total: number };
+  type DecadeRow  = { decade: number; total: number };
   const [trendsLoaded,    setTrendsLoaded]    = useState(false);
   const [monthlyData,     setMonthlyData]     = useState<MonthlyRow[]>([]);
   const [dailySnaps,      setDailySnaps]      = useState<DailySnap[]>([]);
+  const [catalogBySubloc, setCatalogBySubloc] = useState<SublocRow[]>([]);
+  const [catalogByDecade, setCatalogByDecade] = useState<DecadeRow[]>([]);
+  const [catalogTotal,    setCatalogTotal]    = useState<number | null>(null);
   const [syncDailyStatus, setSyncDailyStatus] = useState<string | null>(null);
   const [syncMonthStatus, setSyncMonthStatus] = useState<string | null>(null);
   const [syncingDaily,    setSyncingDaily]    = useState(false);
@@ -2462,6 +2467,15 @@ export default function Dashboard() {
         });
         supabase.from('daily_snapshots').select('snapshot_date,total_items,checked_out,active_patrons_30d,checkouts_30d,total_patrons').order('snapshot_date', { ascending: false }).limit(30).then(({ data }) => {
           if (data) setDailySnaps(data as DailySnap[]);
+        });
+        supabase.from('library_catalog_by_sublocation').select('*').then(({ data }) => {
+          if (data) setCatalogBySubloc(data as SublocRow[]);
+        });
+        supabase.from('library_catalog_by_decade').select('*').then(({ data }) => {
+          if (data) setCatalogByDecade(data as DecadeRow[]);
+        });
+        supabase.from('library_catalog').select('*', { count: 'exact', head: true }).then(({ count }) => {
+          if (typeof count === 'number') setCatalogTotal(count);
         });
       })();
     }
@@ -5233,6 +5247,12 @@ export default function Dashboard() {
                       const res = await fetch('/api/sync/catalog', { method: 'POST' });
                       const d = await res.json();
                       setSyncCatalogStatus(d.ok ? `✅ Synced ${d.upserted} items (${d.removed} removed)` : `❌ ${d.error}`);
+                      if (d.ok) {
+                        const { supabase } = await import('@/lib/supabase');
+                        supabase.from('library_catalog_by_sublocation').select('*').then(({ data }) => { if (data) setCatalogBySubloc(data as SublocRow[]); });
+                        supabase.from('library_catalog_by_decade').select('*').then(({ data }) => { if (data) setCatalogByDecade(data as DecadeRow[]); });
+                        supabase.from('library_catalog').select('*', { count: 'exact', head: true }).then(({ count }) => { if (typeof count === 'number') setCatalogTotal(count); });
+                      }
                     } catch { setSyncCatalogStatus('❌ Network error'); }
                     setSyncingCatalog(false);
                   }}
@@ -5252,6 +5272,61 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
+
+          {/* ── Collection Overview (from library_catalog mirror) ── */}
+          {catalogTotal !== null && catalogTotal > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <span>📚</span>Collection Overview
+              </h2>
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <p className="text-xs text-gray-600">
+                    <strong className="text-gray-900">{catalogTotal.toLocaleString()}</strong> non-withdrawn items mirrored
+                    from Destiny into Supabase — read from the cache, so this works even if Destiny is offline.
+                  </p>
+                  <a
+                    href="/api/catalog/export"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    ⬇️ Export CSV
+                  </a>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By Sublocation</p>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={catalogBySubloc} layout="vertical" margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" tick={{ fontSize: 11 }} />
+                        <YAxis type="category" dataKey="sublocation" width={110} tick={{ fontSize: 11 }} />
+                        <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
+                        <Bar dataKey="total" name="Items" fill="#0d9488" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By Publication Decade</p>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={catalogByDecade.map(r => ({ ...r, label: `${r.decade}s` }))} margin={{ left: 10, right: 10, top: 4, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
+                        <Bar dataKey="total" name="Items" fill="#3b82f6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {catalogTotal === 0 && trendsLoaded && (
+            <div className="mb-8 bg-blue-50 border border-blue-200 rounded-xl p-6 text-blue-800 text-sm">
+              <strong>No catalog data yet.</strong> Click <em>Sync Full Catalog</em> above to mirror your collection into Supabase.
+            </div>
+          )}
 
           {/* ── Monthly Circulation Chart ── */}
           {monthlyData.length > 0 && (

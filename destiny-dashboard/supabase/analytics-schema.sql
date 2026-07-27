@@ -104,3 +104,23 @@ create index if not exists library_catalog_barcode_idx    on library_catalog (ba
 alter table library_catalog enable row level security;
 drop policy if exists "Public read access" on library_catalog;
 create policy "Public read access" on library_catalog for select using (true);
+
+-- Pre-aggregated breakdowns for the dashboard's Collection Overview chart —
+-- cheaper than pulling every row to the browser just to count/group them.
+create or replace view library_catalog_by_sublocation as
+  select coalesce(nullif(sublocation, ''), 'Unassigned') as sublocation, count(*)::int as total
+  from library_catalog
+  group by 1
+  order by total desc;
+
+create or replace view library_catalog_by_decade as
+  select (floor(publication_year / 10.0) * 10)::int as decade, count(*)::int as total
+  from library_catalog
+  where publication_year is not null and publication_year >= 1900
+  group by 1
+  order by decade;
+
+-- Views need their own grant even though the base table already allows
+-- public reads via RLS.
+grant select on library_catalog_by_sublocation to anon, authenticated;
+grant select on library_catalog_by_decade to anon, authenticated;
