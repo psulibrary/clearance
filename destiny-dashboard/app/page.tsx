@@ -2343,6 +2343,18 @@ export default function Dashboard() {
   const [catalogBySubloc, setCatalogBySubloc] = useState<SublocRow[]>([]);
   const [catalogByDecade, setCatalogByDecade] = useState<DecadeRow[]>([]);
   const [catalogTotal,    setCatalogTotal]    = useState<number | null>(null);
+
+  type FacebookInsights = {
+    pageName: string | null;
+    totalFollowers: number | null;
+    engagedUsers28d: number | null;
+    postEngagements28d: number | null;
+    impressions28d: number | null;
+    newFans28d: number | null;
+    error?: string;
+  };
+  const [fbInsights,    setFbInsights]    = useState<FacebookInsights | null>(null);
+  const [fbLoaded,      setFbLoaded]      = useState(false);
   const [syncDailyStatus, setSyncDailyStatus] = useState<string | null>(null);
   const [syncMonthStatus, setSyncMonthStatus] = useState<string | null>(null);
   const [syncingDaily,    setSyncingDaily]    = useState(false);
@@ -2495,6 +2507,10 @@ export default function Dashboard() {
           if (typeof count === 'number') setCatalogTotal(count);
         });
       })();
+      fetch('/api/facebook/insights')
+        .then(r => r.json())
+        .then(d => { setFbInsights(d); setFbLoaded(true); })
+        .catch(e => { setFbInsights({ pageName: null, totalFollowers: null, engagedUsers28d: null, postEngagements28d: null, impressions28d: null, newFans28d: null, error: String(e) }); setFbLoaded(true); });
     }
     if ((activeTab === 'patrons' || activeTab === 'overview') && !roomUseLoaded) {
       setRoomUseLoaded(true);
@@ -5510,6 +5526,47 @@ export default function Dashboard() {
               <strong>No catalog data yet.</strong> Click <em>Sync Full Catalog</em> above to mirror your collection into Supabase.
             </div>
           )}
+
+          {/* ── Facebook Page Engagement ── */}
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <span>📱</span>Facebook Page Engagement
+            </h2>
+            {!fbLoaded ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">Loading Facebook insights…</div>
+            ) : fbInsights?.error ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">
+                <strong>Could not load Facebook insights:</strong> {fbInsights.error}
+                <br /><span className="text-xs">Set <code className="bg-amber-100 px-1 rounded">FACEBOOK_PAGE_ID</code> and <code className="bg-amber-100 px-1 rounded">FACEBOOK_PAGE_ACCESS_TOKEN</code> in Vercel env vars to enable this.</span>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                {fbInsights?.pageName && <p className="text-xs text-gray-500 mb-3">{fbInsights.pageName} — last 28 days</p>}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-700">{fbInsights?.totalFollowers != null ? fbInsights.totalFollowers.toLocaleString() : '—'}</div>
+                    <div className="text-xs text-gray-500 mt-1">Total Followers</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-indigo-700">{fbInsights?.engagedUsers28d != null ? fbInsights.engagedUsers28d.toLocaleString() : '—'}</div>
+                    <div className="text-xs text-gray-500 mt-1">Engaged Users</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-teal-700">{fbInsights?.postEngagements28d != null ? fbInsights.postEngagements28d.toLocaleString() : '—'}</div>
+                    <div className="text-xs text-gray-500 mt-1">Post Engagements</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-violet-700">{fbInsights?.impressions28d != null ? fbInsights.impressions28d.toLocaleString() : '—'}</div>
+                    <div className="text-xs text-gray-500 mt-1">Impressions</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-emerald-700">{fbInsights?.newFans28d != null ? fbInsights.newFans28d.toLocaleString() : '—'}</div>
+                    <div className="text-xs text-gray-500 mt-1">New Followers</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* ── Monthly Circulation Chart ── */}
           {monthlyData.length > 0 && (
