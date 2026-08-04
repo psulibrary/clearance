@@ -110,6 +110,22 @@ function Section({ title, icon, children }: { title: string; icon: string; child
   );
 }
 
+// Collapses a data table behind a toggle so the chart above it is the
+// primary view — the exact numbers are still one click away.
+function DataTable({ label = 'View detailed data table', children }: { label?: string; children: React.ReactNode }) {
+  return (
+    <details className="mt-4 group print:open">
+      <summary className="cursor-pointer select-none list-none inline-flex items-center gap-1.5 text-xs font-semibold text-psu-blue-dark hover:text-psu-orange transition-colors">
+        <svg className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        {label}
+      </summary>
+      {children}
+    </details>
+  );
+}
+
 function exportCsv(s: Stats, yearLabel: string, monthLabel: string, genderLabel: string, patronTypeLabel: string) {
   const rows: [string, string][] = [
     ['Filter: Year', yearLabel],
@@ -2849,6 +2865,7 @@ export default function Dashboard() {
                     <Bar dataKey="newItems"   name="New Items"       fill="#FFCB05" radius={[3,3,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
+                <DataTable>
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full text-xs border-collapse">
                     <thead>
@@ -2889,6 +2906,7 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 </div>
+                </DataTable>
               </div>
             </div>
           )}
@@ -3649,7 +3667,30 @@ export default function Dashboard() {
 
                     return (
                       <>
-                        <div className="overflow-x-auto mb-4">
+                        {/* Monthly bar chart */}
+                        <div className="flex items-end gap-1 h-28">
+                          {(() => {
+                            const max = Math.max(...months.map((_, i) => monthTotal(i + 1)), 1);
+                            return months.map((label, i) => {
+                              const total = monthTotal(i + 1);
+                              const h = total ? Math.max(4, (total / max) * 90) : 0;
+                              return (
+                                <div key={label} className="flex-1 flex flex-col items-center gap-1">
+                                  <div className="text-xs text-gray-500 leading-none">{total ? total.toLocaleString() : ''}</div>
+                                  <div
+                                    className="w-full rounded-t transition-all"
+                                    style={{ height: `${h}px`, backgroundColor: total ? '#29ABE2' : '#e5e7eb' }}
+                                    title={`${label}: ${total.toLocaleString()}`}
+                                  />
+                                  <div className="text-xs text-gray-400">{label}</div>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+
+                        <DataTable label="View monthly totals by staff member">
+                        <div className="overflow-x-auto mt-4">
                           <table className="w-full text-xs border-collapse">
                             <thead>
                               <tr className="bg-gray-100 text-gray-700 uppercase tracking-wide">
@@ -3697,28 +3738,7 @@ export default function Dashboard() {
                             </tbody>
                           </table>
                         </div>
-
-                        {/* Monthly bar chart */}
-                        <div className="flex items-end gap-1 h-28">
-                          {(() => {
-                            const max = Math.max(...months.map((_, i) => monthTotal(i + 1)), 1);
-                            return months.map((label, i) => {
-                              const total = monthTotal(i + 1);
-                              const h = total ? Math.max(4, (total / max) * 90) : 0;
-                              return (
-                                <div key={label} className="flex-1 flex flex-col items-center gap-1">
-                                  <div className="text-xs text-gray-500 leading-none">{total ? total.toLocaleString() : ''}</div>
-                                  <div
-                                    className="w-full rounded-t transition-all"
-                                    style={{ height: `${h}px`, backgroundColor: total ? '#2563eb' : '#e5e7eb' }}
-                                    title={`${label}: ${total.toLocaleString()}`}
-                                  />
-                                  <div className="text-xs text-gray-400">{label}</div>
-                                </div>
-                              );
-                            });
-                          })()}
-                        </div>
+                        </DataTable>
                       </>
                     );
                   })()}
@@ -4048,6 +4068,7 @@ export default function Dashboard() {
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
+                      <DataTable>
                       <div className="overflow-x-auto mt-4">
                         <table className="w-full text-xs border-collapse">
                           <thead>
@@ -4074,6 +4095,7 @@ export default function Dashboard() {
                           </tbody>
                         </table>
                       </div>
+                      </DataTable>
                     </div>
                   );
                 })()}
@@ -4163,6 +4185,7 @@ export default function Dashboard() {
                     )}
                   </BarChart>
                 </ResponsiveContainer>
+                <DataTable>
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full text-xs border-collapse">
                     <thead>
@@ -4200,6 +4223,7 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 </div>
+                </DataTable>
               </div>
             </div>
           )}
@@ -4303,6 +4327,7 @@ export default function Dashboard() {
                     <Bar dataKey="everBorrowed" name="Ever Borrowed" fill="#FFCB05" radius={[2,2,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
+                <DataTable>
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full text-xs border-collapse">
                     <thead>
@@ -4329,6 +4354,7 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 </div>
+                </DataTable>
               </div>
             </div>
           )}
@@ -4416,6 +4442,7 @@ export default function Dashboard() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+                <DataTable>
                 <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                   <table className="w-full text-xs border-collapse">
                     <thead>
@@ -4440,6 +4467,7 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 </div>
+                </DataTable>
               </>
             ) : extraLoaded2.collection ? (
               <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">No data available (items may lack acquisition dates)</div>
@@ -4952,6 +4980,7 @@ export default function Dashboard() {
                     </ResponsiveContainer>
                   </div>
                 </div>
+                <DataTable>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs border-collapse">
                     <thead>
@@ -4980,6 +5009,7 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 </div>
+                </DataTable>
               </div>
             )}
 
@@ -5084,6 +5114,7 @@ export default function Dashboard() {
                     <Bar dataKey="overdueItems"  name="Overdue Items" fill="#EA5B0C" />
                   </BarChart>
                 </ResponsiveContainer>
+                <DataTable>
                 <div className="overflow-x-auto mt-4">
                   <table className="w-full text-xs border-collapse">
                     <thead>
@@ -5112,6 +5143,7 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 </div>
+                </DataTable>
               </div>
             )}
           </div>
@@ -5620,6 +5652,7 @@ export default function Dashboard() {
                 </ResponsiveContainer>
 
                 {/* Annual totals table */}
+                <DataTable label="View annual totals">
                 <div className="mt-6 overflow-x-auto">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Annual Totals</p>
                   <table className="w-full text-xs border-collapse">
@@ -5655,6 +5688,7 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 </div>
+                </DataTable>
               </div>
             </div>
           )}
@@ -5686,6 +5720,7 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
 
+                <DataTable>
                 <div className="overflow-x-auto mt-4">
                   <table className="w-full text-xs border-collapse">
                     <thead>
@@ -5712,6 +5747,7 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 </div>
+                </DataTable>
               </div>
             </div>
           )}
