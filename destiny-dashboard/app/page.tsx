@@ -126,68 +126,48 @@ function DataTable({ label = 'View detailed data table', children }: { label?: s
   );
 }
 
-function exportCsv(s: Stats, yearLabel: string, monthLabel: string, genderLabel: string, patronTypeLabel: string) {
-  const rows: [string, string][] = [
-    ['Filter: Year', yearLabel],
-    ['Filter: Month', monthLabel],
-    ['Filter: Gender', genderLabel || 'All'],
-    ['Filter: Patron Type', patronTypeLabel || 'All'],
-    ['', ''],
-    ['COLLECTION', ''],
-    ['Total Items', String(s.totalItems)],
-    ['Checked Out', String(s.checkedOut)],
-    ['Available Now', String(s.available)],
-    ['Overdue', String(s.overdue)],
-    ['Overdue > 30 Days', String(s.overdueOver30Days)],
-    ['Unique Titles', String(s.uniqueTitles)],
-    ['New Items This Month', String(s.newItemsThisMonth)],
-    ['New Items This Year', String(s.newItemsThisYear)],
-    ['Never Checked Out', String(s.neverCheckedOut)],
-    ['Withdrawn Items', String(s.withdrawnItems)],
-    ['', ''],
-    ['CIRCULATION', ''],
-    ['Checkouts Last 7 Days', String(s.checkoutsLast7Days)],
-    ['Checkouts Last 30 Days', String(s.checkoutsLast30Days)],
-    ['Checkouts (Filtered Period)', String(s.checkoutsThisYear)],
-    ['Check-ins Last 7 Days', String(s.checkinsLast7Days)],
-    ['Check-ins Last 30 Days', String(s.checkinsLast30Days)],
-    ['Avg Loan Duration (days)', Number(s.avgLoanDays).toFixed(1)],
-    ['Utilization Rate', pct(s.checkedOut, s.totalItems)],
-    ['Collection Turnover', s.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—'],
-    ['', ''],
-    ['HOLDS', ''],
-    ['Pending Holds', String(s.pendingHolds)],
-    ['Ready for Pickup', String(s.readyHolds)],
-    ['', ''],
-    ['PATRONS', ''],
-    ['Total Patrons', String(s.totalPatrons)],
-    ['Active Borrowers Now', String(s.patronsWithCheckouts)],
-    ['Active Patrons Last 30 Days', String(s.activePatronsLast30Days)],
-    ['Holds Placed (Filtered Period)', String(s.holdsPlacedThisYear)],
-    ['Active Patrons (Filtered Period)', String(s.activePatronsThisYear)],
-    ['New Patrons (Filtered Period)', String(s.newPatronsThisYear)],
-    ['Patron Reach Rate', pct(s.activePatronsThisYear, s.totalPatrons)],
-    ['Patrons with Overdue', String(s.patronsWithOverdue)],
-    ['', ''],
-    ['FINES & REVENUE', ''],
-    ['Outstanding Fines (count)', String(s.activeFines)],
-    ['Total Fines Balance', money(s.totalFinesBalance)],
-    ['Total Fines Ever Collected', money(s.totalFinesEverCollected)],
-  ];
+function csvField(v: unknown): string {
+  const s = v === null || v === undefined ? '' : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : `"${s}"`;
+}
 
-  const csv = rows.map(([a, b]) => `"${a}","${b}"`).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
+// Shared shape for the "everything on the dashboard" report: built once
+// (inside the Dashboard component, where all the tab data lives) and then
+// rendered as either CSV or plain text so the two exports never drift apart.
+type ReportSection = { section: string; rows: [string, string][] };
+
+function downloadBlob(content: string, filename: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `library-stats-${yearLabel}-${monthLabel.replace(/\s/g, '')}.csv`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-function csvField(v: unknown): string {
-  const s = v === null || v === undefined ? '' : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : `"${s}"`;
+function sectionsToCsv(sections: ReportSection[]): string {
+  const lines: string[] = [];
+  for (const { section, rows } of sections) {
+    if (rows.length === 0) continue;
+    lines.push(`${csvField(section)},${csvField('')}`);
+    for (const [label, value] of rows) lines.push(`${csvField(label)},${csvField(value)}`);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function sectionsToTxt(sections: ReportSection[], title: string): string {
+  const lines: string[] = [title, '='.repeat(title.length), ''];
+  for (const { section, rows } of sections) {
+    if (rows.length === 0) continue;
+    lines.push(section);
+    lines.push('-'.repeat(section.length));
+    const labelWidth = rows.reduce((m, [l]) => Math.max(m, l.length), 0);
+    for (const [label, value] of rows) lines.push(`  ${label.padEnd(labelWidth)}   ${value}`);
+    lines.push('');
+  }
+  return lines.join('\n');
 }
 
 function exportWeedingCsv(items: { Title: string; Author: string; CallNumber: string; CopyBarcode: string; Acquired: string; LastBorrowed: string; daysSinceActivity: number; Price: number }[]) {
@@ -2739,6 +2719,338 @@ export default function Dashboard() {
   const monthLabel   = MONTHS[month];
   const periodLabel  = month ? `${MONTHS[month]} ${year}` : `Year ${year}`;
 
+  // Pulls together everything currently loaded across every tab (not just
+  // the Stats object) into one shared structure so CSV and TXT exports stay
+  // in sync. Sections whose data hasn't been fetched yet (a tab the user
+  // hasn't opened) are simply omitted rather than shown as blank/zero.
+  function buildReportSections(): ReportSection[] {
+    const sections: ReportSection[] = [];
+    const genderLabel = gender || 'All';
+    const patronTypeLabel = patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription ?? 'All';
+
+    sections.push({
+      section: 'REPORT INFO',
+      rows: [
+        ['Generated', new Date().toLocaleString()],
+        ['Filter: Year', yearLabel],
+        ['Filter: Month', monthLabel],
+        ['Filter: Gender', genderLabel],
+        ['Filter: Patron Type', patronTypeLabel],
+      ],
+    });
+
+    if (s && !s.error) {
+      sections.push({
+        section: 'COLLECTION',
+        rows: [
+          ['Total Items', String(s.totalItems)],
+          ['Checked Out', String(s.checkedOut)],
+          ['Available Now', String(s.available)],
+          ['Overdue', String(s.overdue)],
+          ['Overdue > 30 Days', String(s.overdueOver30Days)],
+          ['Unique Titles', String(s.uniqueTitles)],
+          ['New Items This Month', String(s.newItemsThisMonth)],
+          ['New Items This Year', String(s.newItemsThisYear)],
+          ['Never Checked Out', String(s.neverCheckedOut)],
+          ['Withdrawn Items', String(s.withdrawnItems)],
+        ],
+      });
+      sections.push({
+        section: 'CIRCULATION',
+        rows: [
+          ['Checkouts Last 7 Days', String(s.checkoutsLast7Days)],
+          ['Checkouts Last 30 Days', String(s.checkoutsLast30Days)],
+          ['Checkouts (Filtered Period)', String(s.checkoutsThisYear)],
+          ['Check-ins Last 7 Days', String(s.checkinsLast7Days)],
+          ['Check-ins Last 30 Days', String(s.checkinsLast30Days)],
+          ['Avg Loan Duration (days)', Number(s.avgLoanDays).toFixed(1)],
+          ['Utilization Rate', pct(s.checkedOut, s.totalItems)],
+          ['Collection Turnover', s.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—'],
+        ],
+      });
+      sections.push({
+        section: 'HOLDS',
+        rows: [
+          ['Pending Holds', String(s.pendingHolds)],
+          ['Ready for Pickup', String(s.readyHolds)],
+          ['Hold Fill Rate', holdFillRate],
+        ],
+      });
+      sections.push({
+        section: 'PATRONS',
+        rows: [
+          ['Total Patrons', String(s.totalPatrons)],
+          ['Active Borrowers Now', String(s.patronsWithCheckouts)],
+          ['Active Patrons Last 30 Days', String(s.activePatronsLast30Days)],
+          ['Holds Placed (Filtered Period)', String(s.holdsPlacedThisYear)],
+          ['Active Patrons (Filtered Period)', String(s.activePatronsThisYear)],
+          ['New Patrons (Filtered Period)', String(s.newPatronsThisYear)],
+          ['Patron Reach Rate', pct(s.activePatronsThisYear, s.totalPatrons)],
+          ['Patrons with Overdue', String(s.patronsWithOverdue)],
+        ],
+      });
+      sections.push({
+        section: 'FINES & REVENUE',
+        rows: [
+          ['Outstanding Fines (count)', String(s.activeFines)],
+          ['Total Fines Balance', money(s.totalFinesBalance)],
+          ['Total Fines Ever Collected', money(s.totalFinesEverCollected)],
+        ],
+      });
+    }
+
+    if (patronTiers) {
+      sections.push({
+        section: 'PATRON ENGAGEMENT TIERS',
+        rows: [
+          ['Year', String(patronTiers.year)],
+          ['Total Patrons', String(patronTiers.totalPatrons)],
+          ['Active This Year', String(patronTiers.activeThisYear)],
+          ['Lapsed', String(patronTiers.lapsed)],
+          ['Never Borrowed', String(patronTiers.neverBorrowed)],
+          ['New This Year', String(patronTiers.newThisYear)],
+        ],
+      });
+    }
+
+    if (retention) {
+      sections.push({
+        section: 'PATRON RETENTION',
+        rows: [
+          ['Year', String(retention.year)],
+          ['Active Last Year', String(retention.activeLastYear)],
+          ['Retained', String(retention.retained)],
+          ['New Borrowers', String(retention.newBorrowers)],
+          ['Retention Rate', retention.retentionRate.toFixed(1) + '%'],
+        ],
+      });
+    }
+
+    if (lapsedData) {
+      sections.push({
+        section: 'LAPSED PATRONS',
+        rows: [
+          ['Year', String(lapsedData.year)],
+          ['Active Last Year', String(lapsedData.activeLastYear)],
+          ['Active This Year', String(lapsedData.activeThisYear)],
+          ['Lapsed Count', String(lapsedData.lapsedCount)],
+          ['Lapsed Rate', lapsedData.lapsedRate.toFixed(1) + '%'],
+          ...lapsedData.byType.map((r): [string, string] => [`  · ${r.patronType}`, String(r.lapsedCount)]),
+        ],
+      });
+    }
+
+    if (finesByType.length > 0) {
+      sections.push({
+        section: 'FINES BY PATRON TYPE',
+        rows: finesByType.map((r): [string, string] =>
+          [r.patronType, `${r.patronsWithFines} patrons, ${r.fineCount} fines, ${money(r.totalFines)} total, ${money(r.avgFine)} avg`]),
+      });
+    }
+
+    if (roomUse) {
+      sections.push({
+        section: 'IN-LIBRARY (ROOM) USE',
+        rows: [
+          ['Source', roomUse.source],
+          ['Year', String(roomUse.year)],
+          ['Total This Year', String(roomUse.totalThisYear ?? '—')],
+          ['Total All Time', String(roomUse.totalAllTime ?? '—')],
+          ['Titles With Use', String(roomUse.titlesWithUse ?? '—')],
+          ...(roomUse.topTitles ?? []).slice(0, 10).map((t): [string, string] =>
+            [`  · ${t.Title}`, `${t.inLibraryUses} uses (${t.copies} copies)`]),
+        ],
+      });
+    }
+
+    if (staffTx) {
+      sections.push({
+        section: 'STAFF TRANSACTIONS',
+        rows: [
+          ['Source', staffTx.source],
+          ['Year', String(staffTx.year)],
+          ['Total This Year', String(staffTx.totalThisYear ?? '—')],
+          ['Total All Time', String(staffTx.totalAllTime ?? '—')],
+          ...(staffTx.staff ?? []).map((r): [string, string] => [`  · ${r.loginID ?? r.originatorUserID}`, String(r.transactions)]),
+          ...(staffTx.byTransType ?? []).map((r): [string, string] => [`  Type: ${r.transType}`, String(r.transactions)]),
+        ],
+      });
+    }
+
+    if (weedData) {
+      sections.push({
+        section: 'WEEDING CANDIDATES',
+        rows: [
+          ['Candidate Count', String(weedData.summary.candidateCount)],
+          ['Total Replacement Value', money(weedData.summary.totalValue)],
+          ['Years-Idle Threshold', String(weedData.yearsThreshold)],
+        ],
+      });
+    }
+
+    if (neverBorrowed) {
+      sections.push({
+        section: 'ITEMS NEVER USED',
+        rows: [
+          ['Total Titles', String(neverBorrowed.totals.totalTitles)],
+          ['Total Items', String(neverBorrowed.totals.totalItems)],
+          ['Never-Used Items', String(neverBorrowed.totals.neverUsedItems)],
+          ['Never-Used Titles', String(neverBorrowed.totals.neverUsedTitles)],
+          ['Room-Use-Only Items', String(neverBorrowed.totals.roomUseOnlyItems)],
+        ],
+      });
+    }
+
+    if (potentialErrors) {
+      sections.push({
+        section: 'POTENTIAL CATALOGING ERRORS',
+        rows: [
+          ['Total Active Items', String(potentialErrors.totalActiveItems)],
+          ['Blank Publication Year', String(potentialErrors.blankPubYear)],
+          ['Future Publication Year', String(potentialErrors.futurePubYear)],
+        ],
+      });
+    }
+
+    if (catalogTotal !== null || catalogBySubloc.length > 0 || catalogByDecade.length > 0) {
+      sections.push({
+        section: 'COLLECTION OVERVIEW (CATALOG MIRROR)',
+        rows: [
+          ['Total Cataloged Items (Supabase mirror)', catalogTotal !== null ? String(catalogTotal) : '—'],
+          ...catalogBySubloc.map((r): [string, string] => [`  Sublocation: ${r.sublocation}`, String(r.total)]),
+          ...catalogByDecade.map((r): [string, string] => [`  Decade: ${r.decade}s`, String(r.total)]),
+        ],
+      });
+    }
+
+    if (fbInsights && !fbInsights.error) {
+      sections.push({
+        section: 'FACEBOOK PAGE ENGAGEMENT',
+        rows: [
+          ['Page', fbInsights.pageName ?? '—'],
+          ['Total Followers', String(fbInsights.totalFollowers ?? '—')],
+          ['Engaged Users (28d)', String(fbInsights.engagedUsers28d ?? '—')],
+          ['Post Engagements (28d)', String(fbInsights.postEngagements28d ?? '—')],
+          ['Impressions (28d)', String(fbInsights.impressions28d ?? '—')],
+          ['New Fans (28d)', String(fbInsights.newFans28d ?? '—')],
+        ],
+      });
+    }
+
+    if (yoyData.length > 0) {
+      sections.push({
+        section: 'YEAR-OVER-YEAR CIRCULATION',
+        rows: yoyData.map((r): [string, string] =>
+          [String(r.year), `${r.checkouts} checkouts, ${r.roomUse} room use, ${r.totalUse} total, ${r.activeUsers} active users, ${r.newPatrons} new patrons, ${r.newItems} new items`]),
+      });
+    }
+
+    if (chedStats) {
+      sections.push({ section: 'CHED CMO 22 METRICS', rows: Object.entries(chedStats).map(([k, v]): [string, string] => [k, String(v)]) });
+    }
+
+    if (strategicStats) {
+      sections.push({ section: 'STRATEGIC KPIs (ILS-COMPUTED)', rows: Object.entries(strategicStats).map(([k, v]): [string, string] => [k, String(v)]) });
+    }
+
+    if (callNumData.length > 0) {
+      sections.push({
+        section: 'COLLECTION BY CALL NUMBER (DEWEY)',
+        rows: callNumData.map((r): [string, string] =>
+          [r.range, `${r.items} items, ${r.titles} titles, ${r.checkouts} checkouts, ${r.utilRate}% utilization`]),
+      });
+    }
+
+    if (peakDays.length > 0) {
+      sections.push({
+        section: 'PEAK USAGE BY DAY',
+        rows: peakDays.map((r): [string, string] => [r.day, `${r.checkouts} checkouts, ${r.roomUse} room use, ${r.totalUse} total`]),
+      });
+    }
+
+    if (peakPeriods.length > 0) {
+      sections.push({
+        section: 'PEAK USAGE BY TIME OF DAY',
+        rows: peakPeriods.map((r): [string, string] => [r.period, `${r.checkouts} checkouts, ${r.roomUse} room use, ${r.totalUse} total`]),
+      });
+    }
+
+    if (loanDur) {
+      sections.push({
+        section: 'LOAN DURATION',
+        rows: [
+          ['Overall Avg Days Out', loanDur.overall.avgDaysOut.toFixed(1)],
+          ['Overall Avg Loan Period', loanDur.overall.avgLoanPeriod.toFixed(1)],
+          ['Currently Out', String(loanDur.overall.currentlyOut)],
+          ['Overdue Count', String(loanDur.overall.overdueCount)],
+          ...loanDur.byPatronType.map((r): [string, string] =>
+            [`  · ${r.patronType}`, `${r.currentlyOut} out, avg ${r.avgDaysOut.toFixed(1)}d, ${r.overdueCount} overdue`]),
+        ],
+      });
+    }
+
+    if (topTitles.length > 0) {
+      sections.push({
+        section: 'TOP TITLES',
+        rows: topTitles.slice(0, 15).map((r): [string, string] =>
+          [`${r.Title} — ${r.Author}`, `${r.checkoutCount} checkouts${r.roomUse ? `, ${r.roomUse} room use` : ''}`]),
+      });
+    }
+
+    if (longestOverdue.length > 0) {
+      sections.push({
+        section: 'LONGEST OVERDUE ITEMS',
+        rows: longestOverdue.slice(0, 15).map((r): [string, string] =>
+          [`${r.Title} (${r.CopyBarcode})`, `${r.DaysOverdue} days overdue, patron ${r.PatronBarcode}`]),
+      });
+    }
+
+    if (activePatrons.length > 0) {
+      sections.push({
+        section: 'MOST ACTIVE PATRONS',
+        rows: activePatrons.slice(0, 15).map((r): [string, string] =>
+          [`${r.PatronBarcode} (${r.PatronType})`, `${r.totalCheckouts} total checkouts, ${r.checkoutsThisYear} this year`]),
+      });
+    }
+
+    if (avgColAge.length > 0) {
+      sections.push({
+        section: 'AVERAGE COLLECTION AGE BY DEWEY RANGE',
+        rows: avgColAge.map((r): [string, string] => [r.range, `avg ${r.avgAgeYears.toFixed(1)} yrs, ${r.itemCount} items (${r.oldestYear}–${r.newestYear})`]),
+      });
+    }
+
+    if (monthlyData.length > 0) {
+      sections.push({
+        section: 'MONTHLY CIRCULATION TRENDS',
+        rows: monthlyData.map((r): [string, string] =>
+          [`${r.year}-${String(r.month).padStart(2, '0')}`, `${r.checkouts} checkouts, ${r.checkins} checkins, ${r.active_patrons} active patrons, ${r.new_patrons} new patrons, ${r.new_items} new items`]),
+      });
+    }
+
+    if (dailySnaps.length > 0) {
+      sections.push({
+        section: 'DAILY SNAPSHOTS (MOST RECENT 30)',
+        rows: dailySnaps.map((r): [string, string] =>
+          [r.snapshot_date, `${r.total_items} items, ${r.checked_out} checked out, ${r.active_patrons_30d} active (30d), ${r.checkouts_30d} checkouts (30d)`]),
+      });
+    }
+
+    return sections;
+  }
+
+  function exportCsv() {
+    downloadBlob(sectionsToCsv(buildReportSections()), `library-dashboard-${yearLabel}-${monthLabel.replace(/\s/g, '')}.csv`, 'text/csv');
+  }
+
+  function exportTxt() {
+    downloadBlob(
+      sectionsToTxt(buildReportSections(), `Destiny Library Dashboard Report — ${periodLabel}`),
+      `library-dashboard-${yearLabel}-${monthLabel.replace(/\s/g, '')}.txt`,
+      'text/plain',
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-gradient-to-r from-psu-blue-dark via-psu-blue to-psu-orange text-white shadow print:hidden">
@@ -2921,10 +3233,17 @@ export default function Dashboard() {
                 </button>
               )}
               <button
-                onClick={() => s && exportCsv(s, yearLabel, monthLabel, gender, patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription ?? '')}
+                onClick={exportCsv}
                 disabled={!s || !!s.error}
+                title="Export every loaded tab's data as CSV — open a tab first so its data is included"
                 className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
               >↓ CSV</button>
+              <button
+                onClick={exportTxt}
+                disabled={!s || !!s.error}
+                title="Export every loaded tab's data as a plain-text report — open a tab first so its data is included"
+                className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              >↓ TXT</button>
               <button
                 onClick={() => window.print()}
                 className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
