@@ -185,6 +185,29 @@ function exportCsv(s: Stats, yearLabel: string, monthLabel: string, genderLabel:
   URL.revokeObjectURL(url);
 }
 
+function csvField(v: unknown): string {
+  const s = v === null || v === undefined ? '' : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : `"${s}"`;
+}
+
+function exportWeedingCsv(items: { Title: string; Author: string; CallNumber: string; CopyBarcode: string; Acquired: string; LastBorrowed: string; daysSinceActivity: number; Price: number }[]) {
+  const header = ['Title', 'Author', 'CallNumber', 'Barcode', 'Acquired', 'LastBorrowed', 'DaysIdle', 'ReplacementPrice'];
+  const lines = [header.map(csvField).join(',')];
+  for (const w of items) {
+    lines.push([
+      csvField(w.Title), csvField(w.Author), csvField(w.CallNumber), csvField(w.CopyBarcode),
+      csvField(w.Acquired), csvField(w.LastBorrowed), csvField(w.daysSinceActivity), csvField(w.Price),
+    ].join(','));
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `weeding-worklist-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 interface Recommendation {
   priority: 'high' | 'medium' | 'low';
   category: string;
@@ -441,25 +464,55 @@ function RecommendedActions({ stats, chedStats, year, patronTiers, retention, ro
 
 // ── Strategic Planning Tab ───────────────────────────────────────────────────
 
-type StrategicStored = { enrolledStudents: number | null; annualBudget: number | null };
+type StrategicStored = { enrolledStudents: number | null; annualBudget: number | null; staffFte: number | null };
+type StrategicField = 'enrolledStudents' | 'annualBudget' | 'staffFte';
+const STRATEGIC_METRIC_IDS: Record<StrategicField, string> = {
+  enrolledStudents: 'STRAT-ENROLLED',
+  annualBudget: 'STRAT-BUDGET',
+  staffFte: 'STRAT-STAFF-FTE',
+};
 
 function StrategicTab({
   stats,
   mainStats,
   year,
   unlocked,
+  staffTxTotal,
 }: {
   stats: Record<string, number> | null;
   mainStats: Stats | null;
   year: number;
   unlocked: boolean;
+  staffTxTotal?: number | null;
 }) {
-  const [stored, setStored]           = useState<StrategicStored>({ enrolledStudents: null, annualBudget: null });
+  const [stored, setStored]           = useState<StrategicStored>({ enrolledStudents: null, annualBudget: null, staffFte: null });
   const [sbLoading, setSbLoading]     = useState(false);
   const [sbError, setSbError]         = useState<string | null>(null);
-  const [editing, setEditing]         = useState<'enrolledStudents' | 'annualBudget' | null>(null);
+  const [editing, setEditing]         = useState<StrategicField | null>(null);
   const [draft, setDraft]             = useState('');
   const [saving, setSaving]           = useState(false);
+  const [circTrend, setCircTrend]     = useState<{ thisYear: number; lastYear: number } | null>(null);
+
+  useEffect(() => {
+    // Independent fetch (doesn't depend on the Trends tab having loaded
+    // monthly_circulation already) — powers the YoY trend banner below.
+    async function loadTrend() {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const { data } = await supabase.from('monthly_circulation').select('year,checkouts').in('year', [year, year - 1]);
+        if (!data) return;
+        const totals = { thisYear: 0, lastYear: 0 };
+        for (const row of data as { year: number; checkouts: number }[]) {
+          if (row.year === year) totals.thisYear += row.checkouts;
+          else if (row.year === year - 1) totals.lastYear += row.checkouts;
+        }
+        if (totals.thisYear > 0 || totals.lastYear > 0) setCircTrend(totals);
+      } catch {
+        // trend banner just won't show — not critical
+      }
+    }
+    loadTrend();
+  }, [year]);
 
   useEffect(() => {
     async function load() {
@@ -468,15 +521,17 @@ function StrategicTab({
         const { data, error } = await supabase
           .from('green_metrics')
           .select('metric_id, value')
-          .in('metric_id', ['STRAT-ENROLLED', 'STRAT-BUDGET'])
+          .in('metric_id', Object.values(STRATEGIC_METRIC_IDS))
           .order('recorded_on', { ascending: false });
         if (error) { setSbError(error.message); return; }
-        const map: StrategicStored = { enrolledStudents: null, annualBudget: null };
+        const map: StrategicStored = { enrolledStudents: null, annualBudget: null, staffFte: null };
         for (const row of data ?? []) {
-          if (row.metric_id === 'STRAT-ENROLLED' && map.enrolledStudents === null)
+          if (row.metric_id === STRATEGIC_METRIC_IDS.enrolledStudents && map.enrolledStudents === null)
             map.enrolledStudents = Number(row.value);
-          if (row.metric_id === 'STRAT-BUDGET' && map.annualBudget === null)
+          if (row.metric_id === STRATEGIC_METRIC_IDS.annualBudget && map.annualBudget === null)
             map.annualBudget = Number(row.value);
+          if (row.metric_id === STRATEGIC_METRIC_IDS.staffFte && map.staffFte === null)
+            map.staffFte = Number(row.value);
         }
         setStored(map);
       } catch (err: unknown) {
@@ -488,13 +543,13 @@ function StrategicTab({
     load();
   }, []);
 
-  async function saveManual(key: 'enrolledStudents' | 'annualBudget') {
+  async function saveManual(key: StrategicField) {
     const num = parseFloat(draft);
     if (isNaN(num) || num <= 0) { setEditing(null); return; }
     setSaving(true);
     try {
       const { supabase } = await import('@/lib/supabase');
-      const metricId = key === 'enrolledStudents' ? 'STRAT-ENROLLED' : 'STRAT-BUDGET';
+      const metricId = STRATEGIC_METRIC_IDS[key];
       const today = new Date().toISOString().slice(0, 10);
       await supabase.from('green_metrics').upsert(
         { metric_id: metricId, recorded_on: today, value: num, notes: null },
@@ -549,6 +604,8 @@ function StrategicTab({
   const duplicateRatio       = totalTitles > 0 ? totalItems / totalTitles : null;
   const overdueRate          = checkoutsThisYear > 0 ? (overdueCount / checkoutsThisYear) * 100 : null;
   const itemsPerStudent      = enrolled && enrolled > 0 ? totalItems / enrolled : null;
+  const staffFte             = stored.staffFte;
+  const transactionsPerFte   = staffFte && staffFte > 0 && staffTxTotal != null ? staffTxTotal / staffFte : null;
 
   type KPI = {
     id: string;
@@ -656,9 +713,22 @@ function StrategicTab({
       desc: 'Total collection size ÷ enrolled student headcount — the same "Items per Student" figure Destiny\'s Collection Analysis report uses. Low values suggest the collection hasn\'t kept pace with enrollment growth.',
       note: enrolled ? `${fmt(totalItems)} items ÷ ${fmt(enrolled)} students` : undefined,
     },
+    {
+      id: 'transactions-per-fte',
+      name: 'Transactions per Staff FTE',
+      icon: '🧑‍💼',
+      value: transactionsPerFte,
+      unit: 'transactions/FTE',
+      baseline: 1000,
+      goal: 3000,
+      lowerIsBetter: false,
+      source: staffFte ? 'Audit transactions ÷ staff FTE (manual)' : 'Needs circulation staff FTE count ↓',
+      desc: 'Tracked staff Audit transactions this year ÷ circulation staff headcount (full-time equivalent). A workload signal for staffing decisions — not a productivity judgment on individuals.',
+      note: staffFte && staffTxTotal != null ? `${fmt(staffTxTotal)} transactions ÷ ${staffFte} FTE` : undefined,
+    },
   ];
 
-  function ManualInput({ fieldKey, label, placeholder, prefix }: { fieldKey: 'enrolledStudents' | 'annualBudget'; label: string; placeholder: string; prefix?: string }) {
+  function ManualInput({ fieldKey, label, placeholder, prefix }: { fieldKey: StrategicField; label: string; placeholder: string; prefix?: string }) {
     const val = stored[fieldKey];
     const isEdit = editing === fieldKey;
     return (
@@ -706,6 +776,19 @@ function StrategicTab({
         </p>
       </div>
 
+      {/* YoY trend banner — decision-makers care about trajectory, not just a snapshot */}
+      {circTrend && (
+        <div className={`mb-6 rounded-xl p-4 flex items-center gap-3 ${circTrend.thisYear >= circTrend.lastYear ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
+          <span className="text-2xl">{circTrend.thisYear >= circTrend.lastYear ? '📈' : '📉'}</span>
+          <div>
+            <div className={`text-sm font-semibold ${circTrend.thisYear >= circTrend.lastYear ? 'text-emerald-800' : 'text-red-800'}`}>
+              Circulation is {circTrend.lastYear > 0 ? `${Math.abs(((circTrend.thisYear - circTrend.lastYear) / circTrend.lastYear) * 100).toFixed(1)}%` : ''} {circTrend.thisYear >= circTrend.lastYear ? 'up' : 'down'} year-over-year
+            </div>
+            <div className="text-xs text-gray-600">{circTrend.thisYear.toLocaleString()} checkouts in {year} vs {circTrend.lastYear.toLocaleString()} in {year - 1} — from the Trends tab&apos;s synced history.</div>
+          </div>
+        </div>
+      )}
+
       {/* Manual inputs — gated behind password */}
       {unlocked && (
         <div className="mb-6">
@@ -719,6 +802,7 @@ function StrategicTab({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <ManualInput fieldKey="enrolledStudents" label="Total Enrolled Students" placeholder="e.g. 3500" />
               <ManualInput fieldKey="annualBudget" label="Annual Library Budget (₱)" placeholder="e.g. 500000" prefix="₱" />
+              <ManualInput fieldKey="staffFte" label="Circulation Staff (FTE)" placeholder="e.g. 4" />
             </div>
           )}
         </div>
@@ -2269,7 +2353,24 @@ export default function Dashboard() {
   const [genderActivity, setGenderActivity]       = useState<ActivityRow[]>([]);
   const [patronTypeActivity, setPatronTypeActivity] = useState<ActivityRow[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'overview'|'patrons'|'collection'|'iso'|'ched'|'aaccup'|'insights'|'trends'>('overview');
+  type TabName = 'overview'|'patrons'|'collection'|'iso'|'ched'|'aaccup'|'insights'|'trends';
+  const [activeTab, setActiveTab] = useState<TabName>('overview');
+  const [accreditationPrintMode, setAccreditationPrintMode] = useState(false);
+  const ACCREDITATION_TABS: TabName[] = ['ched', 'aaccup'];
+  function tabClass(tab: TabName): string {
+    if (activeTab === tab) return 'block';
+    if (accreditationPrintMode) return ACCREDITATION_TABS.includes(tab) ? 'hidden print:block' : 'hidden print:hidden';
+    return 'hidden print:block';
+  }
+  function printAccreditationPacket() {
+    setAccreditationPrintMode(true);
+    const handleAfterPrint = () => {
+      setAccreditationPrintMode(false);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    setTimeout(() => window.print(), 100);
+  }
   const [chartsLoaded, setChartsLoaded] = useState({ patrons: false, collection: false, insights: false });
   const [chedStats, setChedStats] = useState<Record<string,number> | null>(null);
   const [strategicStats, setStrategicStats] = useState<Record<string,number> | null>(null);
@@ -2688,6 +2789,11 @@ export default function Dashboard() {
                 onClick={() => window.print()}
                 className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
               >⎙ PDF</button>
+              <button
+                onClick={printAccreditationPacket}
+                title="Print just the CHED CMO 22 and AACCUP Area VII tabs as one packet"
+                className="flex items-center gap-1.5 bg-psu-orange hover:bg-psu-orange-dark text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              >🎓 Accreditation Packet</button>
             </div>
           </div>
 
@@ -2764,7 +2870,7 @@ export default function Dashboard() {
         </div>
 
         {/* Tab: Overview */}
-        <div className={activeTab === 'overview' ? 'block' : 'hidden print:block'}>
+        <div className={tabClass('overview')}>
           {/* Hero row */}
           {(() => {
             const roomThisYear = roomUse?.totalThisYear ?? 0;
@@ -2930,7 +3036,7 @@ export default function Dashboard() {
         </div>
 
         {/* Tab: Patrons */}
-        <div className={activeTab === 'patrons' ? 'block' : 'hidden print:block'}>
+        <div className={tabClass('patrons')}>
           <Section title={`Patron Engagement & Impact — ${periodLabel}`} icon="👥">
             <Card label="Active Users Now"              value={fmt(s?.patronsWithCheckouts)}    sub="currently have items checked out" color="text-blue-700" />
             <Card label="Active Users (Last 30 Days)"   value={fmt(s?.activePatronsLast30Days)} sub="checked out in last 30 days (checkout only)" color="text-blue-700" />
@@ -3788,7 +3894,7 @@ export default function Dashboard() {
         </div>
 
         {/* Tab: Collection */}
-        <div className={activeTab === 'collection' ? 'block' : 'hidden print:block'}>
+        <div className={tabClass('collection')}>
 
           {/* ── Section 1: Collection Health KPIs ── */}
           {(() => {
@@ -4632,6 +4738,14 @@ export default function Dashboard() {
                     <div className="text-sm text-gray-500 mt-1">Estimated Value on Shelf</div>
                   </div>
                 </div>
+                <div className="flex justify-end mb-2 print:hidden">
+                  <button
+                    onClick={() => exportWeedingCsv(weedData.items)}
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    ⬇️ Export Worklist CSV
+                  </button>
+                </div>
                 <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                   <table className="w-full text-xs border-collapse">
                     <thead>
@@ -4671,7 +4785,7 @@ export default function Dashboard() {
         </div>
 
         {/* Tab: ISO Standards */}
-        <div className={activeTab === 'iso' ? 'block' : 'hidden print:block'}>
+        <div className={tabClass('iso')}>
 
           {/* ── Circulation & Use (ISO 2789 / 11620 / 16439 — deduplicated) ── */}
           <Section title="Circulation & Use Indicators — ISO 2789 / 11620 / 16439" icon="📐">
@@ -4872,7 +4986,7 @@ export default function Dashboard() {
         </div>
 
         {/* Tab: CHED CMO 22 */}
-        <div className={activeTab === 'ched' ? 'block' : 'hidden print:block'}>
+        <div className={tabClass('ched')}>
           {activeTab === 'ched' && !chedStats && (
             <div className="text-center py-12 text-gray-400 text-sm">Loading CHED metrics…</div>
           )}
@@ -4971,7 +5085,7 @@ export default function Dashboard() {
         </div>
 
         {/* Tab: AACCUP Area VII */}
-        <div className={activeTab === 'aaccup' ? 'block' : 'hidden print:block'}>
+        <div className={tabClass('aaccup')}>
           <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4 text-green-900 text-sm">
             <strong>AACCUP Area VII — Library Self-Survey Instrument</strong>
             <p className="mt-1 text-xs text-green-800">
@@ -5005,7 +5119,7 @@ export default function Dashboard() {
         </div>
 
         {/* Tab: Insights */}
-        <div className={activeTab === 'insights' ? 'block' : 'hidden print:block'}>
+        <div className={tabClass('insights')}>
 
           {/* ── Cross-Activity Analysis ── */}
           <div className="mb-8">
@@ -5477,7 +5591,7 @@ export default function Dashboard() {
           {/* ── Strategic Planning KPIs ── */}
           <div className="mb-8">
             <ErrorBoundary>
-              <StrategicTab stats={strategicStats} mainStats={s} year={year} unlocked={insightsUnlocked} />
+              <StrategicTab stats={strategicStats} mainStats={s} year={year} unlocked={insightsUnlocked} staffTxTotal={staffTx?.totalThisYear} />
             </ErrorBoundary>
           </div>
 
@@ -5493,7 +5607,7 @@ export default function Dashboard() {
         </div>
 
         {/* Tab: Trends */}
-        <div className={activeTab === 'trends' ? 'block' : 'hidden print:block'}>
+        <div className={tabClass('trends')}>
           {/* ── Sync Controls ── */}
           <div className="mb-8">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
