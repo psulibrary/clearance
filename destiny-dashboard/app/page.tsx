@@ -417,7 +417,7 @@ function RecommendedActions({ stats, chedStats, year, patronTiers, retention, ro
   const low    = recs.filter(r => r.priority === 'low');
 
   return (
-    <div>
+    <div data-print-section="recommended-actions">
       <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
         <span>🎯</span>Recommended Actions
       </h2>
@@ -1267,7 +1267,7 @@ function IsoManualSection({ unlocked }: { unlocked: boolean }) {
   if (loading) return <div className="text-center py-8 text-gray-400 text-sm">Loading saved metrics…</div>;
 
   return (
-    <div className="mb-8">
+    <div className="mb-8" data-print-section="iso-manual-entry">
       <div className="flex items-center gap-3 mb-4">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
           <span>📝</span>Manual Data Entry — IFLA / ALA Reference Metrics
@@ -1608,7 +1608,7 @@ function ChedComplianceSummary({ chedStats }: { chedStats: Record<string,number>
   const unknown = checks.filter(c => c.pass === null).length;
 
   return (
-    <div className="mb-8">
+    <div className="mb-8" data-print-section="ched-compliance-checks">
       <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
         <span>✅</span>ILS-Computed Compliance Checks
       </h2>
@@ -1870,7 +1870,7 @@ function AaccupAutoVerified({ chedStats }: { chedStats: Record<string,number> | 
   const passCount = items.filter(i => i.pass).length;
 
   return (
-    <div className="mb-8">
+    <div className="mb-8" data-print-section="aaccup-auto-verified">
       <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
         <span>🤖</span>ILS Auto-Verified Indicators
         <span className="ml-auto text-xs font-normal bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
@@ -2202,7 +2202,7 @@ function ChedManualSection({ unlocked }: { unlocked: boolean }) {
   const totalCount = allIds.length;
 
   return (
-    <div className="mt-6">
+    <div className="mt-6" data-print-section="ched-manual-documentation">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
           📝 Manual Documentation Metrics
@@ -2355,22 +2355,90 @@ export default function Dashboard() {
 
   type TabName = 'overview'|'patrons'|'collection'|'iso'|'ched'|'aaccup'|'insights'|'trends';
   const [activeTab, setActiveTab] = useState<TabName>('overview');
-  const [accreditationPrintMode, setAccreditationPrintMode] = useState(false);
+  type PrintMode = 'none' | 'accreditation' | 'custom';
+  const [printMode, setPrintMode] = useState<PrintMode>('none');
+  const [printPanelOpen, setPrintPanelOpen] = useState(false);
+  const [selectedPrintSections, setSelectedPrintSections] = useState<Set<string>>(new Set());
   const ACCREDITATION_TABS: TabName[] = ['ched', 'aaccup'];
+
   function tabClass(tab: TabName): string {
     if (activeTab === tab) return 'block';
-    if (accreditationPrintMode) return ACCREDITATION_TABS.includes(tab) ? 'hidden print:block' : 'hidden print:hidden';
+    if (printMode === 'accreditation') return ACCREDITATION_TABS.includes(tab) ? 'hidden print:block' : 'hidden print:hidden';
+    if (printMode === 'custom') return 'hidden print:block';
     return 'hidden print:block';
   }
-  function printAccreditationPacket() {
-    setAccreditationPrintMode(true);
+
+  function runScopedPrint(mode: PrintMode) {
+    setPrintMode(mode);
     const handleAfterPrint = () => {
-      setAccreditationPrintMode(false);
+      setPrintMode('none');
       window.removeEventListener('afterprint', handleAfterPrint);
     };
     window.addEventListener('afterprint', handleAfterPrint);
     setTimeout(() => window.print(), 100);
   }
+  function printAccreditationPacket() { runScopedPrint('accreditation'); }
+
+  function togglePrintSection(id: string) {
+    setSelectedPrintSections(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  // Every printable report/chart section, grouped by the tab it lives on.
+  // Keep in sync with the data-print-section="…" attributes on each
+  // section's wrapper further down — this is what drives the custom-print
+  // checklist panel.
+  const PRINTABLE_SECTIONS: { id: string; label: string; tab: TabName }[] = [
+    { id: 'recommended-actions', label: 'Recommended Actions', tab: 'overview' },
+    { id: 'yoy-use-trend', label: 'Year-over-Year Use Trend', tab: 'overview' },
+    { id: 'demographics-distribution', label: 'Demographics & Distribution', tab: 'overview' },
+    { id: 'patron-engagement-tiers', label: 'Patron Engagement Tiers', tab: 'overview' },
+    { id: 'new-patron-registrations', label: 'New Patron Registrations — Last 3 Years', tab: 'patrons' },
+    { id: 'borrowing-behavior', label: 'Borrowing Behavior Metrics', tab: 'patrons' },
+    { id: 'patron-retention', label: 'Patron Retention & New vs. Returning Borrowers', tab: 'patrons' },
+    { id: 'top-active-patrons', label: 'Top Most Active Patrons', tab: 'patrons' },
+    { id: 'peak-use', label: 'Peak Use — Days & Times', tab: 'patrons' },
+    { id: 'avg-loan-duration', label: 'Average Loan Duration by Patron Type', tab: 'patrons' },
+    { id: 'lapsed-patrons', label: 'Lapsed Patrons', tab: 'patrons' },
+    { id: 'fine-revenue', label: 'Fine Revenue by Patron Type', tab: 'patrons' },
+    { id: 'room-use', label: 'In-Library (Room) Use', tab: 'patrons' },
+    { id: 'staff-transactions', label: 'Staff Transactions', tab: 'patrons' },
+    { id: 'collection-decision-metrics', label: 'Collection Decision Metrics', tab: 'collection' },
+    { id: 'collection-composition', label: 'Collection Composition', tab: 'collection' },
+    { id: 'collection-currency-growth', label: 'Collection Currency & Growth', tab: 'collection' },
+    { id: 'funding-publisher', label: 'Funding & Publisher Analysis', tab: 'collection' },
+    { id: 'collection-utilization', label: 'Collection Activity — Utilization by Category', tab: 'collection' },
+    { id: 'dewey-coverage', label: 'Collection Coverage by Dewey Subject Range', tab: 'collection' },
+    { id: 'subject-gap-analysis', label: 'Subject Area Gap Analysis', tab: 'collection' },
+    { id: 'longest-overdue', label: 'Longest-Overdue Items', tab: 'collection' },
+    { id: 'collection-age-distribution', label: 'Collection Age Distribution', tab: 'collection' },
+    { id: 'potential-errors', label: 'Potential Cataloging Errors', tab: 'collection' },
+    { id: 'top-used-titles', label: 'Top Most Used Titles', tab: 'collection' },
+    { id: 'avg-collection-age', label: 'Average Collection Age by Dewey Range', tab: 'collection' },
+    { id: 'items-never-used', label: 'Items Never Used', tab: 'collection' },
+    { id: 'weeding-candidates', label: 'Weeding Candidates', tab: 'collection' },
+    { id: 'derived-decision-metrics', label: 'Derived Decision Metrics — Cross-Standard', tab: 'iso' },
+    { id: 'iso-financial', label: 'Financial & Management Metrics — IFLA/ISO 11620', tab: 'iso' },
+    { id: 'iso-survey-based', label: 'Survey-based & Operational Metrics', tab: 'iso' },
+    { id: 'iso-manual-entry', label: 'Manual Data Entry — IFLA/ALA Reference Metrics', tab: 'iso' },
+    { id: 'ched-compliance-checks', label: 'ILS-Computed Compliance Checks', tab: 'ched' },
+    { id: 'ched-acquisitions-trend', label: 'Annual Acquisitions Trend', tab: 'ched' },
+    { id: 'ched-manual-documentation', label: 'Manual Documentation Metrics', tab: 'ched' },
+    { id: 'aaccup-auto-verified', label: 'ILS Auto-Verified Indicators', tab: 'aaccup' },
+    { id: 'who-uses-library-most', label: 'Who Uses the Library Most?', tab: 'insights' },
+    { id: 'peak-checkout-days', label: 'Peak Checkout Days', tab: 'insights' },
+    { id: 'loan-duration-by-type', label: 'Current Loan Duration by Patron Type', tab: 'insights' },
+    { id: 'collection-health-glance', label: 'Collection Health at a Glance', tab: 'insights' },
+    { id: 'patron-engagement-deep-dive', label: 'Patron Engagement Deep Dive', tab: 'insights' },
+    { id: 'sync-controls', label: 'Sync Destiny → Supabase', tab: 'trends' },
+    { id: 'collection-overview-mirror', label: 'Collection Overview', tab: 'trends' },
+    { id: 'facebook-engagement', label: 'Facebook Page Engagement', tab: 'trends' },
+    { id: 'monthly-circulation-trend', label: 'Monthly Circulation Trend', tab: 'trends' },
+    { id: 'daily-snapshots', label: 'Daily Snapshots', tab: 'trends' },
+  ];
   const [chartsLoaded, setChartsLoaded] = useState({ patrons: false, collection: false, insights: false });
   const [chedStats, setChedStats] = useState<Record<string,number> | null>(null);
   const [strategicStats, setStrategicStats] = useState<Record<string,number> | null>(null);
@@ -2715,6 +2783,78 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* Custom print scoping: hide every printable section by default, then
+          re-show only the ones the user checked. Sections that were never
+          fetched (their tab hasn't been visited) simply won't be in the DOM
+          at all, so this only affects sections that actually rendered. */}
+      {printMode === 'custom' && (
+        <style>{`
+          @media print {
+            [data-print-section] { display: none !important; }
+            ${selectedPrintSections.size > 0
+              ? [...selectedPrintSections].map(id => `[data-print-section="${id}"]`).join(', ') + ' { display: block !important; }'
+              : ''}
+          }
+        `}</style>
+      )}
+
+      {/* Custom Print selection panel */}
+      {printPanelOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 print:hidden" onClick={() => setPrintPanelOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-gray-900">Custom Print — Choose Reports</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Pick any combination of charts/reports across tabs. Only visited tabs have loaded data to print.</p>
+              </div>
+              <button onClick={() => setPrintPanelOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <div className="p-5 overflow-y-auto flex-1">
+              {(['overview','patrons','collection','iso','ched','aaccup','insights','trends'] as TabName[]).map(tabName => {
+                const sections = PRINTABLE_SECTIONS.filter(s => s.tab === tabName);
+                if (sections.length === 0) return null;
+                const tabLabels: Record<TabName,string> = { overview:'Overview', patrons:'Patrons', collection:'Collection', iso:'Intl Standards', ched:'CHED CMO 22', aaccup:'AACCUP Area VII', insights:'Insights', trends:'Trends' };
+                return (
+                  <div key={tabName} className="mb-4">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{tabLabels[tabName]}</p>
+                      <button
+                        onClick={() => setSelectedPrintSections(prev => {
+                          const next = new Set(prev);
+                          const allSelected = sections.every(s => next.has(s.id));
+                          sections.forEach(s => allSelected ? next.delete(s.id) : next.add(s.id));
+                          return next;
+                        })}
+                        className="text-xs text-psu-blue-dark hover:text-psu-orange font-medium"
+                      >{sections.every(s => selectedPrintSections.has(s.id)) ? 'Deselect all' : 'Select all'}</button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {sections.map(s => (
+                        <label key={s.id} className="flex items-center gap-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg px-2 py-1.5 cursor-pointer">
+                          <input type="checkbox" checked={selectedPrintSections.has(s.id)} onChange={() => togglePrintSection(s.id)} className="rounded border-gray-300 text-psu-blue-dark focus:ring-psu-blue" />
+                          {s.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="p-4 border-t border-gray-100 flex items-center justify-between gap-3">
+              <span className="text-xs text-gray-500">{selectedPrintSections.size} selected</span>
+              <div className="flex gap-2">
+                <button onClick={() => setPrintPanelOpen(false)} className="text-xs text-gray-600 hover:text-gray-800 px-3 py-1.5 rounded-lg border border-gray-200">Cancel</button>
+                <button
+                  disabled={selectedPrintSections.size === 0}
+                  onClick={() => { setPrintPanelOpen(false); runScopedPrint('custom'); }}
+                  className="bg-psu-blue-dark hover:bg-psu-blue disabled:opacity-40 text-white text-xs font-semibold px-4 py-1.5 rounded-lg"
+                >Print Selected ({selectedPrintSections.size})</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-6xl mx-auto px-4 py-6">
         {dbHealth && !dbHealth.mssqlOk && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm print:hidden">
@@ -2794,6 +2934,11 @@ export default function Dashboard() {
                 title="Print just the CHED CMO 22 and AACCUP Area VII tabs as one packet"
                 className="flex items-center gap-1.5 bg-psu-orange hover:bg-psu-orange-dark text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
               >🎓 Accreditation Packet</button>
+              <button
+                onClick={() => setPrintPanelOpen(true)}
+                title="Pick specific charts and reports to include in one print job"
+                className="flex items-center gap-1.5 bg-psu-blue-dark hover:bg-psu-blue text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              >☑️ Custom Print</button>
             </div>
           </div>
 
@@ -2969,7 +3114,7 @@ export default function Dashboard() {
 
           {/* ── Year-over-Year Circulation Trend ── */}
           {yoyData.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="yoy-use-trend">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>📈</span>Year-over-Year Use Trend (Last 5 Years)
               </h2>
@@ -3060,7 +3205,7 @@ export default function Dashboard() {
           </Section>
 
           {/* Demographics & Distribution */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="demographics-distribution">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
               <span>📊</span>Demographics & Distribution
             </h2>
@@ -3119,7 +3264,7 @@ export default function Dashboard() {
 
           {/* ── Patron Engagement Tiers ── */}
           {patronTiers && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="patron-engagement-tiers">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🎯</span>Patron Engagement Tiers ({patronTiers.year})
               </h2>
@@ -3175,7 +3320,7 @@ export default function Dashboard() {
 
           {/* ── Patron Growth Trend ── */}
           {patronGrowth.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="new-patron-registrations">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>📈</span>New Patron Registrations — Last 3 Years
               </h2>
@@ -3208,7 +3353,7 @@ export default function Dashboard() {
 
           {/* ── Borrowing Behavior Metrics ── */}
           {s && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="borrowing-behavior">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🔍</span>Borrowing Behavior Metrics
               </h2>
@@ -3268,7 +3413,7 @@ export default function Dashboard() {
 
           {/* ── Patron Retention ── */}
           {retention && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="patron-retention">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🔁</span>Patron Retention & New vs. Returning Borrowers ({retention.year})
               </h2>
@@ -3307,7 +3452,7 @@ export default function Dashboard() {
 
           {/* ── Top 10 Most Active Patrons ── */}
           {activePatrons.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="top-active-patrons">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🥇</span>Top {activePatrons.length} Most Active Patrons
               </h2>
@@ -3359,7 +3504,7 @@ export default function Dashboard() {
           )}
 
           {/* ── Peak Use Days & Time-of-Day ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="peak-use">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>📅</span>Peak Use — Days &amp; Times (All-Time)
             </h2>
@@ -3441,7 +3586,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Average Loan Duration ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="avg-loan-duration">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>⏱</span>Average Loan Duration by Patron Type
             </h2>
@@ -3503,7 +3648,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Lapsed Patrons ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="lapsed-patrons">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>😴</span>Lapsed Patrons
             </h2>
@@ -3550,7 +3695,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Fines by Patron Type ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="fine-revenue">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>💰</span>Fine Revenue by Patron Type (This Year)
             </h2>
@@ -3590,7 +3735,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── In-Library (Room) Use ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="room-use">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
               <span>🪑</span>In-Library (Room) Use
             </h2>
@@ -3732,7 +3877,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Staff Transactions ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="staff-transactions">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
               <span>👤</span>Staff Transactions
             </h2>
@@ -3918,7 +4063,7 @@ export default function Dashboard() {
 
           {/* ── Collection Decision Metrics ── */}
           {s && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="collection-decision-metrics">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🎯</span>Collection Decision Metrics
               </h2>
@@ -3995,7 +4140,7 @@ export default function Dashboard() {
           )}
 
           {/* ── Section 2: Composition Charts ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="collection-composition">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
               <span>📊</span>Collection Composition
             </h2>
@@ -4075,7 +4220,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Section 3: Collection Currency & Growth ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="collection-currency-growth">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
               <span>📈</span>Collection Currency &amp; Growth
             </h2>
@@ -4119,7 +4264,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Section 4: Funding & Publisher ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="funding-publisher">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
               <span>💰</span>Funding &amp; Publisher Analysis
             </h2>
@@ -4164,7 +4309,7 @@ export default function Dashboard() {
 
           {/* ── Section 5: Collection Activity Cross-Analysis ── */}
           {(materialTypeData.length > 0 || sublocData.length > 0 || catData.length > 0 || circTypeData.length > 0) && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="collection-utilization">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🔥</span>Collection Activity — Utilization by Category
               </h2>
@@ -4289,7 +4434,7 @@ export default function Dashboard() {
 
           {/* ── Items by Call Number / Dewey Range ── */}
           {callNumData.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="dewey-coverage">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>📂</span>Collection Coverage by Dewey Subject Range
               </h2>
@@ -4361,7 +4506,7 @@ export default function Dashboard() {
             })).filter(r => r.isUnderused).sort((a,b) => a.utilRate - b.utilRate).slice(0, 6);
             if (!gaps.length) return null;
             return (
-              <div className="mb-8">
+              <div className="mb-8" data-print-section="subject-gap-analysis">
                 <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                   <span>🔍</span>Subject Area Gap Analysis — Under-Utilised Sections
                 </h2>
@@ -4387,7 +4532,7 @@ export default function Dashboard() {
 
           {/* ── Longest Overdue Items ── */}
           {longestOverdue.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="longest-overdue">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>⏰</span>Top {longestOverdue.length} Longest-Overdue Items
               </h2>
@@ -4433,7 +4578,7 @@ export default function Dashboard() {
 
           {/* ── Collection Age Distribution ── */}
           {collAge.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="collection-age-distribution">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>📅</span>Collection Age Distribution
               </h2>
@@ -4484,7 +4629,7 @@ export default function Dashboard() {
 
           {/* ── Potential Errors (blank / future publication year) ── */}
           {potentialErrors && (potentialErrors.blankPubYear > 0 || potentialErrors.futurePubYear > 0) && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="potential-errors">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>⚠️</span>Potential Cataloging Errors
               </h2>
@@ -4536,7 +4681,7 @@ export default function Dashboard() {
 
           {/* ── Top 20 Most Used Titles ── */}
           {topTitles.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="top-used-titles">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🏆</span>Top {topTitles.length} Most Used Titles
               </h2>
@@ -4595,7 +4740,7 @@ export default function Dashboard() {
 
           {/* ── Average Collection Age by Dewey ── */}
           {/* ── Average Collection Age by Dewey ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="avg-collection-age">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>🕰</span>Average Collection Age by Dewey Range
             </h2>
@@ -4650,7 +4795,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Never-Borrowed Items ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="items-never-used">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>📦</span>Items Never Used
             </h2>
@@ -4708,7 +4853,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Weeding Candidates ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="weeding-candidates">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>🌿</span>Weeding Candidates (No Use in 3+ Years)
             </h2>
@@ -4825,7 +4970,7 @@ export default function Dashboard() {
 
           {/* ── Derived Decision Metrics (ISO cross-standard) ── */}
           {s && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="derived-decision-metrics">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>⚡</span>Derived Decision Metrics — Cross-Standard
               </h2>
@@ -4895,7 +5040,7 @@ export default function Dashboard() {
           )}
 
           {/* ── IFLA / ISO 11620 — Financial (requires budget records) ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="iso-financial">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>💸</span>Financial &amp; Management Metrics — IFLA / ISO 11620
             </h2>
@@ -4932,7 +5077,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── IFLA / ISO 11620 — Survey-based & Operational (requires manual data) ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="iso-survey-based">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>📋</span>Survey-based &amp; Operational Metrics — IFLA / ISO 11620 / ALA
             </h2>
@@ -5042,7 +5187,7 @@ export default function Dashboard() {
               </Section>
 
               {acqData.length > 0 && (
-                <div className="mb-8 print:hidden">
+                <div className="mb-8 print:hidden" data-print-section="ched-acquisitions-trend">
                   <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <span>📈</span>Annual Acquisitions Trend (2015–{currentYear})
                   </h2>
@@ -5122,7 +5267,7 @@ export default function Dashboard() {
         <div className={tabClass('insights')}>
 
           {/* ── Cross-Activity Analysis ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="who-uses-library-most">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>📊</span>Who Uses the Library Most?
             </h2>
@@ -5335,7 +5480,7 @@ export default function Dashboard() {
           <div className="mb-8 grid grid-cols-1 gap-6">
 
             {/* Peak Checkout Days */}
-            <div className="bg-white rounded-xl shadow-sm p-5">
+            <div className="bg-white rounded-xl shadow-sm p-5" data-print-section="peak-checkout-days">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>📅</span>Peak Checkout Days
               </h2>
@@ -5372,7 +5517,7 @@ export default function Dashboard() {
             </div>
 
             {/* Loan Duration */}
-            <div className="bg-white rounded-xl shadow-sm p-5">
+            <div className="bg-white rounded-xl shadow-sm p-5" data-print-section="loan-duration-by-type">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>⏱</span>Current Loan Duration by Patron Type
               </h2>
@@ -5432,7 +5577,7 @@ export default function Dashboard() {
             </div>
 
             {/* Collection Health Summary */}
-            <div className="bg-white rounded-xl shadow-sm p-5">
+            <div className="bg-white rounded-xl shadow-sm p-5" data-print-section="collection-health-glance">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>📦</span>Collection Health at a Glance
               </h2>
@@ -5496,7 +5641,7 @@ export default function Dashboard() {
             </div>
 
             {/* Patron Engagement Deep Dive */}
-            <div className="bg-white rounded-xl shadow-sm p-5">
+            <div className="bg-white rounded-xl shadow-sm p-5" data-print-section="patron-engagement-deep-dive">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>👋</span>Patron Engagement Deep Dive
               </h2>
@@ -5609,7 +5754,7 @@ export default function Dashboard() {
         {/* Tab: Trends */}
         <div className={tabClass('trends')}>
           {/* ── Sync Controls ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="sync-controls">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
               <span>🔄</span>Sync Destiny → Supabase
             </h2>
@@ -5718,7 +5863,7 @@ export default function Dashboard() {
 
           {/* ── Collection Overview (from library_catalog mirror) ── */}
           {catalogTotal !== null && catalogTotal > 0 && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="collection-overview-mirror">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <span>📚</span>Collection Overview
               </h2>
@@ -5772,7 +5917,7 @@ export default function Dashboard() {
           )}
 
           {/* ── Facebook Page Engagement ── */}
-          <div className="mb-8">
+          <div className="mb-8" data-print-section="facebook-engagement">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
               <span>📱</span>Facebook Page Engagement
             </h2>
@@ -5814,7 +5959,7 @@ export default function Dashboard() {
 
           {/* ── Monthly Circulation Chart ── */}
           {monthlyData.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="monthly-circulation-trend">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <span>📊</span>Monthly Circulation Trend
               </h2>
@@ -5884,7 +6029,7 @@ export default function Dashboard() {
 
           {/* ── Daily Snapshots ── */}
           {dailySnaps.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-8" data-print-section="daily-snapshots">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <span>📅</span>Daily Snapshots (last 30 days)
               </h2>
