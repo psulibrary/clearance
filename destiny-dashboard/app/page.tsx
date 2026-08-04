@@ -2838,15 +2838,15 @@ export default function Dashboard() {
               <div className="bg-white rounded-xl shadow-sm p-5">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={yoyData} margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="year" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={n => n >= 1000 ? (n/1000).toFixed(0)+'k' : String(n)} />
                     <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
                     <Legend />
-                    <Bar dataKey="checkouts"  name="Checkouts"       fill="#3b82f6" radius={[3,3,0,0]} />
-                    {yoyRoomUseAware && <Bar dataKey="roomUse" name="Room Use (in-library)" fill="#7c3aed" radius={[3,3,0,0]} />}
-                    <Bar dataKey="newPatrons" name="New Patrons"     fill="#10b981" radius={[3,3,0,0]} />
-                    <Bar dataKey="newItems"   name="New Items"       fill="#f59e0b" radius={[3,3,0,0]} />
+                    <Bar dataKey="checkouts"  name="Checkouts"       fill="#29ABE2" radius={[3,3,0,0]} />
+                    {yoyRoomUseAware && <Bar dataKey="roomUse" name="Room Use (in-library)" fill="#8B5CF6" radius={[3,3,0,0]} />}
+                    <Bar dataKey="newPatrons" name="New Patrons"     fill="#1B7A3D" radius={[3,3,0,0]} />
+                    <Bar dataKey="newItems"   name="New Items"       fill="#FFCB05" radius={[3,3,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="mt-4 overflow-x-auto">
@@ -3045,7 +3045,7 @@ export default function Dashboard() {
                     <XAxis dataKey="label" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" interval={0} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v: unknown) => [Number(v).toLocaleString(), 'New Patrons']} />
-                    <Bar dataKey="newPatrons" name="New Patrons" fill="#3b82f6" radius={[3,3,0,0]} />
+                    <Bar dataKey="newPatrons" name="New Patrons" fill="#29ABE2" radius={[3,3,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -3234,18 +3234,18 @@ export default function Dashboard() {
                   <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">By Day of Week</div>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={peakDays} margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="day" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={n => n.toLocaleString()} />
                       <Tooltip formatter={(v) => typeof v === "number" ? v.toLocaleString() : String(v)} />
-                      <Bar dataKey="checkouts" name="Checkouts" fill="#6366f1" radius={[4,4,0,0]} stackId="a" />
+                      <Bar dataKey="checkouts" name="Checkouts" fill="#29ABE2" radius={[4,4,0,0]} stackId="a" />
                       {peakDays.some(d => d.roomUse > 0) && (
-                        <Bar dataKey="roomUse" name="Room Use" fill="#a855f7" radius={[4,4,0,0]} stackId="a" />
+                        <Bar dataKey="roomUse" name="Room Use" fill="#8B5CF6" radius={[4,4,0,0]} stackId="a" />
                       )}
                     </BarChart>
                   </ResponsiveContainer>
                   {peakDays.some(d => d.roomUse > 0) && (
-                    <p className="text-xs text-gray-500 mt-1 text-center">Stacked: checkouts (indigo) + in-library room use (purple)</p>
+                    <p className="text-xs text-gray-500 mt-1 text-center">Stacked: checkouts (blue) + in-library room use (purple)</p>
                   )}
                 </div>
 
@@ -3255,13 +3255,13 @@ export default function Dashboard() {
                     <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">By Time Period</div>
                     <ResponsiveContainer width="100%" height={220}>
                       <BarChart data={peakPeriods} layout="vertical" margin={{ left: 160, right: 60, top: 4, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                         <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={n => n.toLocaleString()} />
                         <YAxis type="category" dataKey="period" tick={{ fontSize: 10 }} width={155} />
                         <Tooltip formatter={(v) => typeof v === "number" ? v.toLocaleString() : String(v)} />
-                        <Bar dataKey="checkouts" name="Checkouts" fill="#6366f1" stackId="b" />
+                        <Bar dataKey="checkouts" name="Checkouts" fill="#29ABE2" stackId="b" />
                         {peakPeriods.some(d => d.roomUse > 0) && (
-                          <Bar dataKey="roomUse" name="Room Use" fill="#a855f7" stackId="b" radius={[0,4,4,0]} />
+                          <Bar dataKey="roomUse" name="Room Use" fill="#8B5CF6" stackId="b" radius={[0,4,4,0]} />
                         )}
                       </BarChart>
                     </ResponsiveContainer>
@@ -3869,8 +3869,8 @@ export default function Dashboard() {
                       <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
                       <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
                       <Legend />
-                      <Bar dataKey="items" name="Items" fill="#7c3aed" />
-                      <Bar dataKey="titles" name="Titles" fill="#a78bfa" />
+                      <Bar dataKey="items" name="Items" fill="#29ABE2" />
+                      <Bar dataKey="titles" name="Titles" fill="#1C7FAE" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -3886,8 +3886,8 @@ export default function Dashboard() {
                     <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="total" name="Total" fill="#8b5cf6" />
-                    <Bar dataKey="checkedOut" name="Checked Out" fill="#ef4444" />
+                    <Bar dataKey="total" name="Total" fill="#29ABE2" />
+                    <Bar dataKey="checkedOut" name="Checked Out" fill="#EA5B0C" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -3902,9 +3902,9 @@ export default function Dashboard() {
                     <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={135} />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="total" name="Total" fill="#3b82f6" />
-                    <Bar dataKey="checkedOut" name="Checked Out" fill="#f59e0b" />
-                    <Bar dataKey="available" name="Available" fill="#10b981" />
+                    <Bar dataKey="total" name="Total" fill="#29ABE2" />
+                    <Bar dataKey="checkedOut" name="Checked Out" fill="#FFCB05" />
+                    <Bar dataKey="available" name="Available" fill="#1B7A3D" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -3920,9 +3920,9 @@ export default function Dashboard() {
                       <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
                       <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
                       <Legend />
-                      <Bar dataKey="total" name="Total" fill="#6366f1" />
-                      <Bar dataKey="checkedOut" name="Checked Out" fill="#ec4899" />
-                      <Bar dataKey="available" name="Available" fill="#22c55e" />
+                      <Bar dataKey="total" name="Total" fill="#29ABE2" />
+                      <Bar dataKey="checkedOut" name="Checked Out" fill="#EA5B0C" />
+                      <Bar dataKey="available" name="Available" fill="#1B7A3D" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -3948,8 +3948,8 @@ export default function Dashboard() {
                       <YAxis tick={{fontSize:11}} />
                       <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
                       <Legend />
-                      <Bar dataKey="items" name="Items Added" fill="#3b82f6" />
-                      <Bar dataKey="titles" name="Titles Added" fill="#10b981" />
+                      <Bar dataKey="items" name="Items Added" fill="#29ABE2" />
+                      <Bar dataKey="titles" name="Titles Added" fill="#1B7A3D" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -3965,8 +3965,8 @@ export default function Dashboard() {
                       <YAxis tick={{fontSize:11}} />
                       <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
                       <Legend />
-                      <Bar dataKey="items" name="Items" fill="#8b5cf6" />
-                      <Bar dataKey="titles" name="Titles" fill="#f59e0b" />
+                      <Bar dataKey="items" name="Items" fill="#29ABE2" />
+                      <Bar dataKey="titles" name="Titles" fill="#FFCB05" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -3992,8 +3992,8 @@ export default function Dashboard() {
                       <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={135} />
                       <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
                       <Legend />
-                      <Bar dataKey="total" name="Total" fill="#0ea5e9" />
-                      <Bar dataKey="checkedOut" name="Checked Out" fill="#f97316" />
+                      <Bar dataKey="total" name="Total" fill="#29ABE2" />
+                      <Bar dataKey="checkedOut" name="Checked Out" fill="#EA5B0C" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -4009,8 +4009,8 @@ export default function Dashboard() {
                       <YAxis type="category" dataKey="name" tick={{fontSize:10}} width={155} />
                       <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
                       <Legend />
-                      <Bar dataKey="titles" name="Titles" fill="#06b6d4" />
-                      <Bar dataKey="items" name="Items" fill="#84cc16" />
+                      <Bar dataKey="titles" name="Titles" fill="#1C7FAE" />
+                      <Bar dataKey="items" name="Items" fill="#29ABE2" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -4092,7 +4092,7 @@ export default function Dashboard() {
                         <XAxis type="number" tick={{fontSize:11}} unit="%" domain={[0,100]} />
                         <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={135} />
                         <Tooltip formatter={(v:unknown) => Number(v).toFixed(1)+'%'} />
-                        <Bar dataKey="utilRate" name="Utilization %" fill="#3b82f6" radius={[0,4,4,0]} />
+                        <Bar dataKey="utilRate" name="Utilization %" fill="#29ABE2" radius={[0,4,4,0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -4112,7 +4112,7 @@ export default function Dashboard() {
                         <XAxis type="number" tick={{fontSize:11}} unit="%" domain={[0,100]} />
                         <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
                         <Tooltip formatter={(v:unknown) => Number(v).toFixed(1)+'%'} />
-                        <Bar dataKey="utilRate" name="Utilization %" fill="#8b5cf6" radius={[0,4,4,0]} />
+                        <Bar dataKey="utilRate" name="Utilization %" fill="#29ABE2" radius={[0,4,4,0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -4132,7 +4132,7 @@ export default function Dashboard() {
                         <XAxis type="number" tick={{fontSize:11}} unit="%" domain={[0,100]} />
                         <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={155} />
                         <Tooltip formatter={(v:unknown) => Number(v).toFixed(1)+'%'} />
-                        <Bar dataKey="utilRate" name="Utilization %" fill="#6366f1" radius={[0,4,4,0]} />
+                        <Bar dataKey="utilRate" name="Utilization %" fill="#29ABE2" radius={[0,4,4,0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -4156,10 +4156,10 @@ export default function Dashboard() {
                     <YAxis type="category" dataKey="range" tick={{ fontSize: 11 }} width={275} />
                     <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
                     <Legend />
-                    <Bar dataKey="items" name="Items" fill="#3b82f6" radius={[0,2,2,0]} />
-                    <Bar dataKey="checkouts" name="Checkouts" fill="#10b981" radius={[0,2,2,0]} />
+                    <Bar dataKey="items" name="Items" fill="#29ABE2" radius={[0,2,2,0]} />
+                    <Bar dataKey="checkouts" name="Checkouts" fill="#1B7A3D" radius={[0,2,2,0]} />
                     {callNumData.some(r => (r.roomUse ?? 0) > 0) && (
-                      <Bar dataKey="roomUse" name="Room Use" fill="#a855f7" radius={[0,2,2,0]} />
+                      <Bar dataKey="roomUse" name="Room Use" fill="#8B5CF6" radius={[0,2,2,0]} />
                     )}
                   </BarChart>
                 </ResponsiveContainer>
@@ -4298,9 +4298,9 @@ export default function Dashboard() {
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
                     <Legend />
-                    <Bar dataKey="items" name="Items" fill="#0ea5e9" radius={[2,2,0,0]} />
-                    <Bar dataKey="titles" name="Titles" fill="#10b981" radius={[2,2,0,0]} />
-                    <Bar dataKey="everBorrowed" name="Ever Borrowed" fill="#f59e0b" radius={[2,2,0,0]} />
+                    <Bar dataKey="items" name="Items" fill="#29ABE2" radius={[2,2,0,0]} />
+                    <Bar dataKey="titles" name="Titles" fill="#1B7A3D" radius={[2,2,0,0]} />
+                    <Bar dataKey="everBorrowed" name="Ever Borrowed" fill="#FFCB05" radius={[2,2,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="mt-4 overflow-x-auto">
@@ -4408,11 +4408,11 @@ export default function Dashboard() {
                 <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
                   <ResponsiveContainer width="100%" height={Math.max(220, avgColAge.length * 36)}>
                     <BarChart data={avgColAge} layout="vertical" margin={{ left: 200, right: 80, top: 4, bottom: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={n => `${n}y`} />
                       <YAxis type="category" dataKey="range" tick={{ fontSize: 11 }} width={195} />
                       <Tooltip formatter={(v) => typeof v === "number" ? `${v} years` : String(v)} />
-                      <Bar dataKey="avgAgeYears" name="Avg Age (years)" fill="#f59e0b" radius={[0,4,4,0]} />
+                      <Bar dataKey="avgAgeYears" name="Avg Age (years)" fill="#29ABE2" radius={[0,4,4,0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -4842,8 +4842,8 @@ export default function Dashboard() {
                         <YAxis tick={{fontSize:11}} />
                         <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
                         <Legend />
-                        <Bar dataKey="items" name="Items Added" fill="#3b82f6" />
-                        <Bar dataKey="titles" name="Titles Added" fill="#10b981" />
+                        <Bar dataKey="items" name="Items Added" fill="#29ABE2" />
+                        <Bar dataKey="titles" name="Titles Added" fill="#1B7A3D" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -4932,9 +4932,9 @@ export default function Dashboard() {
                         <YAxis tick={{fontSize:11}} />
                         <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
                         <Legend />
-                        <Bar dataKey="totalPatrons"  name="Registered" fill="#3b82f6" />
-                        <Bar dataKey="activePatrons" name="Active Borrowers" fill="#10b981" />
-                        <Bar dataKey="overdueItems"  name="Overdue Items" fill="#ef4444" />
+                        <Bar dataKey="totalPatrons"  name="Registered" fill="#29ABE2" />
+                        <Bar dataKey="activePatrons" name="Active Borrowers" fill="#1B7A3D" />
+                        <Bar dataKey="overdueItems"  name="Overdue Items" fill="#EA5B0C" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -4946,8 +4946,8 @@ export default function Dashboard() {
                         <YAxis tick={{fontSize:11}} unit="%" />
                         <Tooltip formatter={(v:unknown) => Number(v).toFixed(1) + '%'} />
                         <Legend />
-                        <Bar dataKey="activeRate"         name="Active Rate %" fill="#8b5cf6" />
-                        <Bar dataKey="checkoutsPerPatron" name="Checkouts / Patron" fill="#f59e0b" />
+                        <Bar dataKey="activeRate"         name="Active Rate %" fill="#29ABE2" />
+                        <Bar dataKey="checkoutsPerPatron" name="Checkouts / Patron" fill="#FFCB05" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -5079,9 +5079,9 @@ export default function Dashboard() {
                     <YAxis type="category" dataKey="name" tick={{fontSize:10}} width={135} />
                     <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
                     <Legend />
-                    <Bar dataKey="totalPatrons"  name="Registered" fill="#3b82f6" />
-                    <Bar dataKey="activePatrons" name="Active Borrowers" fill="#10b981" />
-                    <Bar dataKey="overdueItems"  name="Overdue Items" fill="#ef4444" />
+                    <Bar dataKey="totalPatrons"  name="Registered" fill="#29ABE2" />
+                    <Bar dataKey="activePatrons" name="Active Borrowers" fill="#1B7A3D" />
+                    <Bar dataKey="overdueItems"  name="Overdue Items" fill="#EA5B0C" />
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="overflow-x-auto mt-4">
@@ -5133,11 +5133,11 @@ export default function Dashboard() {
                 <>
                   <ResponsiveContainer width="100%" height={180}>
                     <BarChart data={peakDays} margin={{left:10,right:10,top:4,bottom:4}}>
-                      <CartesianGrid strokeDasharray="3 3" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="day" tick={{fontSize:11}} />
                       <YAxis tick={{fontSize:11}} />
                       <Tooltip formatter={(v:unknown) => [Number(v).toLocaleString(), 'Checkouts']} />
-                      <Bar dataKey="checkouts" fill="#3b82f6" radius={[3,3,0,0]}>
+                      <Bar dataKey="checkouts" fill="#29ABE2" radius={[3,3,0,0]}>
                         {peakDays.map((_,i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                       </Bar>
                     </BarChart>
@@ -5526,11 +5526,11 @@ export default function Dashboard() {
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By Sublocation</p>
                     <ResponsiveContainer width="100%" height={260}>
                       <BarChart data={catalogBySubloc} layout="vertical" margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis type="number" tick={{ fontSize: 11 }} />
                         <YAxis type="category" dataKey="sublocation" width={110} tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
-                        <Bar dataKey="total" name="Items" fill="#0d9488" />
+                        <Bar dataKey="total" name="Items" fill="#29ABE2" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -5538,11 +5538,11 @@ export default function Dashboard() {
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By Publication Decade</p>
                     <ResponsiveContainer width="100%" height={260}>
                       <BarChart data={catalogByDecade.map(r => ({ ...r, label: `${r.decade}s` }))} margin={{ left: 10, right: 10, top: 4, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
-                        <Bar dataKey="total" name="Items" fill="#3b82f6" />
+                        <Bar dataKey="total" name="Items" fill="#EA5B0C" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -5607,15 +5607,15 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-600 mb-4">Checkouts, check-ins, new patrons, and new items per calendar month stored in Supabase.</p>
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={monthlyData.map(r => ({ ...r, label: `${r.year}-${String(r.month).padStart(2,'0')}` }))} margin={{ left: 10, right: 10, top: 4, bottom: 40 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
                     <Legend />
-                    <Bar dataKey="checkouts"  name="Checkouts"   fill="#3b82f6" />
-                    <Bar dataKey="checkins"   name="Check-ins"   fill="#10b981" />
-                    <Bar dataKey="new_patrons" name="New Patrons" fill="#f59e0b" />
-                    <Bar dataKey="new_items"  name="New Items"   fill="#8b5cf6" />
+                    <Bar dataKey="checkouts"  name="Checkouts"   fill="#29ABE2" />
+                    <Bar dataKey="checkins"   name="Check-ins"   fill="#1B7A3D" />
+                    <Bar dataKey="new_patrons" name="New Patrons" fill="#FFCB05" />
+                    <Bar dataKey="new_items"  name="New Items"   fill="#8B5CF6" />
                   </BarChart>
                 </ResponsiveContainer>
 
@@ -5675,14 +5675,14 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-600 mb-4">Each row is a point-in-time capture pushed by the daily sync. Use these to spot sudden spikes or drops in collection availability.</p>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={[...dailySnaps].reverse()} margin={{ left: 10, right: 10, top: 4, bottom: 40 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="snapshot_date" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" interval={0} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v: unknown) => Number(v).toLocaleString()} />
                     <Legend />
-                    <Bar dataKey="checked_out"       name="Checked Out"       fill="#f59e0b" />
-                    <Bar dataKey="active_patrons_30d" name="Active (30d)"     fill="#10b981" />
-                    <Bar dataKey="checkouts_30d"     name="Checkouts (30d)"  fill="#3b82f6" />
+                    <Bar dataKey="checked_out"       name="Checked Out"       fill="#FFCB05" />
+                    <Bar dataKey="active_patrons_30d" name="Active (30d)"     fill="#1B7A3D" />
+                    <Bar dataKey="checkouts_30d"     name="Checkouts (30d)"  fill="#29ABE2" />
                   </BarChart>
                 </ResponsiveContainer>
 
