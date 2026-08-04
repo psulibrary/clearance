@@ -89,10 +89,10 @@ function days(n: number | undefined): string {
 interface CardProps { label: string; value: string; sub?: string; color?: string; }
 function Card({ label, value, sub, color = 'text-gray-800' }: CardProps) {
   return (
-    <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-1 print:shadow-none print:border print:border-gray-200">
+    <div className="bg-white rounded-2xl shadow-sm hover:shadow-md border border-gray-100 transition-shadow p-5 flex flex-col gap-1 print:shadow-none print:border print:border-gray-200">
       <div className={`text-3xl font-bold ${color}`}>{value}</div>
       <div className="text-sm font-medium text-gray-600">{label}</div>
-      {sub && <div className="text-xs text-gray-600 mt-0.5">{sub}</div>}
+      {sub && <div className="text-xs text-gray-500 mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -2205,7 +2205,9 @@ function ChedManualSection({ unlocked }: { unlocked: boolean }) {
 export default function Dashboard() {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: currentYear - 2015 + 1 }, (_, i) => currentYear - i);
-  const CHART_COLORS = ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
+  // Palawan State University seal palette, extended with a couple of
+  // neutral shades for charts with more categories than the seal has colors.
+  const CHART_COLORS = ['#29ABE2','#EA5B0C','#FFCB05','#1B7A3D','#1C7FAE','#C94E1F','#8B5CF6','#64748B'];
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -2537,29 +2539,33 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-blue-800 text-white shadow print:hidden">
+      <header className="bg-gradient-to-r from-psu-blue-dark via-psu-blue to-psu-orange text-white shadow print:hidden">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold">Destiny Library Dashboard</h1>
-            <p className="text-blue-200 text-xs">PSU Library System · Read-only Reporter View</p>
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/psu-seal.jpg" alt="Palawan State University seal" className="w-11 h-11 rounded-full bg-white shadow-sm object-contain p-0.5" />
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">Destiny Library Dashboard</h1>
+              <p className="text-white/80 text-xs">Palawan State University Library · Read-only Reporter View</p>
+            </div>
           </div>
-          <div className="text-right text-xs text-blue-200 flex flex-col items-end gap-1">
+          <div className="text-right text-xs text-white/80 flex flex-col items-end gap-1">
             <div>{new Date().toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
             <div className="flex items-center gap-2">
               {s?.error
-                ? <span className="text-red-300">⚠ {s.error}</span>
+                ? <span className="text-red-200 font-medium">⚠ {s.error}</span>
                 : loading
-                ? <span className="text-yellow-300 animate-pulse">Loading…</span>
+                ? <span className="text-psu-gold animate-pulse">Loading…</span>
                 : s
-                ? <span className="text-green-300">● Connected</span>
-                : <span className="text-yellow-300 animate-pulse">Connecting…</span>}
+                ? <span className="text-emerald-200 font-medium">● Connected</span>
+                : <span className="text-psu-gold animate-pulse">Connecting…</span>}
               {lastUpdated && (
-                <button onClick={load} className="border border-blue-400 text-blue-200 hover:bg-blue-700 text-xs px-2 py-0.5 rounded transition-colors">
+                <button onClick={load} className="border border-white/40 text-white/90 hover:bg-white/15 text-xs px-2 py-0.5 rounded transition-colors">
                   ↻ Refresh
                 </button>
               )}
             </div>
-            {lastUpdated && <div className="text-blue-300">Updated {lastUpdated.toLocaleTimeString()}</div>}
+            {lastUpdated && <div className="text-white/70">Updated {lastUpdated.toLocaleTimeString()}</div>}
           </div>
         </div>
       </header>
@@ -2918,27 +2924,50 @@ export default function Dashboard() {
               <span>📊</span>Demographics & Distribution
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Gender Pie Chart */}
-              <div className="bg-white rounded-xl shadow-sm p-5">
+              {/* Gender Donut Chart */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                 <h3 className="text-sm font-semibold text-gray-600 mb-3">Patrons by Gender</h3>
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={genderData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({name, percent}: {name?: string;percent?: number}) => `${name ?? ''} ${((percent ?? 0)*100).toFixed(1)}%`}>
-                      {genderData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  <div className="relative w-full sm:w-1/2">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie data={genderData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={80} paddingAngle={2}>
+                          {genderData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="#fff" strokeWidth={2} />)}
+                        </Pie>
+                        <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <div className="text-xl font-bold text-gray-800">{genderData.reduce((a,d)=>a+d.value,0).toLocaleString()}</div>
+                      <div className="text-[10px] text-gray-400 uppercase tracking-wide">Total</div>
+                    </div>
+                  </div>
+                  <div className="w-full sm:w-1/2 space-y-2.5">
+                    {genderData.map((d, i) => {
+                      const total = genderData.reduce((a,b)=>a+b.value,0);
+                      return (
+                        <div key={d.name} className="flex items-center justify-between text-xs gap-2">
+                          <span className="flex items-center gap-2 text-gray-600 truncate">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                            {d.name}
+                          </span>
+                          <span className="font-semibold text-gray-800 whitespace-nowrap">{d.value.toLocaleString()} <span className="text-gray-400 font-normal">({total ? (d.value/total*100).toFixed(1) : 0}%)</span></span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
               {/* Patron Type Bar Chart */}
-              <div className="bg-white rounded-xl shadow-sm p-5">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                 <h3 className="text-sm font-semibold text-gray-600 mb-3">Top Patron Types</h3>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={patronTypeData} layout="vertical" margin={{left:80}}>
-                    <XAxis type="number" tick={{fontSize:11}} />
-                    <YAxis type="category" dataKey="name" tick={{fontSize:10}} width={80} />
-                    <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
-                    <Bar dataKey="value" fill="#3b82f6" radius={[0,4,4,0]}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                    <XAxis type="number" tick={{fontSize:11, fill:'#94a3b8'}} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="name" tick={{fontSize:10, fill:'#475569'}} width={80} axisLine={false} tickLine={false} />
+                    <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} cursor={{ fill: '#f8fafc' }} />
+                    <Bar dataKey="value" radius={[0,6,6,0]} barSize={16}>
                       {patronTypeData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                     </Bar>
                   </BarChart>

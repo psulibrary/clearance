@@ -3,11 +3,25 @@
 :root {
   --background: #ffffff;
   --foreground: #111827;
+
+  /* Palawan State University seal palette */
+  --psu-blue-dark: #1c7fae;
+  --psu-blue: #29abe2;
+  --psu-orange: #ea5b0c;
+  --psu-orange-dark: #c94e1f;
+  --psu-gold: #ffcb05;
+  --psu-green: #1b7a3d;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-psu-blue-dark: var(--psu-blue-dark);
+  --color-psu-blue: var(--psu-blue);
+  --color-psu-orange: var(--psu-orange);
+  --color-psu-orange-dark: var(--psu-orange-dark);
+  --color-psu-gold: var(--psu-gold);
+  --color-psu-green: var(--psu-green);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
