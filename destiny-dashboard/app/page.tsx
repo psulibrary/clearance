@@ -548,6 +548,7 @@ function StrategicTab({
   const costPerCirculation   = budget && checkoutsThisYear > 0 ? budget / checkoutsThisYear : null;
   const duplicateRatio       = totalTitles > 0 ? totalItems / totalTitles : null;
   const overdueRate          = checkoutsThisYear > 0 ? (overdueCount / checkoutsThisYear) * 100 : null;
+  const itemsPerStudent      = enrolled && enrolled > 0 ? totalItems / enrolled : null;
 
   type KPI = {
     id: string;
@@ -641,6 +642,19 @@ function StrategicTab({
       source: 'ILS — auto-computed',
       desc: 'Overdue items as a percentage of total checkouts this year. High rates signal poor return compliance or overly long loan periods.',
       note: `${fmt(overdueCount)} overdue items`,
+    },
+    {
+      id: 'items-per-student',
+      name: 'Items per Student',
+      icon: '🎒',
+      value: itemsPerStudent,
+      unit: 'items/student',
+      baseline: 10,
+      goal: 20,
+      lowerIsBetter: false,
+      source: enrolled ? 'ILS ÷ enrolled students (manual)' : 'Needs enrolled student count ↓',
+      desc: 'Total collection size ÷ enrolled student headcount — the same "Items per Student" figure Destiny\'s Collection Analysis report uses. Low values suggest the collection hasn\'t kept pace with enrollment growth.',
+      note: enrolled ? `${fmt(totalItems)} items ÷ ${fmt(enrolled)} students` : undefined,
     },
   ];
 
@@ -2280,8 +2294,10 @@ export default function Dashboard() {
   type FineByTypeRow = { patronType: string; patronsWithFines: number; fineCount: number; totalFines: number; avgFine: number };
   type AvgAgeRow     = { range: string; firstDigit: string; avgAgeYears: number; itemCount: number; oldestYear: number; newestYear: number };
 
+  type PotentialErrors = { totalActiveItems: number; blankPubYear: number; futurePubYear: number; samples: { Barcode: string; Title: string; Author: string; PublicationYear: number | null; issueType: 'blank' | 'future' }[] };
   const [topTitles, setTopTitles]         = useState<TopTitle[]>([]);
   const [collAge, setCollAge]             = useState<CollAgeRow[]>([]);
+  const [potentialErrors, setPotentialErrors] = useState<PotentialErrors | null>(null);
   const [patronGrowth, setPatronGrowth]   = useState<PatronGrowthRow[]>([]);
   const [retention, setRetention]         = useState<RetentionStats | null>(null);
   const [activePatrons, setActivePatrons] = useState<ActivePatron[]>([]);
@@ -2435,6 +2451,7 @@ export default function Dashboard() {
       setExtraLoaded(p => ({ ...p, collection: true }));
       fetch('/api/charts/top-titles').then(r=>r.json()).then(d=>{ const arr = d?.data ?? d; if(Array.isArray(arr)) setTopTitles(arr); }).catch(() => {});
       fetch('/api/charts/collection-age').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setCollAge(d); }).catch(() => {});
+      fetch('/api/charts/potential-errors').then(r=>r.json()).then(d=>{ if(!d.error) setPotentialErrors(d); }).catch(() => {});
       fetch('/api/charts/longest-overdue?limit=10').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setLongestOverdue(d); }).catch(() => {});
       fetch('/api/charts/by-callnumber').then(r=>r.json()).then(d=>{ const arr = d?.rows ?? d; if(Array.isArray(arr)) setCallNumData(arr); }).catch(() => {});
     }
@@ -4356,6 +4373,58 @@ export default function Dashboard() {
                 </div>
                 </DataTable>
               </div>
+            </div>
+          )}
+
+          {/* ── Potential Errors (blank / future publication year) ── */}
+          {potentialErrors && (potentialErrors.blankPubYear > 0 || potentialErrors.futurePubYear > 0) && (
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>⚠️</span>Potential Cataloging Errors
+              </h2>
+              <p className="text-xs text-gray-600 mb-4">Items with a blank or future publication year — usually a data-entry issue worth correcting before it skews other reports.</p>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-bold text-amber-700">{potentialErrors.blankPubYear.toLocaleString()}</div>
+                  <div className="text-sm text-amber-600 mt-1">Blank Publication Year</div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-bold text-red-600">{potentialErrors.futurePubYear.toLocaleString()}</div>
+                  <div className="text-sm text-red-500 mt-1">Future Publication Year</div>
+                </div>
+              </div>
+              {potentialErrors.samples.length > 0 && (
+                <DataTable label={`View ${potentialErrors.samples.length} affected items`}>
+                <div className="bg-white rounded-xl shadow-sm overflow-x-auto mt-2">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-amber-600 text-white">
+                        <th className="text-left p-2">Barcode</th>
+                        <th className="text-left p-2">Title</th>
+                        <th className="text-left p-2">Author</th>
+                        <th className="text-right p-2">Pub. Year</th>
+                        <th className="text-left p-2">Issue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {potentialErrors.samples.map((r, i) => (
+                        <tr key={r.Barcode} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{r.Barcode}</td>
+                          <td className="p-2 border-b border-gray-100 font-medium text-gray-900">{r.Title}</td>
+                          <td className="p-2 border-b border-gray-100 text-gray-600">{r.Author}</td>
+                          <td className="p-2 border-b border-gray-100 text-right">{r.PublicationYear ?? '—'}</td>
+                          <td className="p-2 border-b border-gray-100">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${r.issueType === 'future' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {r.issueType === 'future' ? 'Future year' : 'Blank year'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                </DataTable>
+              )}
             </div>
           )}
 
