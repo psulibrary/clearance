@@ -2340,7 +2340,6 @@ export default function Dashboard() {
   const [useDateRange, setUseDateRange] = useState(false);
   const [rangeFrom, setRangeFrom]     = useState('');
   const [rangeTo, setRangeTo]         = useState('');
-  const [showExtraFilters, setShowExtraFilters] = useState(false);
   const [insightsUnlocked, setInsightsUnlocked] = useState(false);
   const [pwDraft, setPwDraft] = useState('');
   const [pwError, setPwError] = useState(false);
@@ -2743,6 +2742,15 @@ export default function Dashboard() {
     : (month ? `${MONTHS[month]} ${year}` : `Year ${year}`);
   const periodFileLabel = useDateRange && rangeFrom && rangeTo ? `${rangeFrom}_to_${rangeTo}` : `${yearLabel}-${monthLabel.replace(/\s/g, '')}`;
 
+  // The Year selector was removed from the UI in favor of a single period
+  // control, but CHED/ISO/AACCUP/Trends/Room Use/Staff Transactions still
+  // fetch by year — so every range change carries the range's end-date
+  // year over to that shared `year` state, keeping those tabs in step.
+  function syncYearFromDate(iso: string) {
+    const y = new Date(iso + 'T00:00:00').getFullYear();
+    if (!Number.isNaN(y)) setYear(Math.min(currentYear, Math.max(2015, y)));
+  }
+
   function applyDateRangePreset(preset: 'thisMonth' | 'last30' | 'last90' | 'thisYear' | 'lastYear') {
     const now = new Date();
     let from: Date;
@@ -2755,6 +2763,7 @@ export default function Dashboard() {
     setRangeFrom(fmtDate(from));
     setRangeTo(fmtDate(to));
     setUseDateRange(true);
+    syncYearFromDate(fmtDate(to));
   }
 
   // Pulls together everything currently loaded across every tab (not just
@@ -3221,57 +3230,48 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Filter bar */}
+        {/* Filter bar — period control only; Gender/Patron Type/Year/Month
+            pickers were removed as clutter that added little value. */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-4 print:hidden">
-          {/* Row 1: Year stepper + month pills + action buttons */}
-          <div className="flex flex-wrap items-center gap-3 mb-3">
-            {/* Year stepper */}
-            <div className="flex items-center gap-1 border border-gray-200 rounded-lg overflow-hidden shrink-0" title="Applies dashboard-wide — CHED, ISO, Trends, Room Use, and Staff Transactions all use this year too">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide shrink-0">Period</span>
+            {([
+              ['thisMonth', 'This Month'],
+              ['last30', 'Last 30 Days'],
+              ['last90', 'Last 90 Days'],
+              ['thisYear', 'This Year'],
+              ['lastYear', 'Last Year'],
+            ] as const).map(([key, label]) => (
               <button
-                onClick={() => setYear(y => Math.max(2015, y - 1))}
-                disabled={year <= 2015}
-                className="px-2 py-1.5 text-gray-600 hover:bg-gray-100 disabled:opacity-30 text-sm font-bold transition-colors"
-              >‹</button>
-              <span className="px-3 py-1.5 text-sm font-semibold text-gray-800 border-x border-gray-200 min-w-[52px] text-center">{year}</span>
+                key={key}
+                onClick={() => applyDateRangePreset(key)}
+                className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+              >{label}</button>
+            ))}
+            <span className="flex items-center gap-1 text-xs">
+              <input
+                type="date"
+                value={rangeFrom}
+                onChange={e => { const v = e.target.value; setRangeFrom(v); setUseDateRange(true); if (rangeTo) syncYearFromDate(rangeTo); }}
+                className="border border-gray-200 rounded-md px-1.5 py-1 text-xs text-gray-700"
+              />
+              <span className="text-gray-400">to</span>
+              <input
+                type="date"
+                value={rangeTo}
+                onChange={e => { const v = e.target.value; setRangeTo(v); setUseDateRange(true); syncYearFromDate(v); }}
+                className="border border-gray-200 rounded-md px-1.5 py-1 text-xs text-gray-700"
+              />
+            </span>
+            {useDateRange && (
               <button
-                onClick={() => setYear(y => Math.min(currentYear, y + 1))}
-                disabled={year >= currentYear}
-                className="px-2 py-1.5 text-gray-600 hover:bg-gray-100 disabled:opacity-30 text-sm font-bold transition-colors"
-              >›</button>
-            </div>
+                onClick={() => setUseDateRange(false)}
+                className="flex items-center gap-1 text-xs bg-blue-100 text-blue-800 font-medium px-2 py-0.5 rounded-full hover:bg-blue-200"
+              >{periodLabel} <span className="text-blue-500">×</span></button>
+            )}
 
-            {/* Month pills — Overview tab only */}
-            <div className="flex flex-wrap gap-1" title="Overview tab only">
-              {MONTHS.map((m, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setMonth(month === i ? 0 : i); setUseDateRange(false); }}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                    month === i && !useDateRange
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {i === 0 ? 'All' : m.slice(0, 3)}
-                </button>
-              ))}
-            </div>
-
-            {/* Right side: extra filters toggle + export buttons */}
-            <div className="ml-auto flex items-center gap-2 shrink-0">
-              {(genders.length > 0 || patronTypes.length > 0) && (
-                <button
-                  onClick={() => setShowExtraFilters(f => !f)}
-                  className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-                    showExtraFilters || gender || patronTypeID
-                      ? 'border-blue-400 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M7 8h10M11 12h2M9 16h6" /></svg>
-                  Filters{(gender || patronTypeID > 0) ? ` (${[gender, patronTypeID > 0 ? '1' : ''].filter(Boolean).length})` : ''}
-                </button>
-              )}
+            {/* Export/print actions */}
+            <div className="ml-auto flex flex-wrap items-center gap-2">
               <button
                 onClick={exportCsv}
                 disabled={!s || !!s.error}
@@ -3300,104 +3300,9 @@ export default function Dashboard() {
               >☑️ Custom Print</button>
             </div>
           </div>
-
-          {/* Row 1.5: Overview date-range presets — alternative to Month pills, Overview tab only */}
-          <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide shrink-0">Overview period</span>
-            {([
-              ['thisMonth', 'This Month'],
-              ['last30', 'Last 30 Days'],
-              ['last90', 'Last 90 Days'],
-              ['thisYear', 'This Year'],
-              ['lastYear', 'Last Year'],
-            ] as const).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => applyDateRangePreset(key)}
-                className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-              >{label}</button>
-            ))}
-            <span className="flex items-center gap-1 text-xs">
-              <input
-                type="date"
-                value={rangeFrom}
-                onChange={e => { setRangeFrom(e.target.value); setUseDateRange(true); }}
-                className="border border-gray-200 rounded-md px-1.5 py-1 text-xs text-gray-700"
-              />
-              <span className="text-gray-400">to</span>
-              <input
-                type="date"
-                value={rangeTo}
-                onChange={e => { setRangeTo(e.target.value); setUseDateRange(true); }}
-                className="border border-gray-200 rounded-md px-1.5 py-1 text-xs text-gray-700"
-              />
-            </span>
-            {useDateRange && (
-              <button
-                onClick={() => setUseDateRange(false)}
-                className="flex items-center gap-1 text-xs bg-blue-100 text-blue-800 font-medium px-2 py-0.5 rounded-full hover:bg-blue-200"
-              >{periodLabel} <span className="text-blue-500">×</span></button>
-            )}
-          </div>
-          {useDateRange && rangeFrom && rangeTo && (
-            <p className="text-[11px] text-gray-400 mt-1">
-              Date range applies to the Overview tab&apos;s KPI cards only. CHED, ISO, AACCUP, Trends, Room Use, and Staff Transactions still use the Year selector above.
-            </p>
-          )}
-
-          {/* Row 2: expanded extra filters */}
-          {showExtraFilters && (
-            <div className="flex flex-wrap gap-3 pt-3 border-t border-gray-100">
-              {genders.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Gender</label>
-                  <div className="flex gap-1 flex-wrap">
-                    <button onClick={() => setGender('')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${!gender ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</button>
-                    {genders.map(g => (
-                      <button key={g} onClick={() => setGender(gender === g ? '' : g)} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${gender === g ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{g}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {patronTypes.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Patron Type</label>
-                  <div className="flex gap-1 flex-wrap">
-                    <button onClick={() => setPatronTypeID(0)} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${patronTypeID === 0 ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</button>
-                    {patronTypes.map(pt => (
-                      <button key={pt.PatronTypeID} onClick={() => setPatronTypeID(patronTypeID === pt.PatronTypeID ? 0 : pt.PatronTypeID)} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${patronTypeID === pt.PatronTypeID ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{pt.PatronTypeDescription}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Active filter chips */}
-          {(gender || patronTypeID > 0 || (month > 0 && !useDateRange)) && (
-            <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-gray-100">
-              <span className="text-xs text-gray-400 self-center">Active:</span>
-              <span className="text-xs bg-blue-100 text-blue-800 font-medium px-2 py-0.5 rounded-full">{year}</span>
-              {month > 0 && !useDateRange && (
-                <button onClick={() => setMonth(0)} className="flex items-center gap-1 text-xs bg-blue-100 text-blue-800 font-medium px-2 py-0.5 rounded-full hover:bg-blue-200">
-                  {MONTHS[month]} <span className="text-blue-500">×</span>
-                </button>
-              )}
-              {gender && (
-                <button onClick={() => setGender('')} className="flex items-center gap-1 text-xs bg-indigo-100 text-indigo-800 font-medium px-2 py-0.5 rounded-full hover:bg-indigo-200">
-                  {gender} <span className="text-indigo-500">×</span>
-                </button>
-              )}
-              {patronTypeID > 0 && (
-                <button onClick={() => setPatronTypeID(0)} className="flex items-center gap-1 text-xs bg-indigo-100 text-indigo-800 font-medium px-2 py-0.5 rounded-full hover:bg-indigo-200">
-                  {patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription} <span className="text-indigo-500">×</span>
-                </button>
-              )}
-              {(gender || patronTypeID > 0 || (month > 0 && !useDateRange)) && (
-                <button onClick={() => { setGender(''); setPatronTypeID(0); setMonth(0); }} className="text-xs text-gray-400 hover:text-red-500 px-1 py-0.5 transition-colors">Clear all</button>
-              )}
-            </div>
-          )}
+          <p className="text-[11px] text-gray-400 mt-2">
+            Sets the Overview tab&apos;s KPI cards directly, and also sets the year used by CHED, ISO, AACCUP, Trends, Room Use, and Staff Transactions (from the period&apos;s end date).
+          </p>
         </div>
 
         {/* Tab bar */}
