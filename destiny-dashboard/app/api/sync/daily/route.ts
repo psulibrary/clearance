@@ -3,6 +3,7 @@ import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 import { supabaseServer } from '@/lib/supabase-server';
 import { getRoomUseConfig } from '@/lib/audit-room-use';
+import { runSlimsSync } from '@/app/api/sync/slims/route';
 
 async function runSync() {
   const pool = await getPool();
@@ -117,6 +118,18 @@ async function runSync() {
   return snapshotDate;
 }
 
+// Other campuses running SLiMS piggyback on this same cron job — Vercel's
+// Hobby plan only gives us two cron slots, both already spoken for by this
+// route and warm-cache. Wrapped so a SLiMS outage never fails the Destiny
+// snapshot that the rest of the dashboard depends on.
+async function runSlimsSyncSafe() {
+  try {
+    return await runSlimsSync();
+  } catch {
+    return null;
+  }
+}
+
 // Called by Vercel Cron (GET with Authorization header)
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -125,7 +138,8 @@ export async function GET(request: Request) {
   }
   try {
     const snapshotDate = await runSync();
-    return NextResponse.json({ ok: true, snapshot_date: snapshotDate });
+    const slimsResults = await runSlimsSyncSafe();
+    return NextResponse.json({ ok: true, snapshot_date: snapshotDate, slims: slimsResults });
   } catch (err: unknown) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
@@ -138,7 +152,8 @@ export async function GET(request: Request) {
 export async function POST() {
   try {
     const snapshotDate = await runSync();
-    return NextResponse.json({ ok: true, snapshot_date: snapshotDate });
+    const slimsResults = await runSlimsSyncSafe();
+    return NextResponse.json({ ok: true, snapshot_date: snapshotDate, slims: slimsResults });
   } catch (err: unknown) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },

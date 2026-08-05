@@ -2349,7 +2349,7 @@ export default function Dashboard() {
   const [genderActivity, setGenderActivity]       = useState<ActivityRow[]>([]);
   const [patronTypeActivity, setPatronTypeActivity] = useState<ActivityRow[]>([]);
 
-  type TabName = 'overview'|'patrons'|'collection'|'iso'|'ched'|'aaccup'|'insights'|'trends';
+  type TabName = 'overview'|'patrons'|'collection'|'iso'|'ched'|'aaccup'|'insights'|'trends'|'campuses';
   const [activeTab, setActiveTab] = useState<TabName>('overview');
   type PrintMode = 'none' | 'accreditation' | 'custom';
   const [printMode, setPrintMode] = useState<PrintMode>('none');
@@ -2366,6 +2366,7 @@ export default function Dashboard() {
     { id: 'aaccup', label: 'AACCUP Area VII' },
     { id: 'insights', label: '💡 Insights' },
     { id: 'trends', label: '📈 Trends' },
+    { id: 'campuses', label: '🏫 Campuses' },
   ];
   const ACCREDITATION_TABS: TabName[] = ['ched', 'aaccup'];
 
@@ -2446,6 +2447,7 @@ export default function Dashboard() {
     { id: 'facebook-engagement', label: 'Facebook Page Engagement', tab: 'trends' },
     { id: 'monthly-circulation-trend', label: 'Monthly Circulation Trend', tab: 'trends' },
     { id: 'daily-snapshots', label: 'Daily Snapshots', tab: 'trends' },
+    { id: 'other-campuses', label: 'Other Campuses Overview', tab: 'campuses' },
   ];
   const [chartsLoaded, setChartsLoaded] = useState({ patrons: false, collection: false, insights: false });
   const [chedStats, setChedStats] = useState<Record<string,number> | null>(null);
@@ -2555,6 +2557,11 @@ export default function Dashboard() {
   const [catalogByDecade, setCatalogByDecade] = useState<DecadeRow[]>([]);
   const [catalogTotal,    setCatalogTotal]    = useState<number | null>(null);
 
+  type SublocationRow = { name: string; totalItems: number; checkedOut: number };
+  type CampusStatRow = { campus: string; source: 'slims' | 'koha'; period_type: string; period_date: string; total_items: number | null; checked_out: number | null; total_patrons: number | null; active_patrons: number | null; checkouts: number | null; new_items: number | null; synced_at: string };
+  const [campusesData, setCampusesData] = useState<{ sublocations: SublocationRow[]; campuses: CampusStatRow[] } | null>(null);
+  const [campusesLoaded, setCampusesLoaded] = useState(false);
+
   type FacebookInsights = {
     pageName: string | null;
     totalFollowers: number | null;
@@ -2572,6 +2579,8 @@ export default function Dashboard() {
   const [syncingMonthly,  setSyncingMonthly]  = useState(false);
   const [syncCatalogStatus, setSyncCatalogStatus] = useState<string | null>(null);
   const [syncingCatalog,    setSyncingCatalog]    = useState(false);
+  const [syncSlimsStatus, setSyncSlimsStatus] = useState<string | null>(null);
+  const [syncingSlims,    setSyncingSlims]    = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -2741,7 +2750,11 @@ export default function Dashboard() {
         .then((d) => { setStaffTx(d); setStaffTxLoaded(true); })
         .catch(() => { setStaffTx({ source: 'none', year, staffUserIds: [572608, 963453, 882550], message: 'Failed to load staff transactions.' }); setStaffTxLoaded(true); });
     }
-  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded, roomUseLoaded, staffTxYear]);
+    if (activeTab === 'campuses' && !campusesLoaded) {
+      setCampusesLoaded(true);
+      fetch('/api/charts/campuses').then(r => r.json()).then(d => { if (!d.error) setCampusesData(d); }).catch(() => {});
+    }
+  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded, roomUseLoaded, staffTxYear, campusesLoaded]);
 
   const s = stats;
   const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
@@ -3097,6 +3110,18 @@ export default function Dashboard() {
       });
     }
 
+    if (campusesData) {
+      sections.push({
+        section: 'OTHER CAMPUSES',
+        rows: [
+          ...campusesData.campuses.map((c): [string, string] =>
+            [`${c.campus} (${c.source})`, `${fmt(c.total_items ?? undefined)} items, ${fmt(c.checked_out ?? undefined)} checked out, ${fmt(c.total_patrons ?? undefined)} patrons, ${fmt(c.active_patrons ?? undefined)} active, ${fmt(c.checkouts ?? undefined)} checkouts YTD — as of ${c.period_date}`]),
+          ...campusesData.sublocations.map((r): [string, string] =>
+            [`  Sublocation: ${r.name}`, `${fmt(r.totalItems)} items, ${fmt(r.checkedOut)} checked out`]),
+        ],
+      });
+    }
+
     return sections;
   }
 
@@ -3184,10 +3209,10 @@ export default function Dashboard() {
               <button onClick={() => setPrintPanelOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
             <div className="p-5 overflow-y-auto flex-1">
-              {(['overview','patrons','collection','iso','ched','aaccup','insights','trends'] as TabName[]).map(tabName => {
+              {(['overview','patrons','collection','iso','ched','aaccup','insights','trends','campuses'] as TabName[]).map(tabName => {
                 const sections = PRINTABLE_SECTIONS.filter(s => s.tab === tabName);
                 if (sections.length === 0) return null;
-                const tabLabels: Record<TabName,string> = { overview:'Overview', patrons:'Patrons', collection:'Collection', iso:'Intl Standards', ched:'CHED CMO 22', aaccup:'AACCUP Area VII', insights:'Insights', trends:'Trends' };
+                const tabLabels: Record<TabName,string> = { overview:'Overview', patrons:'Patrons', collection:'Collection', iso:'Intl Standards', ched:'CHED CMO 22', aaccup:'AACCUP Area VII', insights:'Insights', trends:'Trends', campuses:'Campuses' };
                 return (
                   <div key={tabName} className="mb-4">
                     <div className="flex items-center justify-between mb-1.5">
@@ -6436,6 +6461,121 @@ export default function Dashboard() {
           {dailySnaps.length === 0 && trendsLoaded && (
             <div className="mb-8 bg-blue-50 border border-blue-200 rounded-xl p-6 text-blue-800 text-sm">
               <strong>No daily snapshots yet.</strong> Click <em>Sync Today&apos;s Snapshot</em> above to capture today&apos;s stats. Schedule this to run daily (e.g. via a cron job hitting <code className="bg-blue-100 px-1 rounded">/api/sync/daily</code>) to build a historical trend.
+            </div>
+          )}
+        </div>
+
+        {/* ── Campuses tab: other campuses don't share Destiny for
+            circulation. Some run SLiMS (synced live below), some run
+            local-only Koha (no network path to sync — their staff upload a
+            CSV export instead). Collection totals below the fold come
+            straight from Destiny's Sublocation field, which does cover
+            items catalogued for every campus even though checkout activity
+            for non-Destiny campuses doesn't. */}
+        <div className={tabClass('campuses')} data-print-section="other-campuses">
+          <div className="mb-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-1">Other Campuses</h2>
+            <p className="text-sm text-gray-500">
+              Campuses running their own SLiMS or Koha instead of Destiny. SLiMS campuses sync automatically;
+              Koha campuses are local-only and upload a CSV export on whatever schedule their site can manage.
+            </p>
+          </div>
+
+          <div className="mb-8 bg-white rounded-xl shadow-sm p-5 print:hidden">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Sync SLiMS Campuses</h3>
+            <button
+              disabled={syncingSlims}
+              onClick={async () => {
+                setSyncingSlims(true);
+                setSyncSlimsStatus(null);
+                try {
+                  const res = await fetch('/api/sync/slims', { method: 'POST' });
+                  const d = await res.json();
+                  if (d.error) { setSyncSlimsStatus(`❌ ${d.error}`); }
+                  else {
+                    const ok = (d.results ?? []).filter((r: { ok: boolean }) => r.ok).length;
+                    const total = (d.results ?? []).length;
+                    setSyncSlimsStatus(total === 0 ? 'No SLiMS campuses configured (set SLIMS_CAMPUSES).' : `✅ Synced ${ok}/${total} campuses`);
+                    const res2 = await fetch('/api/charts/campuses');
+                    const d2 = await res2.json();
+                    if (!d2.error) setCampusesData(d2);
+                  }
+                } catch { setSyncSlimsStatus('❌ Network error'); }
+                setSyncingSlims(false);
+              }}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              {syncingSlims ? 'Syncing…' : '🔄 Sync SLiMS Campuses Now'}
+            </button>
+            {syncSlimsStatus && <p className="mt-3 text-sm">{syncSlimsStatus}</p>}
+            <p className="mt-3 text-xs text-gray-500">
+              Runs nightly alongside the Destiny snapshot sync too. Koha campuses aren&apos;t reachable from here — see{' '}
+              <code className="bg-gray-100 px-1 rounded">/api/sync/koha-upload</code> for the CSV upload each Koha site&apos;s staff run instead.
+            </p>
+          </div>
+
+          {!campusesData && (
+            <div className="mb-8 bg-blue-50 border border-blue-200 rounded-xl p-6 text-blue-800 text-sm">Loading…</div>
+          )}
+
+          {campusesData && campusesData.campuses.length === 0 && (
+            <div className="mb-8 bg-amber-50 border border-amber-200 rounded-xl p-6 text-amber-800 text-sm">
+              <strong>No campus data synced yet.</strong> Configure <code className="bg-amber-100 px-1 rounded">SLIMS_CAMPUSES</code> and click
+              &quot;Sync SLiMS Campuses Now&quot; above, or have a Koha campus POST a CSV to <code className="bg-amber-100 px-1 rounded">/api/sync/koha-upload</code>.
+            </div>
+          )}
+
+          {campusesData && campusesData.campuses.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Circulation & Patrons — By Campus</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {campusesData.campuses.map(c => (
+                  <div key={c.campus} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-bold text-gray-800">{c.campus}</h4>
+                      <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${c.source === 'slims' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                        {c.source}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div><div className="text-gray-400 text-xs">Total Items</div><div className="font-semibold text-gray-800">{fmt(c.total_items ?? undefined)}</div></div>
+                      <div><div className="text-gray-400 text-xs">Checked Out</div><div className="font-semibold text-gray-800">{fmt(c.checked_out ?? undefined)}</div></div>
+                      <div><div className="text-gray-400 text-xs">Total Patrons</div><div className="font-semibold text-gray-800">{fmt(c.total_patrons ?? undefined)}</div></div>
+                      <div><div className="text-gray-400 text-xs">Active Patrons</div><div className="font-semibold text-gray-800">{fmt(c.active_patrons ?? undefined)}</div></div>
+                      <div><div className="text-gray-400 text-xs">Checkouts (YTD)</div><div className="font-semibold text-gray-800">{fmt(c.checkouts ?? undefined)}</div></div>
+                      <div><div className="text-gray-400 text-xs">New Items (YTD)</div><div className="font-semibold text-gray-800">{fmt(c.new_items ?? undefined)}</div></div>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">
+                      As of {c.period_date} · synced {new Date(c.synced_at).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {campusesData && campusesData.sublocations.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Collection by Sublocation (from Destiny&apos;s union catalog)</h3>
+              <p className="text-xs text-gray-500 mb-3">
+                Item counts only — checkout activity for non-Destiny campuses isn&apos;t recorded here. See the cards above for their live circulation numbers.
+              </p>
+              <DataTable label="View sublocation breakdown">
+                <div className="overflow-x-auto mt-2">
+                  <table className="w-full text-sm">
+                    <thead><tr className="text-left text-gray-500 border-b border-gray-200"><th className="py-2 pr-4">Sublocation</th><th className="py-2 pr-4">Total Items</th><th className="py-2">Checked Out</th></tr></thead>
+                    <tbody>
+                      {campusesData.sublocations.map(r => (
+                        <tr key={r.name} className="border-b border-gray-100">
+                          <td className="py-2 pr-4">{r.name}</td>
+                          <td className="py-2 pr-4">{fmt(r.totalItems)}</td>
+                          <td className="py-2">{fmt(r.checkedOut)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </DataTable>
             </div>
           )}
         </div>

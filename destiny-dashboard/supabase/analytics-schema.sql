@@ -124,3 +124,31 @@ create or replace view library_catalog_by_decade as
 -- public reads via RLS.
 grant select on library_catalog_by_sublocation to anon, authenticated;
 grant select on library_catalog_by_decade to anon, authenticated;
+
+-- Other-campus stats. Those campuses don't share Destiny for circulation —
+-- some run their own SLiMS (synced live from its MySQL database by
+-- app/api/sync/slims/route.ts) and some run local-only Koha (no network
+-- access to sync from, so their staff export a CSV and POST it to
+-- app/api/sync/koha-upload/route.ts on whatever schedule they can manage).
+-- One row per campus per period; latest row per campus/period_type is what
+-- the dashboard's Campuses tab reads.
+create table if not exists campus_stats (
+  campus         text not null,
+  source         text not null check (source in ('slims', 'koha')),
+  period_type    text not null check (period_type in ('daily', 'monthly')),
+  period_date    date not null,
+  total_items    integer,
+  checked_out    integer,
+  total_patrons  integer,
+  active_patrons integer,
+  checkouts      integer,
+  new_items      integer,
+  synced_at      timestamptz not null default now(),
+  primary key (campus, period_type, period_date)
+);
+
+create index if not exists campus_stats_campus_idx on campus_stats (campus, period_date desc);
+
+alter table campus_stats enable row level security;
+drop policy if exists "Public read access" on campus_stats;
+create policy "Public read access" on campus_stats for select using (true);
