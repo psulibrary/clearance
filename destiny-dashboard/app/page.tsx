@@ -58,6 +58,8 @@ interface Stats {
   totalFinesEverCollected: number;
   year: number;
   month: number;
+  from?: string | null;
+  to?: string | null;
   error?: string;
 }
 
@@ -65,6 +67,14 @@ const MONTHS = [
   'All Months','January','February','March','April','May','June',
   'July','August','September','October','November','December',
 ];
+
+function fmtDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function fmtDateLabel(iso: string): string {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 function fmt(n: number | undefined): string {
   if (n === undefined || n === null) return '—';
@@ -2323,6 +2333,13 @@ export default function Dashboard() {
   const [month, setMonth]             = useState(0);
   const [gender, setGender]           = useState('');
   const [patronTypeID, setPatronTypeID] = useState(0);
+  // Overview-only date range: an alternative to Year+Month for the
+  // Overview tab's period KPIs. The Year selector above still drives every
+  // other tab (CHED, ISO, Trends, Room Use, Staff Transactions, etc.), so
+  // switching to a custom range never touches those.
+  const [useDateRange, setUseDateRange] = useState(false);
+  const [rangeFrom, setRangeFrom]     = useState('');
+  const [rangeTo, setRangeTo]         = useState('');
   const [showExtraFilters, setShowExtraFilters] = useState(false);
   const [insightsUnlocked, setInsightsUnlocked] = useState(false);
   const [pwDraft, setPwDraft] = useState('');
@@ -2548,12 +2565,16 @@ export default function Dashboard() {
   const load = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams({ year: String(year), month: String(month), gender, patronTypeID: String(patronTypeID) });
+    if (useDateRange && rangeFrom && rangeTo) {
+      params.set('from', rangeFrom);
+      params.set('to', rangeTo);
+    }
     fetch(`/api/stats?${params}`)
       .then(r => r.json())
       .then(d => { setStats(d); setLastUpdated(new Date()); })
       .catch(() => setStats({ error: 'Connection failed' } as Stats))
       .finally(() => setLoading(false));
-  }, [year, month, gender, patronTypeID]);
+  }, [year, month, gender, patronTypeID, useDateRange, rangeFrom, rangeTo]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -2717,7 +2738,24 @@ export default function Dashboard() {
   const deadStockPct = s?.neverCheckedOut && s?.totalItems ? pct(s.neverCheckedOut, s.totalItems) : '—';
   const yearLabel    = String(year);
   const monthLabel   = MONTHS[month];
-  const periodLabel  = month ? `${MONTHS[month]} ${year}` : `Year ${year}`;
+  const periodLabel  = useDateRange && rangeFrom && rangeTo
+    ? `${fmtDateLabel(rangeFrom)} – ${fmtDateLabel(rangeTo)}`
+    : (month ? `${MONTHS[month]} ${year}` : `Year ${year}`);
+  const periodFileLabel = useDateRange && rangeFrom && rangeTo ? `${rangeFrom}_to_${rangeTo}` : `${yearLabel}-${monthLabel.replace(/\s/g, '')}`;
+
+  function applyDateRangePreset(preset: 'thisMonth' | 'last30' | 'last90' | 'thisYear' | 'lastYear') {
+    const now = new Date();
+    let from: Date;
+    let to = now;
+    if (preset === 'thisMonth') from = new Date(now.getFullYear(), now.getMonth(), 1);
+    else if (preset === 'last30') { from = new Date(now); from.setDate(from.getDate() - 30); }
+    else if (preset === 'last90') { from = new Date(now); from.setDate(from.getDate() - 90); }
+    else if (preset === 'thisYear') from = new Date(now.getFullYear(), 0, 1);
+    else { from = new Date(now.getFullYear() - 1, 0, 1); to = new Date(now.getFullYear() - 1, 11, 31); }
+    setRangeFrom(fmtDate(from));
+    setRangeTo(fmtDate(to));
+    setUseDateRange(true);
+  }
 
   // Pulls together everything currently loaded across every tab (not just
   // the Stats object) into one shared structure so CSV and TXT exports stay
@@ -2732,8 +2770,10 @@ export default function Dashboard() {
       section: 'REPORT INFO',
       rows: [
         ['Generated', new Date().toLocaleString()],
-        ['Filter: Year', yearLabel],
-        ['Filter: Month', monthLabel],
+        ['Filter: Year (dashboard-wide)', yearLabel],
+        ...(useDateRange && rangeFrom && rangeTo
+          ? [['Filter: Overview Date Range', `${rangeFrom} to ${rangeTo}`] as [string, string]]
+          : [['Filter: Month (Overview only)', monthLabel] as [string, string]]),
         ['Filter: Gender', genderLabel],
         ['Filter: Patron Type', patronTypeLabel],
       ],
@@ -3040,13 +3080,13 @@ export default function Dashboard() {
   }
 
   function exportCsv() {
-    downloadBlob(sectionsToCsv(buildReportSections()), `library-dashboard-${yearLabel}-${monthLabel.replace(/\s/g, '')}.csv`, 'text/csv');
+    downloadBlob(sectionsToCsv(buildReportSections()), `library-dashboard-${periodFileLabel}.csv`, 'text/csv');
   }
 
   function exportTxt() {
     downloadBlob(
       sectionsToTxt(buildReportSections(), `Destiny Library Dashboard Report — ${periodLabel}`),
-      `library-dashboard-${yearLabel}-${monthLabel.replace(/\s/g, '')}.txt`,
+      `library-dashboard-${periodFileLabel}.txt`,
       'text/plain',
     );
   }
@@ -3186,7 +3226,7 @@ export default function Dashboard() {
           {/* Row 1: Year stepper + month pills + action buttons */}
           <div className="flex flex-wrap items-center gap-3 mb-3">
             {/* Year stepper */}
-            <div className="flex items-center gap-1 border border-gray-200 rounded-lg overflow-hidden shrink-0">
+            <div className="flex items-center gap-1 border border-gray-200 rounded-lg overflow-hidden shrink-0" title="Applies dashboard-wide — CHED, ISO, Trends, Room Use, and Staff Transactions all use this year too">
               <button
                 onClick={() => setYear(y => Math.max(2015, y - 1))}
                 disabled={year <= 2015}
@@ -3200,14 +3240,14 @@ export default function Dashboard() {
               >›</button>
             </div>
 
-            {/* Month pills */}
-            <div className="flex flex-wrap gap-1">
+            {/* Month pills — Overview tab only */}
+            <div className="flex flex-wrap gap-1" title="Overview tab only">
               {MONTHS.map((m, i) => (
                 <button
                   key={i}
-                  onClick={() => setMonth(month === i ? 0 : i)}
+                  onClick={() => { setMonth(month === i ? 0 : i); setUseDateRange(false); }}
                   className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                    month === i
+                    month === i && !useDateRange
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
@@ -3261,6 +3301,50 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Row 1.5: Overview date-range presets — alternative to Month pills, Overview tab only */}
+          <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide shrink-0">Overview period</span>
+            {([
+              ['thisMonth', 'This Month'],
+              ['last30', 'Last 30 Days'],
+              ['last90', 'Last 90 Days'],
+              ['thisYear', 'This Year'],
+              ['lastYear', 'Last Year'],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => applyDateRangePreset(key)}
+                className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+              >{label}</button>
+            ))}
+            <span className="flex items-center gap-1 text-xs">
+              <input
+                type="date"
+                value={rangeFrom}
+                onChange={e => { setRangeFrom(e.target.value); setUseDateRange(true); }}
+                className="border border-gray-200 rounded-md px-1.5 py-1 text-xs text-gray-700"
+              />
+              <span className="text-gray-400">to</span>
+              <input
+                type="date"
+                value={rangeTo}
+                onChange={e => { setRangeTo(e.target.value); setUseDateRange(true); }}
+                className="border border-gray-200 rounded-md px-1.5 py-1 text-xs text-gray-700"
+              />
+            </span>
+            {useDateRange && (
+              <button
+                onClick={() => setUseDateRange(false)}
+                className="flex items-center gap-1 text-xs bg-blue-100 text-blue-800 font-medium px-2 py-0.5 rounded-full hover:bg-blue-200"
+              >{periodLabel} <span className="text-blue-500">×</span></button>
+            )}
+          </div>
+          {useDateRange && rangeFrom && rangeTo && (
+            <p className="text-[11px] text-gray-400 mt-1">
+              Date range applies to the Overview tab&apos;s KPI cards only. CHED, ISO, AACCUP, Trends, Room Use, and Staff Transactions still use the Year selector above.
+            </p>
+          )}
+
           {/* Row 2: expanded extra filters */}
           {showExtraFilters && (
             <div className="flex flex-wrap gap-3 pt-3 border-t border-gray-100">
@@ -3290,11 +3374,11 @@ export default function Dashboard() {
           )}
 
           {/* Active filter chips */}
-          {(gender || patronTypeID > 0 || month > 0) && (
+          {(gender || patronTypeID > 0 || (month > 0 && !useDateRange)) && (
             <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-gray-100">
               <span className="text-xs text-gray-400 self-center">Active:</span>
               <span className="text-xs bg-blue-100 text-blue-800 font-medium px-2 py-0.5 rounded-full">{year}</span>
-              {month > 0 && (
+              {month > 0 && !useDateRange && (
                 <button onClick={() => setMonth(0)} className="flex items-center gap-1 text-xs bg-blue-100 text-blue-800 font-medium px-2 py-0.5 rounded-full hover:bg-blue-200">
                   {MONTHS[month]} <span className="text-blue-500">×</span>
                 </button>
@@ -3309,7 +3393,7 @@ export default function Dashboard() {
                   {patronTypes.find(pt => pt.PatronTypeID === patronTypeID)?.PatronTypeDescription} <span className="text-indigo-500">×</span>
                 </button>
               )}
-              {(gender || patronTypeID > 0 || month > 0) && (
+              {(gender || patronTypeID > 0 || (month > 0 && !useDateRange)) && (
                 <button onClick={() => { setGender(''); setPatronTypeID(0); setMonth(0); }} className="text-xs text-gray-400 hover:text-red-500 px-1 py-0.5 transition-colors">Clear all</button>
               )}
             </div>

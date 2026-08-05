@@ -10,6 +10,9 @@ export async function GET(request: NextRequest) {
   const month       = parseInt(sp.get('month') || '0');
   const gender      = sp.get('gender')      || '';
   const patronTypeID = parseInt(sp.get('patronTypeID') || '0');  // 0 = all types
+  const rangeFrom   = sp.get('from') || '';
+  const rangeTo     = sp.get('to')   || '';
+  const useRange    = !!(rangeFrom && rangeTo);
   const key = cacheKey('/api/stats', sp);
 
   try {
@@ -20,9 +23,20 @@ export async function GET(request: NextRequest) {
     req.input('month',       sql.Int,     month);
     req.input('gender',      sql.NVarChar, gender);
     req.input('patronTypeID', sql.Int,    patronTypeID);
+    if (useRange) {
+      req.input('rangeFrom', sql.Date, rangeFrom);
+      req.input('rangeTo',   sql.Date, rangeTo);
+    }
 
-    const yearFilter  = `YEAR(c2.DateOut) = @year`;
-    const monthFilter = month ? `MONTH(c2.DateOut) = @month AND ${yearFilter}` : yearFilter;
+    // Overview "period" fields can be scoped either by Year+Month (the
+    // dashboard-wide selector other tabs also read) or by an explicit
+    // From/To date range (Overview-only — set via the quick presets or a
+    // custom range in the filter bar). Falls back to Year+Month when no
+    // range is supplied so this stays backward compatible.
+    const dateOutCond   = useRange ? `c2.DateOut >= @rangeFrom AND c2.DateOut < DATEADD(day,1,@rangeTo)` : `YEAR(c2.DateOut) = @year`;
+    const monthFilter   = useRange ? dateOutCond : (month ? `MONTH(c2.DateOut) = @month AND YEAR(c2.DateOut) = @year` : dateOutCond);
+    const createdCond   = useRange ? `Created >= @rangeFrom AND Created < DATEADD(day,1,@rangeTo)` : `YEAR(Created) = @year`;
+    const datePlacedCond = useRange ? `DatePlaced >= @rangeFrom AND DatePlaced < DATEADD(day,1,@rangeTo)` : `YEAR(DatePlaced) = @year`;
 
     // Build JOIN conditions for optional filters
     // Both gender and patronType join to Patron/SitePatron — combine into one join when both set
@@ -42,8 +56,8 @@ export async function GET(request: NextRequest) {
     ].filter(Boolean).join(' AND ');
     const patronFilter = patronWhere ? `WHERE ${patronWhere}` : '';
     const patronCreatedFilter = patronWhere
-      ? `WHERE YEAR(Created) = @year AND ${patronWhere}`
-      : `WHERE YEAR(Created) = @year`;
+      ? `WHERE ${createdCond} AND ${patronWhere}`
+      : `WHERE ${createdCond}`;
 
     const result = await req.query(`
       SELECT
@@ -58,7 +72,7 @@ export async function GET(request: NextRequest) {
           AS overdueOver30Days,
         (SELECT COUNT(*) FROM ${t(p,'Copy')} WHERE DateWithdrawn IS NULL AND PatronID IS NULL AND DateReturned IS NULL)
           AS available,
-        (SELECT COUNT(*) FROM ${t(p,'Copy')} WHERE YEAR(Created) = @year AND DateWithdrawn IS NULL)
+        (SELECT COUNT(*) FROM ${t(p,'Copy')} WHERE ${createdCond} AND DateWithdrawn IS NULL)
           AS newItemsThisYear,
         (SELECT COUNT(*) FROM ${t(p,'Copy')} WHERE MONTH(Created) = MONTH(GETDATE()) AND YEAR(Created) = @year AND DateWithdrawn IS NULL)
           AS newItemsThisMonth,
@@ -92,7 +106,7 @@ export async function GET(request: NextRequest) {
           AS pendingHolds,
         (SELECT COUNT(*) FROM ${t(p,'Hold')} WHERE IsReady = 1 AND ExpireDate > GETDATE())
           AS readyHolds,
-        (SELECT COUNT(*) FROM ${t(p,'Hold')} WHERE YEAR(DatePlaced) = @year)
+        (SELECT COUNT(*) FROM ${t(p,'Hold')} WHERE ${datePlacedCond})
           AS holdsPlacedThisYear,
 
         /* ── Patrons ── */
@@ -123,7 +137,7 @@ export async function GET(request: NextRequest) {
           AS totalFinesEverCollected
     `);
 
-    const json = { ...result.recordset[0], year, month, gender, patronTypeID };
+    const json = { ...result.recordset[0], year, month, gender, patronTypeID, from: useRange ? rangeFrom : null, to: useRange ? rangeTo : null };
     cacheSet(key, json);
     return NextResponse.json(json);
   } catch (err: unknown) {
