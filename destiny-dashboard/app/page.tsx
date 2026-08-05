@@ -2355,6 +2355,18 @@ export default function Dashboard() {
   const [printMode, setPrintMode] = useState<PrintMode>('none');
   const [printPanelOpen, setPrintPanelOpen] = useState(false);
   const [selectedPrintSections, setSelectedPrintSections] = useState<Set<string>>(new Set());
+  const [mobileTabOpen, setMobileTabOpen] = useState(false);
+
+  const TAB_META: { id: TabName; label: string }[] = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'patrons', label: 'Patrons' },
+    { id: 'collection', label: 'Collection' },
+    { id: 'iso', label: '🌐 Intl Standards' },
+    { id: 'ched', label: 'CHED CMO 22' },
+    { id: 'aaccup', label: 'AACCUP Area VII' },
+    { id: 'insights', label: '💡 Insights' },
+    { id: 'trends', label: '📈 Trends' },
+  ];
   const ACCREDITATION_TABS: TabName[] = ['ched', 'aaccup'];
 
   function tabClass(tab: TabName): string {
@@ -3103,32 +3115,33 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-gradient-to-r from-psu-blue-dark via-psu-blue to-psu-orange text-white shadow print:hidden">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex items-center gap-3 min-w-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/psu-seal.jpg" alt="Palawan State University seal" className="w-11 h-11 rounded-full bg-white shadow-sm object-contain p-0.5" />
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">Destiny Library Dashboard</h1>
-              <p className="text-white/80 text-xs">Palawan State University Library · Read-only Reporter View</p>
+            <img src="/psu-seal.jpg" alt="Palawan State University seal" className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white shadow-sm object-contain p-0.5 shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold tracking-tight truncate">Destiny Library Dashboard</h1>
+              <p className="hidden sm:block text-white/80 text-xs">Palawan State University Library · Read-only Reporter View</p>
             </div>
           </div>
-          <div className="text-right text-xs text-white/80 flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2 text-xs text-white/80 shrink-0">
+            {s?.error
+              ? <span className="text-red-200 font-medium">⚠ Offline</span>
+              : loading
+              ? <span className="text-psu-gold animate-pulse">Loading…</span>
+              : s
+              ? <span className="text-emerald-200 font-medium">● Connected</span>
+              : <span className="text-psu-gold animate-pulse">Connecting…</span>}
+            {lastUpdated && (
+              <button onClick={load} className="border border-white/40 text-white/90 hover:bg-white/15 text-xs px-2 py-0.5 rounded transition-colors">
+                ↻ Refresh
+              </button>
+            )}
+          </div>
+          <div className="hidden sm:flex w-full sm:w-auto justify-end text-right text-xs text-white/70 gap-1 flex-col">
             <div>{new Date().toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
-            <div className="flex items-center gap-2">
-              {s?.error
-                ? <span className="text-red-200 font-medium">⚠ {s.error}</span>
-                : loading
-                ? <span className="text-psu-gold animate-pulse">Loading…</span>
-                : s
-                ? <span className="text-emerald-200 font-medium">● Connected</span>
-                : <span className="text-psu-gold animate-pulse">Connecting…</span>}
-              {lastUpdated && (
-                <button onClick={load} className="border border-white/40 text-white/90 hover:bg-white/15 text-xs px-2 py-0.5 rounded transition-colors">
-                  ↻ Refresh
-                </button>
-              )}
-            </div>
-            {lastUpdated && <div className="text-white/70">Updated {lastUpdated.toLocaleTimeString()}</div>}
+            {s?.error && <div className="text-red-200">{s.error}</div>}
+            {lastUpdated && <div>Updated {lastUpdated.toLocaleTimeString()}</div>}
           </div>
         </div>
       </header>
@@ -3305,22 +3318,54 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Tab bar */}
-        <div className="flex gap-2 mb-6 border-b border-gray-200 print:hidden">
-          {(['overview','patrons','collection','iso','ched','aaccup','insights','trends'] as const).map(tab => (
+        {/* Tab bar — full horizontal strip on desktop; on mobile the strip
+            overflows past the viewport with no scroll affordance, so it's
+            replaced by a single button that opens a full-width tab sheet. */}
+        <div className="hidden sm:flex gap-2 mb-6 border-b border-gray-200 print:hidden">
+          {TAB_META.map(({ id, label }) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={id}
+              onClick={() => setActiveTab(id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab
+                activeTab === id
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
-            >
-              {tab === 'iso' ? '🌐 Intl Standards' : tab === 'ched' ? 'CHED CMO 22' : tab === 'aaccup' ? 'AACCUP Area VII' : tab === 'insights' ? '💡 Insights' : tab === 'trends' ? '📈 Trends' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
+            >{label}</button>
           ))}
         </div>
+
+        <div className="sm:hidden mb-6 print:hidden">
+          <button
+            onClick={() => setMobileTabOpen(true)}
+            className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm text-sm font-semibold text-gray-800"
+          >
+            <span>{TAB_META.find(t => t.id === activeTab)?.label}</span>
+            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          </button>
+        </div>
+
+        {mobileTabOpen && (
+          <div className="sm:hidden fixed inset-0 z-50 bg-black/40 flex items-end print:hidden" onClick={() => setMobileTabOpen(false)}>
+            <div className="bg-white rounded-t-2xl shadow-xl w-full max-h-[75vh] overflow-y-auto pb-[env(safe-area-inset-bottom)]" onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white p-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-gray-900">Jump to tab</h3>
+                <button onClick={() => setMobileTabOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+              </div>
+              <div className="p-2">
+                {TAB_META.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    onClick={() => { setActiveTab(id); setMobileTabOpen(false); }}
+                    className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                      activeTab === id ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >{label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tab: Overview */}
         <div className={tabClass('overview')}>
