@@ -2562,6 +2562,11 @@ export default function Dashboard() {
   const [campusesData, setCampusesData] = useState<{ sublocations: SublocationRow[]; campuses: CampusStatRow[] } | null>(null);
   const [campusesLoaded, setCampusesLoaded] = useState(false);
 
+  type AuditLogRow = { id: number; entity_type: string; entity_key: string; old_value: Record<string, unknown> | null; new_value: Record<string, unknown> | null; source: string; flagged: boolean; flag_reason: string | null; reverted: boolean; created_at: string };
+  const [auditLog, setAuditLog] = useState<AuditLogRow[]>([]);
+  const [revertingId, setRevertingId] = useState<number | null>(null);
+  const [revertStatus, setRevertStatus] = useState<string | null>(null);
+
   type FacebookInsights = {
     pageName: string | null;
     totalFollowers: number | null;
@@ -2753,8 +2758,39 @@ export default function Dashboard() {
     if (activeTab === 'campuses' && !campusesLoaded) {
       setCampusesLoaded(true);
       fetch('/api/charts/campuses').then(r => r.json()).then(d => { if (!d.error) setCampusesData(d); }).catch(() => {});
+      (async () => {
+        const { supabase } = await import('@/lib/supabase');
+        const { data } = await supabase.from('audit_log').select('*').eq('entity_type', 'campus_stats').order('created_at', { ascending: false }).limit(30);
+        if (data) setAuditLog(data as AuditLogRow[]);
+      })();
     }
   }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded, roomUseLoaded, staffTxYear, campusesLoaded]);
+
+  async function reloadCampusesAndAudit() {
+    const [campusesRes, { supabase }] = await Promise.all([fetch('/api/charts/campuses').then(r => r.json()), import('@/lib/supabase')]);
+    if (!campusesRes.error) setCampusesData(campusesRes);
+    const { data } = await supabase.from('audit_log').select('*').eq('entity_type', 'campus_stats').order('created_at', { ascending: false }).limit(30);
+    if (data) setAuditLog(data as AuditLogRow[]);
+  }
+
+  async function revertAudit(auditId: number) {
+    if (!insightsUnlocked) return;
+    setRevertingId(auditId);
+    setRevertStatus(null);
+    try {
+      const res = await fetch('/api/audit/revert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auditId, password: 'palstateu' }),
+      });
+      const d = await res.json();
+      setRevertStatus(d.ok ? '✅ Reverted' : `❌ ${d.error}`);
+      if (d.ok) await reloadCampusesAndAudit();
+    } catch {
+      setRevertStatus('❌ Network error');
+    }
+    setRevertingId(null);
+  }
 
   const s = stats;
   const turnoverRate = s?.checkoutsThisYear && s?.totalItems ? (s.checkoutsThisYear / s.totalItems).toFixed(2) + 'x' : '—';
@@ -6493,12 +6529,15 @@ export default function Dashboard() {
                   const d = await res.json();
                   if (d.error) { setSyncSlimsStatus(`❌ ${d.error}`); }
                   else {
-                    const ok = (d.results ?? []).filter((r: { ok: boolean }) => r.ok).length;
-                    const total = (d.results ?? []).length;
-                    setSyncSlimsStatus(total === 0 ? 'No SLiMS campuses configured (set SLIMS_CAMPUSES).' : `✅ Synced ${ok}/${total} campuses`);
-                    const res2 = await fetch('/api/charts/campuses');
-                    const d2 = await res2.json();
-                    if (!d2.error) setCampusesData(d2);
+                    const results = (d.results ?? []) as { campus: string; ok: boolean; flagged?: boolean }[];
+                    const ok = results.filter(r => r.ok).length;
+                    const flagged = results.filter(r => r.flagged).length;
+                    setSyncSlimsStatus(
+                      results.length === 0
+                        ? 'No SLiMS campuses configured (set SLIMS_CAMPUSES).'
+                        : `✅ Synced ${ok}/${results.length} campuses${flagged ? ` · ⚠️ ${flagged} flagged and skipped — see Audit Log below` : ''}`
+                    );
+                    await reloadCampusesAndAudit();
                   }
                 } catch { setSyncSlimsStatus('❌ Network error'); }
                 setSyncingSlims(false);
@@ -6578,6 +6617,74 @@ export default function Dashboard() {
               </DataTable>
             </div>
           )}
+
+          {/* ── Audit log: every write the SLiMS/Koha pipelines make, so a
+              bad reading can be spotted and undone instead of silently
+              overwriting good data. SLiMS auto-skips anomalies (never
+              applied, so nothing to revert); Koha uploads apply-but-flag
+              since a human curated the CSV, so those are the ones worth
+              reviewing here. */}
+          <div className="mb-8 print:hidden">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Audit Log — Campus Sync</h3>
+              {insightsUnlocked ? (
+                <button onClick={() => { setInsightsUnlocked(false); setPwDraft(''); setPwError(false); }} className="text-xs text-gray-500 hover:text-red-500 border border-gray-200 px-3 py-1 rounded-lg transition-colors">🔓 Lock</button>
+              ) : (
+                <form onSubmit={e => { e.preventDefault(); if (pwDraft === 'palstateu') { setInsightsUnlocked(true); setPwError(false); setPwDraft(''); } else { setPwError(true); } }} className="flex items-center gap-2">
+                  <input type="password" value={pwDraft} onChange={e => { setPwDraft(e.target.value); setPwError(false); }} placeholder="Password to enable Revert" className={`border rounded-lg px-3 py-1.5 text-xs w-44 focus:outline-none focus:ring-2 ${pwError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-blue-400'}`} />
+                  <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">Unlock</button>
+                  {pwError && <span className="text-xs text-red-500">Incorrect</span>}
+                </form>
+              )}
+            </div>
+            {revertStatus && <p className="text-sm mb-2">{revertStatus}</p>}
+            {auditLog.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-sm text-gray-500">No sync activity recorded yet.</div>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500 border-b border-gray-200">
+                      <th className="py-2 px-4">When</th>
+                      <th className="py-2 px-4">Campus</th>
+                      <th className="py-2 px-4">Source</th>
+                      <th className="py-2 px-4">Total Items</th>
+                      <th className="py-2 px-4">Status</th>
+                      <th className="py-2 px-4"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLog.map(entry => (
+                      <tr key={entry.id} className={`border-b border-gray-100 ${entry.flagged ? 'bg-amber-50' : ''}`}>
+                        <td className="py-2 px-4 text-xs text-gray-500 whitespace-nowrap">{new Date(entry.created_at).toLocaleString()}</td>
+                        <td className="py-2 px-4">{entry.entity_key.split('|')[0]}</td>
+                        <td className="py-2 px-4 text-xs">{entry.source}</td>
+                        <td className="py-2 px-4 text-xs">
+                          {String(entry.old_value?.total_items ?? '—')} → {String(entry.new_value?.total_items ?? '—')}
+                        </td>
+                        <td className="py-2 px-4 text-xs">
+                          {entry.reverted
+                            ? <span className="text-gray-400">Reverted</span>
+                            : entry.flagged
+                            ? <span className="text-amber-700 font-medium">⚠️ {entry.flag_reason}</span>
+                            : <span className="text-emerald-600">OK</span>}
+                        </td>
+                        <td className="py-2 px-4 text-right">
+                          {insightsUnlocked && !entry.reverted && entry.old_value && entry.source !== 'revert' && (
+                            <button
+                              disabled={revertingId === entry.id}
+                              onClick={() => revertAudit(entry.id)}
+                              className="text-xs text-red-600 hover:text-red-800 disabled:opacity-40 font-medium"
+                            >{revertingId === entry.id ? 'Reverting…' : 'Revert'}</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>

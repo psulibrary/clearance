@@ -152,3 +152,37 @@ create index if not exists campus_stats_campus_idx on campus_stats (campus, peri
 alter table campus_stats enable row level security;
 drop policy if exists "Public read access" on campus_stats;
 create policy "Public read access" on campus_stats for select using (true);
+
+-- Audit trail for every write the sync/upload pipelines make, so a bad
+-- SLiMS reading or a typo'd Koha CSV can be spotted and undone instead of
+-- silently overwriting good data. old_value/new_value store a full-row
+-- JSON snapshot (not per-field) so a revert is just "upsert old_value
+-- back" regardless of which columns changed. entity_key is a stable
+-- "<table's unique key, pipe-joined>" string, e.g.
+-- "Aborlan Campus|daily|2026-08-05" for campus_stats or
+-- "STRAT-ENROLLED|2026-08-05" for green_metrics.
+create table if not exists audit_log (
+  id           bigserial primary key,
+  entity_type  text not null,   -- 'campus_stats' | 'manual_metric'
+  entity_key   text not null,
+  old_value    jsonb,
+  new_value    jsonb,
+  source       text not null,   -- 'slims_sync' | 'koha_upload' | 'manual_entry' | 'revert'
+  flagged      boolean not null default false,
+  flag_reason  text,
+  reverted     boolean not null default false,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists audit_log_entity_idx  on audit_log (entity_type, entity_key, created_at desc);
+create index if not exists audit_log_flagged_idx on audit_log (flagged, created_at desc);
+
+-- Read-only from the browser, like every other table here. Writes only
+-- happen server-side via the service-role key (sync/upload routes and
+-- /api/audit/revert), so there's no public insert/update policy —
+-- reverting requires going through that route's (weak, matching the rest
+-- of this app's manual-entry password gate) admin check rather than a
+-- direct Supabase write from the client.
+alter table audit_log enable row level security;
+drop policy if exists "Public read access" on audit_log;
+create policy "Public read access" on audit_log for select using (true);

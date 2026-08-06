@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { supabaseServer } from '@/lib/supabase-server';
+import { recordAudit, detectAnomaly } from '@/lib/audit';
 
 // Local-only Koha campuses have no network path back to this dashboard for
 // a live sync, so their staff run a report on-site and POST the resulting
@@ -59,11 +60,35 @@ export async function POST(request: NextRequest) {
     };
   });
 
-  const { error } = await supabaseServer
-    .from('campus_stats')
-    .upsert(rows, { onConflict: 'campus,period_type,period_date' });
+  // Koha rows are curated by a human, so unlike the SLiMS live sync we
+  // apply the upload even when it looks anomalous — just flag it in the
+  // audit log so it surfaces on the Campuses tab for someone to review
+  // (and revert, if it really was a mistake) instead of silently
+  // overwriting the last known-good numbers.
+  const flagged: { period_date: string; reason: string }[] = [];
+  for (const row of rows) {
+    const { data: prevRow } = await supabaseServer
+      .from('campus_stats')
+      .select('*')
+      .eq('campus', campus)
+      .lt('period_date', row.period_date)
+      .order('period_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const anomaly = prevRow ? detectAnomaly(prevRow.total_items, row.total_items) : null;
+    const entityKey = `${campus}|daily|${row.period_date}`;
 
-  return NextResponse.json({ ok: true, campus, rowsUpserted: rows.length });
+    const { error } = await supabaseServer.from('campus_stats').upsert(row, { onConflict: 'campus,period_type,period_date' });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    await recordAudit({
+      entityType: 'campus_stats', entityKey, source: 'koha_upload',
+      oldValue: prevRow, newValue: row,
+      flagged: !!anomaly, flagReason: anomaly ? `total_items ${anomaly}` : null,
+    });
+    if (anomaly) flagged.push({ period_date: row.period_date, reason: anomaly });
+  }
+
+  return NextResponse.json({ ok: true, campus, rowsUpserted: rows.length, flagged });
 }
