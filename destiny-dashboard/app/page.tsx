@@ -198,6 +198,18 @@ function exportWeedingCsv(items: { Title: string; Author: string; CallNumber: st
   URL.revokeObjectURL(url);
 }
 
+function exportRenewalBehaviorCsv(items: { Title: string; Author: string; uniqueBorrowers: number; checkouts: number; renewals: number; totalTransactions: number; renewalRatio: number; transactionsPerBorrower: number }[], year: number | null) {
+  const header = ['Title', 'Author', 'UniqueBorrowers', 'Checkouts', 'Renewals', 'TotalTransactions', 'RenewalPercent', 'TransactionsPerBorrower'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([
+      csvField(r.Title), csvField(r.Author), csvField(r.uniqueBorrowers), csvField(r.checkouts),
+      csvField(r.renewals), csvField(r.totalTransactions), csvField((r.renewalRatio * 100).toFixed(1)), csvField(r.transactionsPerBorrower.toFixed(2)),
+    ].join(','));
+  }
+  downloadBlob(lines.join('\n'), `renewal-behavior-${year ?? 'all-time'}-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
 interface Recommendation {
   priority: 'high' | 'medium' | 'low';
   category: string;
@@ -2477,7 +2489,7 @@ export default function Dashboard() {
   type PotentialErrors = { totalActiveItems: number; blankPubYear: number; futurePubYear: number; samples: { Barcode: string; Title: string; Author: string; PublicationYear: number | null; issueType: 'blank' | 'future' }[] };
   type RenewalBehaviorRow = { BibID: number; Title: string; Author: string; uniqueBorrowers: number; checkouts: number; renewals: number; totalTransactions: number; renewalRatio: number; transactionsPerBorrower: number };
   type RenewalDiagnostics = { availableCopiesWithRenewalCount: number; availableCopiesTotal: number; likelyPersistsAfterCheckin: boolean | null };
-  const [renewalBehavior, setRenewalBehavior] = useState<{ renewalDriven: RenewalBehaviorRow[]; broadDemand: RenewalBehaviorRow[]; minCheckouts: number; year: number | null; diagnostics: RenewalDiagnostics } | null>(null);
+  const [renewalBehavior, setRenewalBehavior] = useState<{ renewalDriven: RenewalBehaviorRow[]; broadDemand: RenewalBehaviorRow[]; all: RenewalBehaviorRow[]; minCheckouts: number; year: number | null; diagnostics: RenewalDiagnostics } | null>(null);
   const [topTitles, setTopTitles]         = useState<TopTitle[]>([]);
   const [collAge, setCollAge]             = useState<CollAgeRow[]>([]);
   const [potentialErrors, setPotentialErrors] = useState<PotentialErrors | null>(null);
@@ -5189,6 +5201,15 @@ export default function Dashboard() {
                   so the numbers below likely only reflect copies currently on loan, not full renewal history. Treat this as a lower bound.
                 </p>
               )}
+              <div className="flex items-center justify-between mb-2 print:hidden">
+                <span className="text-xs text-gray-500">Tables above show the top 25 of each — export covers all {renewalBehavior.all.length} titles that met the checkout threshold.</span>
+                <button
+                  onClick={() => exportRenewalBehaviorCsv(renewalBehavior.all, renewalBehavior.year)}
+                  className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0"
+                >
+                  ⬇️ Export All Titles CSV
+                </button>
+              </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                   <div className="bg-amber-600 text-white text-xs font-semibold px-3 py-2">⏱ Renewal-Driven — consider a longer loan period</div>

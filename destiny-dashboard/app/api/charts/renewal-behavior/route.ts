@@ -114,7 +114,13 @@ export async function GET(request: Request) {
       .sort((a, b) => b.uniqueBorrowers - a.uniqueBorrowers)
       .slice(0, 25);
 
-    const json = { renewalDriven, broadDemand, minCheckouts: MIN_CHECKOUTS, year, diagnostics };
+    // Full set (up to LIMIT), sorted by total transactions — the tables
+    // above only show the top 25 of each ranking, so this backs a CSV
+    // export covering every title that met the checkout threshold, not
+    // just what's visible on screen.
+    const all = [...rows].sort((a, b) => b.totalTransactions - a.totalTransactions);
+
+    const json = { renewalDriven, broadDemand, all, minCheckouts: MIN_CHECKOUTS, year, diagnostics };
     cacheSet(key, json);
     return NextResponse.json(json);
   } catch (err: unknown) {
