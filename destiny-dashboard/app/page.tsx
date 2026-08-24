@@ -2476,7 +2476,7 @@ export default function Dashboard() {
 
   type PotentialErrors = { totalActiveItems: number; blankPubYear: number; futurePubYear: number; samples: { Barcode: string; Title: string; Author: string; PublicationYear: number | null; issueType: 'blank' | 'future' }[] };
   type RenewalBehaviorRow = { BibID: number; Title: string; Author: string; uniqueBorrowers: number; checkouts: number; renewals: number; totalTransactions: number; renewalRatio: number; transactionsPerBorrower: number };
-  const [renewalBehavior, setRenewalBehavior] = useState<{ renewalDriven: RenewalBehaviorRow[]; broadDemand: RenewalBehaviorRow[]; minTransactions: number } | null>(null);
+  const [renewalBehavior, setRenewalBehavior] = useState<{ renewalDriven: RenewalBehaviorRow[]; broadDemand: RenewalBehaviorRow[]; minTransactions: number; year: number | null } | null>(null);
   const [topTitles, setTopTitles]         = useState<TopTitle[]>([]);
   const [collAge, setCollAge]             = useState<CollAgeRow[]>([]);
   const [potentialErrors, setPotentialErrors] = useState<PotentialErrors | null>(null);
@@ -2536,6 +2536,7 @@ export default function Dashboard() {
   const [staffTx, setStaffTx]             = useState<StaffTxData | null>(null);
   const [staffTxLoaded, setStaffTxLoaded] = useState(false);
   const [staffTxYear, setStaffTxYear]     = useState<number | null>(null);
+  const [renewalBehaviorYear, setRenewalBehaviorYear] = useState<number | null>(null);
 
   type CombinedUseData = {
     year: number;
@@ -2652,7 +2653,12 @@ export default function Dashboard() {
       fetch('/api/charts/potential-errors').then(r=>r.json()).then(d=>{ if(!d.error) setPotentialErrors(d); }).catch(() => {});
       fetch('/api/charts/longest-overdue?limit=10').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setLongestOverdue(d); }).catch(() => {});
       fetch('/api/charts/by-callnumber').then(r=>r.json()).then(d=>{ const arr = d?.rows ?? d; if(Array.isArray(arr)) setCallNumData(arr); }).catch(() => {});
-      fetch('/api/charts/renewal-behavior').then(r=>r.json()).then(d=>{ if(!d.error) setRenewalBehavior(d); }).catch(() => {});
+    }
+    // Fetched by year (not the one-time extraLoaded.collection guard above)
+    // so switching the Period filter's year actually refreshes it.
+    if (activeTab === 'collection' && renewalBehaviorYear !== year) {
+      setRenewalBehaviorYear(year);
+      fetch(`/api/charts/renewal-behavior?year=${year}`).then(r=>r.json()).then(d=>{ if(!d.error) setRenewalBehavior(d); }).catch(() => {});
     }
     if (activeTab === 'patrons' && !extraLoaded.patrons) {
       setExtraLoaded(p => ({ ...p, patrons: true }));
@@ -2768,7 +2774,7 @@ export default function Dashboard() {
         if (data) setAuditLog(data as AuditLogRow[]);
       })();
     }
-  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded, roomUseLoaded, staffTxYear, campusesLoaded]);
+  }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded, roomUseLoaded, staffTxYear, campusesLoaded, renewalBehaviorYear]);
 
   async function reloadCampusesAndAudit() {
     const [campusesRes, { supabase }] = await Promise.all([fetch('/api/charts/campuses').then(r => r.json()), import('@/lib/supabase')]);
@@ -5172,7 +5178,8 @@ export default function Dashboard() {
               </h2>
               <p className="text-xs text-gray-600 mb-4">
                 A high checkout count can mean two very different things: many different patrons borrowing a title, or the same one or two
-                patrons renewing it over and over because the loan period is too short. Titles limited to at least {renewalBehavior.minTransactions} transactions.
+                patrons renewing it over and over because the loan period is too short. Titles limited to at least {renewalBehavior.minTransactions} transactions
+                · <span className="font-semibold">{renewalBehavior.year ? `Year ${renewalBehavior.year} only` : 'All-time'}</span> — set by the Year used in the Period filter above.
               </p>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-white rounded-xl shadow-sm overflow-hidden">

@@ -12,7 +12,9 @@ const MIN_TRANSACTIONS = 5;
 const LIMIT = 300;
 
 export async function GET(request: Request) {
-  const key = cacheKey('/api/charts/renewal-behavior', new URL(request.url).searchParams);
+  const searchParams = new URL(request.url).searchParams;
+  const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : null;
+  const key = cacheKey('/api/charts/renewal-behavior', searchParams);
 
   try {
     const pool = await getPool();
@@ -20,6 +22,7 @@ export async function GET(request: Request) {
     const req = pool.request();
     req.input('limit', sql.Int, LIMIT);
     req.input('minTransactions', sql.Int, MIN_TRANSACTIONS);
+    if (year) req.input('year', sql.Int, year);
 
     const result = await req.query(`
       SELECT TOP (@limit)
@@ -34,6 +37,7 @@ export async function GET(request: Request) {
       JOIN ${t(p,'Copy')} c ON c.CopyID = a.CopyID
       JOIN ${t(p,'BibMaster')} bm ON bm.BibID = c.BibID
       WHERE a.TransType IN (1,3) AND a.PatronID IS NOT NULL
+        ${year ? 'AND YEAR(a.Created) = @year' : ''}
       GROUP BY bm.BibID, bm.Title, bm.Author
       HAVING SUM(CASE WHEN a.TransType IN (1,3) THEN 1 ELSE 0 END) >= @minTransactions
       ORDER BY totalTransactions DESC
@@ -58,7 +62,7 @@ export async function GET(request: Request) {
       .sort((a, b) => b.uniqueBorrowers - a.uniqueBorrowers)
       .slice(0, 25);
 
-    const json = { renewalDriven, broadDemand, minTransactions: MIN_TRANSACTIONS };
+    const json = { renewalDriven, broadDemand, minTransactions: MIN_TRANSACTIONS, year };
     cacheSet(key, json);
     return NextResponse.json(json);
   } catch (err: unknown) {
