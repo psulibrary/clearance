@@ -2546,6 +2546,7 @@ export default function Dashboard() {
     duplicateTitleBibCount: number; duplicateTitleBibs: DupTitleBib[];
     duplicateBarcodeCount: number; duplicateBarcodeCopies: DupBarcodeCopy[];
     missingCallNumberCount: number; missingCallNumberSamples: MissingCallNumberRow[];
+    errors?: Record<string, string>;
   };
   type RenewalBehaviorRow = { BibID: number; Title: string; Author: string; uniqueBorrowers: number; checkouts: number; renewals: number; totalTransactions: number; renewalRatio: number; transactionsPerBorrower: number };
   type RenewalDiagnostics = { availableCopiesWithRenewalCount: number; availableCopiesTotal: number; likelyPersistsAfterCheckin: boolean | null };
@@ -5141,11 +5142,16 @@ export default function Dashboard() {
           )}
 
           {/* ── Potential Cataloging Errors ── */}
-          {potentialErrors && (potentialErrors.blankPubYear > 0 || potentialErrors.futurePubYear > 0 || potentialErrors.duplicateTitleBibCount > 0 || potentialErrors.duplicateBarcodeCount > 0 || potentialErrors.missingCallNumberCount > 0) && (
+          {potentialErrors && (potentialErrors.blankPubYear > 0 || potentialErrors.futurePubYear > 0 || potentialErrors.duplicateTitleBibCount > 0 || potentialErrors.duplicateBarcodeCount > 0 || potentialErrors.missingCallNumberCount > 0 || (potentialErrors.errors && Object.keys(potentialErrors.errors).length > 0)) && (
             <div className="mb-8" data-print-section="potential-errors">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>⚠️</span>Potential Cataloging Errors
               </h2>
+              {potentialErrors.errors && Object.entries(potentialErrors.errors).map(([check, msg]) => (
+                <p key={check} className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+                  ⚠️ The <strong>{check}</strong> check failed to run: {msg}
+                </p>
+              ))}
               <div className="flex items-center justify-between gap-3 mb-4">
                 <p className="text-xs text-gray-600">Items with a blank or future publication year — usually a data-entry issue worth correcting before it skews other reports.</p>
                 <button
