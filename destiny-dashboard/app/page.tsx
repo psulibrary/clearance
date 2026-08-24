@@ -210,6 +210,27 @@ function exportRenewalBehaviorCsv(items: { Title: string; Author: string; unique
   downloadBlob(lines.join('\n'), `renewal-behavior-${year ?? 'all-time'}-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
 }
 
+function exportPotentialErrorsCsv(items: { Barcode: string; Title: string; Author: string; PublicationYear: number | null; issueType: 'blank' | 'future' }[]) {
+  const header = ['Barcode', 'Title', 'Author', 'PublicationYear', 'IssueType'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([csvField(r.Barcode), csvField(r.Title), csvField(r.Author), csvField(r.PublicationYear ?? ''), csvField(r.issueType)].join(','));
+  }
+  downloadBlob(lines.join('\n'), `potential-cataloging-errors-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
+function exportTopTitlesCsv(items: { Title: string; Author: string; checkoutCount: number; roomUse?: number; totalUse?: number; currentlyOut: number }[]) {
+  const header = ['Title', 'Author', 'Checkouts', 'RoomUse', 'TotalUse', 'CurrentlyOut'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([
+      csvField(r.Title), csvField(r.Author), csvField(r.checkoutCount),
+      csvField(r.roomUse ?? 0), csvField(r.totalUse ?? r.checkoutCount), csvField(r.currentlyOut),
+    ].join(','));
+  }
+  downloadBlob(lines.join('\n'), `top-titles-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
 interface Recommendation {
   priority: 'high' | 'medium' | 'low';
   category: string;
@@ -2550,6 +2571,8 @@ export default function Dashboard() {
   const [staffTxLoaded, setStaffTxLoaded] = useState(false);
   const [staffTxYear, setStaffTxYear]     = useState<number | null>(null);
   const [renewalBehaviorYear, setRenewalBehaviorYear] = useState<number | null>(null);
+  const [exportingPotentialErrors, setExportingPotentialErrors] = useState(false);
+  const [exportingTopTitles, setExportingTopTitles] = useState(false);
 
   type CombinedUseData = {
     year: number;
@@ -5078,7 +5101,24 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>⚠️</span>Potential Cataloging Errors
               </h2>
-              <p className="text-xs text-gray-600 mb-4">Items with a blank or future publication year — usually a data-entry issue worth correcting before it skews other reports.</p>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <p className="text-xs text-gray-600">Items with a blank or future publication year — usually a data-entry issue worth correcting before it skews other reports.</p>
+                <button
+                  disabled={exportingPotentialErrors}
+                  onClick={async () => {
+                    setExportingPotentialErrors(true);
+                    try {
+                      const res = await fetch('/api/charts/potential-errors?limit=5000');
+                      const d = await res.json();
+                      if (!d.error && Array.isArray(d.samples)) exportPotentialErrorsCsv(d.samples);
+                    } catch { /* ignore */ }
+                    setExportingPotentialErrors(false);
+                  }}
+                  className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 print:hidden"
+                >
+                  {exportingPotentialErrors ? 'Exporting…' : '⬇️ Export All CSV'}
+                </button>
+              </div>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
                   <div className="text-3xl font-bold text-amber-700">{potentialErrors.blankPubYear.toLocaleString()}</div>
@@ -5130,7 +5170,25 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🏆</span>Top {topTitles.length} Most Used Titles
               </h2>
-              <p className="text-xs text-gray-600 mb-4">Titles ranked by total use (checkouts + in-library room use). Use this to identify high-demand materials that may need additional copies.</p>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <p className="text-xs text-gray-600">Titles ranked by total use (checkouts + in-library room use). Use this to identify high-demand materials that may need additional copies.</p>
+                <button
+                  disabled={exportingTopTitles}
+                  onClick={async () => {
+                    setExportingTopTitles(true);
+                    try {
+                      const res = await fetch('/api/charts/top-titles?limit=2000');
+                      const d = await res.json();
+                      const arr = d?.data ?? d;
+                      if (Array.isArray(arr)) exportTopTitlesCsv(arr);
+                    } catch { /* ignore */ }
+                    setExportingTopTitles(false);
+                  }}
+                  className="bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 print:hidden"
+                >
+                  {exportingTopTitles ? 'Exporting…' : '⬇️ Export All CSV'}
+                </button>
+              </div>
               <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead>

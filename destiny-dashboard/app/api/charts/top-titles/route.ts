@@ -6,7 +6,9 @@ import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const limit = Math.min(50, Math.max(5, parseInt(searchParams.get('limit') ?? '20', 10)));
+  // Default display cap stays 20; export uses a much higher explicit limit
+  // to cover titles beyond what's shown in the on-page table.
+  const limit = Math.min(2000, Math.max(5, parseInt(searchParams.get('limit') ?? '20', 10)));
   const key = cacheKey('/api/charts/top-titles', searchParams);
 
   try {
