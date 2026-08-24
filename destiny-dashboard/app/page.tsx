@@ -292,6 +292,33 @@ function exportRoomUseTopTitlesCsv(items: { Title: string; Author: string; inLib
   downloadBlob(lines.join('\n'), `room-use-top-titles-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
 }
 
+function exportLapsedByTypeCsv(items: { patronType: string; lapsedCount: number }[]) {
+  const header = ['PatronType', 'LapsedCount'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([csvField(r.patronType), csvField(r.lapsedCount)].join(','));
+  }
+  downloadBlob(lines.join('\n'), `lapsed-patrons-by-type-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
+function exportFinesByTypeCsv(items: { patronType: string; patronsWithFines: number; fineCount: number; totalFines: number; avgFine: number }[]) {
+  const header = ['PatronType', 'PatronsWithFines', 'FineCount', 'TotalFines', 'AvgFine'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([csvField(r.patronType), csvField(r.patronsWithFines), csvField(r.fineCount), csvField(r.totalFines), csvField(r.avgFine)].join(','));
+  }
+  downloadBlob(lines.join('\n'), `fines-by-patron-type-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
+function exportDailySnapshotsCsv(items: { snapshot_date: string; total_items: number; checked_out: number; active_patrons_30d: number; checkouts_30d: number; total_patrons: number }[]) {
+  const header = ['Date', 'TotalItems', 'CheckedOut', 'ActivePatrons30d', 'Checkouts30d', 'TotalPatrons'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([csvField(r.snapshot_date), csvField(r.total_items), csvField(r.checked_out), csvField(r.active_patrons_30d), csvField(r.checkouts_30d), csvField(r.total_patrons)].join(','));
+  }
+  downloadBlob(lines.join('\n'), `daily-snapshots-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
 function exportTopTitlesCsv(items: { Title: string; Author: string; checkoutCount: number; roomUse?: number; totalUse?: number; currentlyOut: number }[]) {
   const header = ['Title', 'Author', 'Checkouts', 'RoomUse', 'TotalUse', 'CurrentlyOut'];
   const lines = [header.map(csvField).join(',')];
@@ -2665,6 +2692,7 @@ export default function Dashboard() {
   const [exportingTopActivePatrons, setExportingTopActivePatrons] = useState(false);
   const [exportingRoomUseTopTitles, setExportingRoomUseTopTitles] = useState(false);
   const [exportingWeeding, setExportingWeeding] = useState(false);
+  const [exportingDailySnapshots, setExportingDailySnapshots] = useState(false);
   const [exportingTopTitles, setExportingTopTitles] = useState(false);
 
   type CombinedUseData = {
@@ -6659,7 +6687,15 @@ export default function Dashboard() {
                   <div className="bg-red-50 rounded-lg p-4 text-xs text-red-600">Lapsed error: {extra2Errors.lapsed}</div>
                 ) : lapsedData ? (
                   <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                    <div className="text-xs font-semibold text-purple-800 uppercase tracking-wide mb-2">Lapsed Patrons ({lapsedData.year})</div>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="text-xs font-semibold text-purple-800 uppercase tracking-wide">Lapsed Patrons ({lapsedData.year})</div>
+                      {lapsedData.byType.length > 4 && (
+                        <button
+                          onClick={() => exportLapsedByTypeCsv(lapsedData.byType)}
+                          className="text-[10px] text-purple-700 hover:text-purple-900 font-semibold underline shrink-0 print:hidden"
+                        >⬇️ CSV ({lapsedData.byType.length})</button>
+                      )}
+                    </div>
                     <div className="text-3xl font-bold text-purple-700 mb-1">{lapsedData.lapsedCount.toLocaleString()}</div>
                     <div className="text-xs text-gray-700">borrowed last year but not this year ({lapsedData.lapsedRate?.toFixed(1)}% of last year&apos;s borrowers)</div>
                     {lapsedData.byType.length > 0 && (
@@ -6669,6 +6705,9 @@ export default function Dashboard() {
                             <span>{r.patronType}</span><span className="font-semibold">{r.lapsedCount.toLocaleString()}</span>
                           </div>
                         ))}
+                        {lapsedData.byType.length > 4 && (
+                          <div className="text-[10px] text-gray-400 pt-0.5">+{lapsedData.byType.length - 4} more — see CSV above</div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -6680,7 +6719,15 @@ export default function Dashboard() {
                   <div className="bg-red-50 rounded-lg p-4 text-xs text-red-600">Fines error: {extra2Errors.fines}</div>
                 ) : finesByType.length > 0 ? (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="text-xs font-semibold text-red-800 uppercase tracking-wide mb-2">Active Fines by Patron Type</div>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="text-xs font-semibold text-red-800 uppercase tracking-wide">Active Fines by Patron Type</div>
+                      {finesByType.length > 5 && (
+                        <button
+                          onClick={() => exportFinesByTypeCsv(finesByType)}
+                          className="text-[10px] text-red-700 hover:text-red-900 font-semibold underline shrink-0 print:hidden"
+                        >⬇️ CSV ({finesByType.length})</button>
+                      )}
+                    </div>
                     <div className="space-y-1.5">
                       {finesByType.slice(0,5).map((r,i) => (
                         <div key={i} className="flex justify-between text-xs">
@@ -6688,6 +6735,9 @@ export default function Dashboard() {
                           <span className="text-red-700 font-semibold">₱{r.totalFines?.toLocaleString('en-PH',{minimumFractionDigits:2})}</span>
                         </div>
                       ))}
+                      {finesByType.length > 5 && (
+                        <div className="text-[10px] text-gray-400 pt-0.5">+{finesByType.length - 5} more — see CSV above</div>
+                      )}
                     </div>
                     <div className="mt-2 pt-2 border-t border-red-200 text-xs text-gray-700">
                       Total: <span className="font-bold text-red-700">₱{finesByType.reduce((a,r)=>a+(r.totalFines??0),0).toLocaleString('en-PH',{minimumFractionDigits:2})}</span>
@@ -7035,9 +7085,26 @@ export default function Dashboard() {
           {/* ── Daily Snapshots ── */}
           {dailySnaps.length > 0 && (
             <div className="mb-8" data-print-section="daily-snapshots">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span>📅</span>Daily Snapshots (last 30 days)
-              </h2>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <span>📅</span>Daily Snapshots (last 30 days)
+                </h2>
+                <button
+                  disabled={exportingDailySnapshots}
+                  onClick={async () => {
+                    setExportingDailySnapshots(true);
+                    try {
+                      const { supabase } = await import('@/lib/supabase');
+                      const { data } = await supabase.from('daily_snapshots').select('snapshot_date,total_items,checked_out,active_patrons_30d,checkouts_30d,total_patrons').order('snapshot_date', { ascending: false });
+                      if (data) exportDailySnapshotsCsv(data as DailySnap[]);
+                    } catch { /* ignore */ }
+                    setExportingDailySnapshots(false);
+                  }}
+                  className="bg-gray-700 hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 print:hidden"
+                >
+                  {exportingDailySnapshots ? 'Exporting…' : '⬇️ Export All CSV'}
+                </button>
+              </div>
               <div className="bg-white rounded-xl shadow-sm p-5">
                 <p className="text-xs text-gray-600 mb-4">Each row is a point-in-time capture pushed by the daily sync. Use these to spot sudden spikes or drops in collection availability.</p>
                 <ResponsiveContainer width="100%" height={220}>
