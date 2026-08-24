@@ -25,6 +25,7 @@ export async function GET(request: Request) {
   const dupTitleLimit = capped('dupTitleLimit', 100);
   const dupBarcodeLimit = capped('dupBarcodeLimit', 100);
   const missingCallNumberLimit = capped('missingCallNumberLimit', 25);
+  const inconsistentCallNumberLimit = capped('inconsistentCallNumberLimit', 100);
   const key = cacheKey('/api/charts/potential-errors', searchParams);
   const errors: Record<string, string> = {};
 
@@ -150,6 +151,49 @@ export async function GET(request: Request) {
       errors.missingCallNumber = err instanceof Error ? err.message : String(err);
     }
 
+    // Inconsistent call numbers within a title: the SAME BibID's own
+    // copies don't all carry the same call number. Normally every copy
+    // of a title shares one call number, so this usually means it was
+    // reclassified at some point without updating every copy, or copies
+    // were merged in from different purchase batches. Distinct from the
+    // duplicate-title check above, which is about different BibIDs.
+    let inconsistentCallNumberCount = 0;
+    let inconsistentCallNumberCopies: unknown[] = [];
+    try {
+      const flaggedCountRes = await pool.request().query(`
+        SELECT COUNT(*) AS n FROM (
+          SELECT c.BibID
+          FROM ${t(p,'Copy')} c
+          WHERE c.DateWithdrawn IS NULL AND c.CallNumber IS NOT NULL AND LTRIM(RTRIM(c.CallNumber)) != ''
+          GROUP BY c.BibID
+          HAVING COUNT(DISTINCT c.CallNumber) > 1
+        ) x
+      `);
+      inconsistentCallNumberCount = (flaggedCountRes.recordset[0] as { n: number }).n ?? 0;
+
+      const inconsistentReq = pool.request();
+      inconsistentReq.input('inconsistentCallNumberLimit', sql.Int, inconsistentCallNumberLimit);
+      const inconsistentRes = await inconsistentReq.query(`
+        WITH Flagged AS (
+          SELECT c.BibID
+          FROM ${t(p,'Copy')} c
+          WHERE c.DateWithdrawn IS NULL AND c.CallNumber IS NOT NULL AND LTRIM(RTRIM(c.CallNumber)) != ''
+          GROUP BY c.BibID
+          HAVING COUNT(DISTINCT c.CallNumber) > 1
+        )
+        SELECT TOP (@inconsistentCallNumberLimit) c.BibID, bm.Title, ISNULL(bm.Author,'Unknown') AS Author,
+               c.CopyBarcode AS Barcode, c.CallNumber
+        FROM ${t(p,'Copy')} c
+        JOIN Flagged f ON f.BibID = c.BibID
+        JOIN ${t(p,'BibMaster')} bm ON bm.BibID = c.BibID
+        WHERE c.DateWithdrawn IS NULL AND c.CallNumber IS NOT NULL AND LTRIM(RTRIM(c.CallNumber)) != ''
+        ORDER BY bm.Title, c.CallNumber
+      `);
+      inconsistentCallNumberCopies = inconsistentRes.recordset;
+    } catch (err: unknown) {
+      errors.inconsistentCallNumber = err instanceof Error ? err.message : String(err);
+    }
+
     const row = totals.recordset[0] as { totalActiveItems: number; blankPubYear: number; futurePubYear: number };
     const json = {
       totalActiveItems: row.totalActiveItems,
@@ -162,6 +206,8 @@ export async function GET(request: Request) {
       duplicateBarcodeCopies,
       missingCallNumberCount,
       missingCallNumberSamples,
+      inconsistentCallNumberCount,
+      inconsistentCallNumberCopies,
       errors,
     };
     cacheSet(key, json);

@@ -249,6 +249,15 @@ function exportMissingCallNumberCsv(items: { Barcode: string; Title: string; Aut
   downloadBlob(lines.join('\n'), `missing-call-number-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
 }
 
+function exportInconsistentCallNumberCsv(items: { BibID: number; Title: string; Author: string; Barcode: string; CallNumber: string }[]) {
+  const header = ['BibID', 'Title', 'Author', 'Barcode', 'CallNumber'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([csvField(r.BibID), csvField(r.Title), csvField(r.Author), csvField(r.Barcode), csvField(r.CallNumber)].join(','));
+  }
+  downloadBlob(lines.join('\n'), `inconsistent-call-numbers-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
 function exportTopTitlesCsv(items: { Title: string; Author: string; checkoutCount: number; roomUse?: number; totalUse?: number; currentlyOut: number }[]) {
   const header = ['Title', 'Author', 'Checkouts', 'RoomUse', 'TotalUse', 'CurrentlyOut'];
   const lines = [header.map(csvField).join(',')];
@@ -2540,12 +2549,14 @@ export default function Dashboard() {
   type DupTitleBib = { BibID: number; Title: string; Author: string; PublicationYear: number | null; ISBN: string | null; CallNumber: string | null; itemCount: number; normTitle: string };
   type DupBarcodeCopy = { Barcode: string; Title: string; Author: string; BibID: number };
   type MissingCallNumberRow = { Barcode: string; Title: string; Author: string };
+  type InconsistentCallNumberCopy = { BibID: number; Title: string; Author: string; Barcode: string; CallNumber: string };
   type PotentialErrors = {
     totalActiveItems: number; blankPubYear: number; futurePubYear: number;
     samples: { Barcode: string; Title: string; Author: string; PublicationYear: number | null; issueType: 'blank' | 'future' }[];
     duplicateTitleBibCount: number; duplicateTitleBibs: DupTitleBib[];
     duplicateBarcodeCount: number; duplicateBarcodeCopies: DupBarcodeCopy[];
     missingCallNumberCount: number; missingCallNumberSamples: MissingCallNumberRow[];
+    inconsistentCallNumberCount: number; inconsistentCallNumberCopies: InconsistentCallNumberCopy[];
     errors?: Record<string, string>;
   };
   type RenewalBehaviorRow = { BibID: number; Title: string; Author: string; uniqueBorrowers: number; checkouts: number; renewals: number; totalTransactions: number; renewalRatio: number; transactionsPerBorrower: number };
@@ -2615,6 +2626,7 @@ export default function Dashboard() {
   const [exportingDupTitles, setExportingDupTitles] = useState(false);
   const [exportingDupBarcodes, setExportingDupBarcodes] = useState(false);
   const [exportingMissingCallNumber, setExportingMissingCallNumber] = useState(false);
+  const [exportingInconsistentCallNumber, setExportingInconsistentCallNumber] = useState(false);
   const [exportingTopTitles, setExportingTopTitles] = useState(false);
 
   type CombinedUseData = {
@@ -3110,6 +3122,7 @@ export default function Dashboard() {
           ['Possible Duplicate Bib Records', String(potentialErrors.duplicateTitleBibCount)],
           ['Duplicate Barcodes', String(potentialErrors.duplicateBarcodeCount)],
           ['Missing Call Number', String(potentialErrors.missingCallNumberCount)],
+          ['Inconsistent Call Numbers Within a Title', String(potentialErrors.inconsistentCallNumberCount)],
         ],
       });
     }
@@ -5142,7 +5155,7 @@ export default function Dashboard() {
           )}
 
           {/* ── Potential Cataloging Errors ── */}
-          {potentialErrors && (potentialErrors.blankPubYear > 0 || potentialErrors.futurePubYear > 0 || potentialErrors.duplicateTitleBibCount > 0 || potentialErrors.duplicateBarcodeCount > 0 || potentialErrors.missingCallNumberCount > 0 || (potentialErrors.errors && Object.keys(potentialErrors.errors).length > 0)) && (
+          {potentialErrors && (potentialErrors.blankPubYear > 0 || potentialErrors.futurePubYear > 0 || potentialErrors.duplicateTitleBibCount > 0 || potentialErrors.duplicateBarcodeCount > 0 || potentialErrors.missingCallNumberCount > 0 || potentialErrors.inconsistentCallNumberCount > 0 || (potentialErrors.errors && Object.keys(potentialErrors.errors).length > 0)) && (
             <div className="mb-8" data-print-section="potential-errors">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>⚠️</span>Potential Cataloging Errors
@@ -5250,6 +5263,7 @@ export default function Dashboard() {
                             <th className="text-left p-2">ISBN</th>
                             <th className="text-right p-2">Pub. Year</th>
                             <th className="text-right p-2">Items</th>
+                            <th className="text-left p-2">Signal</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -5262,6 +5276,8 @@ export default function Dashboard() {
                             let groupIdx = 0;
                             return [...groups.values()].map(group => {
                               const shaded = groupIdx++ % 2 === 1;
+                              const callNumbers = new Set(group.map(g => (g.CallNumber || '').trim()).filter(Boolean));
+                              const sameCallNumber = callNumbers.size === 1;
                               return group.map((r, i) => (
                                 <tr key={r.BibID} className={shaded ? 'bg-amber-50' : 'bg-white'}>
                                   <td className="p-2 border-b border-gray-100 font-medium text-gray-900">{i === 0 ? r.Title : ''}</td>
@@ -5271,6 +5287,13 @@ export default function Dashboard() {
                                   <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{r.ISBN || '—'}</td>
                                   <td className="p-2 border-b border-gray-100 text-right">{r.PublicationYear ?? '—'}</td>
                                   <td className="p-2 border-b border-gray-100 text-right">{r.itemCount}</td>
+                                  <td className="p-2 border-b border-gray-100">
+                                    {i === 0 && (
+                                      sameCallNumber
+                                        ? <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">Same call # — likely true duplicate</span>
+                                        : <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">Different call #s — may be separate editions</span>
+                                    )}
+                                  </td>
                                 </tr>
                               ));
                             });
@@ -5382,6 +5405,69 @@ export default function Dashboard() {
                               <td className="p-2 border-b border-gray-100 text-gray-600">{r.Author}</td>
                             </tr>
                           ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </DataTable>
+                </div>
+              )}
+
+              {/* Inconsistent call numbers within a title — same BibID, copies don't agree */}
+              {potentialErrors.inconsistentCallNumberCount > 0 && (
+                <div className="mt-6">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <h3 className="text-sm font-semibold text-gray-700">🔢 Inconsistent Call Numbers Within a Title ({potentialErrors.inconsistentCallNumberCount.toLocaleString()})</h3>
+                    <button
+                      disabled={exportingInconsistentCallNumber}
+                      onClick={async () => {
+                        setExportingInconsistentCallNumber(true);
+                        try {
+                          const res = await fetch('/api/charts/potential-errors?inconsistentCallNumberLimit=5000');
+                          const d = await res.json();
+                          if (!d.error && Array.isArray(d.inconsistentCallNumberCopies)) exportInconsistentCallNumberCsv(d.inconsistentCallNumberCopies);
+                        } catch { /* ignore */ }
+                        setExportingInconsistentCallNumber(false);
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 print:hidden"
+                    >
+                      {exportingInconsistentCallNumber ? 'Exporting…' : '⬇️ Export All CSV'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Same title (one BibID), but its own copies don&apos;t share a call number — usually means it was reclassified at some point without
+                    updating every copy, or copies were merged in from different batches.
+                  </p>
+                  <DataTable label={`View ${potentialErrors.inconsistentCallNumberCopies.length} copies`}>
+                    <div className="bg-white rounded-xl shadow-sm overflow-x-auto mt-2">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-amber-600 text-white">
+                            <th className="text-left p-2">Title</th>
+                            <th className="text-left p-2">Author</th>
+                            <th className="text-left p-2">Barcode</th>
+                            <th className="text-left p-2">Call Number</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const groups = new Map<number, InconsistentCallNumberCopy[]>();
+                            for (const r of potentialErrors.inconsistentCallNumberCopies) {
+                              if (!groups.has(r.BibID)) groups.set(r.BibID, []);
+                              groups.get(r.BibID)!.push(r);
+                            }
+                            let groupIdx = 0;
+                            return [...groups.values()].map(group => {
+                              const shaded = groupIdx++ % 2 === 1;
+                              return group.map((r, i) => (
+                                <tr key={`${r.BibID}-${r.Barcode}`} className={shaded ? 'bg-amber-50' : 'bg-white'}>
+                                  <td className="p-2 border-b border-gray-100 font-medium text-gray-900">{i === 0 ? r.Title : ''}</td>
+                                  <td className="p-2 border-b border-gray-100 text-gray-600">{i === 0 ? r.Author : ''}</td>
+                                  <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{r.Barcode}</td>
+                                  <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{r.CallNumber}</td>
+                                </tr>
+                              ));
+                            });
+                          })()}
                         </tbody>
                       </table>
                     </div>
