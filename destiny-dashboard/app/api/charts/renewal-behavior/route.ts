@@ -51,8 +51,12 @@ export async function GET(request: Request) {
     }));
 
     // Titles where volume is mostly the same one or two patrons renewing —
-    // candidates for a longer loan period rather than more copies.
-    const renewalDriven = [...rows]
+    // candidates for a longer loan period rather than more copies. Must
+    // have at least one actual renewal: a title with renewals=0 has zero
+    // evidence for this hypothesis and shouldn't appear here just because
+    // it happens to have high checkout volume.
+    const renewalDriven = rows
+      .filter(r => r.renewals > 0)
       .sort((a, b) => b.renewalRatio - a.renewalRatio || b.totalTransactions - a.totalTransactions)
       .slice(0, 25);
 

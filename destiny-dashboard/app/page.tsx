@@ -5184,30 +5184,34 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                   <div className="bg-amber-600 text-white text-xs font-semibold px-3 py-2">⏱ Renewal-Driven — consider a longer loan period</div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-gray-50 text-gray-500">
-                          <th className="text-left p-2">Title</th>
-                          <th className="text-right p-2">Unique Borrowers</th>
-                          <th className="text-right p-2">Checkouts</th>
-                          <th className="text-right p-2">Renewals</th>
-                          <th className="text-right p-2">Renewal %</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {renewalBehavior.renewalDriven.map((r, i) => (
-                          <tr key={r.BibID} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="p-2 border-b border-gray-100 font-medium text-gray-900 max-w-[14rem]"><div className="line-clamp-2">{r.Title}</div></td>
-                            <td className="p-2 border-b border-gray-100 text-right">{r.uniqueBorrowers}</td>
-                            <td className="p-2 border-b border-gray-100 text-right">{r.checkouts}</td>
-                            <td className="p-2 border-b border-gray-100 text-right">{r.renewals}</td>
-                            <td className="p-2 border-b border-gray-100 text-right font-bold text-amber-700">{(r.renewalRatio * 100).toFixed(0)}%</td>
+                  {renewalBehavior.renewalDriven.length === 0 ? (
+                    <p className="p-4 text-xs text-gray-500">No renewals recorded {renewalBehavior.year ? `in ${renewalBehavior.year}` : ''} — nothing here supports a longer loan period right now.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-500">
+                            <th className="text-left p-2">Title</th>
+                            <th className="text-right p-2">Unique Borrowers</th>
+                            <th className="text-right p-2">Checkouts</th>
+                            <th className="text-right p-2">Renewals</th>
+                            <th className="text-right p-2">Renewal %</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {renewalBehavior.renewalDriven.map((r, i) => (
+                            <tr key={r.BibID} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="p-2 border-b border-gray-100 font-medium text-gray-900 max-w-[14rem]"><div className="line-clamp-2">{r.Title}</div></td>
+                              <td className="p-2 border-b border-gray-100 text-right">{r.uniqueBorrowers}</td>
+                              <td className="p-2 border-b border-gray-100 text-right">{r.checkouts}</td>
+                              <td className="p-2 border-b border-gray-100 text-right">{r.renewals}</td>
+                              <td className="p-2 border-b border-gray-100 text-right font-bold text-amber-700">{(r.renewalRatio * 100).toFixed(0)}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
                 <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                   <div className="bg-emerald-600 text-white text-xs font-semibold px-3 py-2">👥 Broad Demand — consider more copies, not a longer loan period</div>
