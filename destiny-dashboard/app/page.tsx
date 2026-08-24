@@ -2426,6 +2426,7 @@ export default function Dashboard() {
     { id: 'collection-age-distribution', label: 'Collection Age Distribution', tab: 'collection' },
     { id: 'potential-errors', label: 'Potential Cataloging Errors', tab: 'collection' },
     { id: 'top-used-titles', label: 'Top Most Used Titles', tab: 'collection' },
+    { id: 'renewal-behavior', label: 'Renewal-Driven vs. Broad-Demand Titles', tab: 'collection' },
     { id: 'avg-collection-age', label: 'Average Collection Age by Dewey Range', tab: 'collection' },
     { id: 'items-never-used', label: 'Items Never Used', tab: 'collection' },
     { id: 'weeding-candidates', label: 'Weeding Candidates', tab: 'collection' },
@@ -2474,6 +2475,8 @@ export default function Dashboard() {
   type AvgAgeRow     = { range: string; firstDigit: string; avgAgeYears: number; itemCount: number; oldestYear: number; newestYear: number };
 
   type PotentialErrors = { totalActiveItems: number; blankPubYear: number; futurePubYear: number; samples: { Barcode: string; Title: string; Author: string; PublicationYear: number | null; issueType: 'blank' | 'future' }[] };
+  type RenewalBehaviorRow = { BibID: number; Title: string; Author: string; uniqueBorrowers: number; checkouts: number; renewals: number; totalTransactions: number; renewalRatio: number; transactionsPerBorrower: number };
+  const [renewalBehavior, setRenewalBehavior] = useState<{ renewalDriven: RenewalBehaviorRow[]; broadDemand: RenewalBehaviorRow[]; minTransactions: number } | null>(null);
   const [topTitles, setTopTitles]         = useState<TopTitle[]>([]);
   const [collAge, setCollAge]             = useState<CollAgeRow[]>([]);
   const [potentialErrors, setPotentialErrors] = useState<PotentialErrors | null>(null);
@@ -2649,6 +2652,7 @@ export default function Dashboard() {
       fetch('/api/charts/potential-errors').then(r=>r.json()).then(d=>{ if(!d.error) setPotentialErrors(d); }).catch(() => {});
       fetch('/api/charts/longest-overdue?limit=10').then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setLongestOverdue(d); }).catch(() => {});
       fetch('/api/charts/by-callnumber').then(r=>r.json()).then(d=>{ const arr = d?.rows ?? d; if(Array.isArray(arr)) setCallNumData(arr); }).catch(() => {});
+      fetch('/api/charts/renewal-behavior').then(r=>r.json()).then(d=>{ if(!d.error) setRenewalBehavior(d); }).catch(() => {});
     }
     if (activeTab === 'patrons' && !extraLoaded.patrons) {
       setExtraLoaded(p => ({ ...p, patrons: true }));
@@ -3104,6 +3108,14 @@ export default function Dashboard() {
         section: 'TOP TITLES',
         rows: topTitles.slice(0, 15).map((r): [string, string] =>
           [`${r.Title} — ${r.Author}`, `${r.checkoutCount} checkouts${r.roomUse ? `, ${r.roomUse} room use` : ''}`]),
+      });
+    }
+
+    if (renewalBehavior && renewalBehavior.renewalDriven.length > 0) {
+      sections.push({
+        section: 'RENEWAL-DRIVEN TITLES (candidates for a longer loan period)',
+        rows: renewalBehavior.renewalDriven.map((r): [string, string] =>
+          [`${r.Title} — ${r.Author}`, `${r.uniqueBorrowers} unique borrowers, ${r.checkouts} checkouts, ${r.renewals} renewals, ${(r.renewalRatio * 100).toFixed(0)}% renewal rate`]),
       });
     }
 
@@ -5148,6 +5160,75 @@ export default function Dashboard() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Renewal-Driven vs. Broad-Demand Titles ── */}
+          {renewalBehavior && (renewalBehavior.renewalDriven.length > 0 || renewalBehavior.broadDemand.length > 0) && (
+            <div className="mb-8" data-print-section="renewal-behavior">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                <span>🔁</span>Renewal-Driven vs. Broad-Demand Titles
+              </h2>
+              <p className="text-xs text-gray-600 mb-4">
+                A high checkout count can mean two very different things: many different patrons borrowing a title, or the same one or two
+                patrons renewing it over and over because the loan period is too short. Titles limited to at least {renewalBehavior.minTransactions} transactions.
+              </p>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                  <div className="bg-amber-600 text-white text-xs font-semibold px-3 py-2">⏱ Renewal-Driven — consider a longer loan period</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50 text-gray-500">
+                          <th className="text-left p-2">Title</th>
+                          <th className="text-right p-2">Unique Borrowers</th>
+                          <th className="text-right p-2">Checkouts</th>
+                          <th className="text-right p-2">Renewals</th>
+                          <th className="text-right p-2">Renewal %</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {renewalBehavior.renewalDriven.map((r, i) => (
+                          <tr key={r.BibID} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="p-2 border-b border-gray-100 font-medium text-gray-900 max-w-[14rem]"><div className="line-clamp-2">{r.Title}</div></td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.uniqueBorrowers}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.checkouts}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.renewals}</td>
+                            <td className="p-2 border-b border-gray-100 text-right font-bold text-amber-700">{(r.renewalRatio * 100).toFixed(0)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                  <div className="bg-emerald-600 text-white text-xs font-semibold px-3 py-2">👥 Broad Demand — consider more copies, not a longer loan period</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50 text-gray-500">
+                          <th className="text-left p-2">Title</th>
+                          <th className="text-right p-2">Unique Borrowers</th>
+                          <th className="text-right p-2">Checkouts</th>
+                          <th className="text-right p-2">Renewals</th>
+                          <th className="text-right p-2">Txns / Borrower</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {renewalBehavior.broadDemand.map((r, i) => (
+                          <tr key={r.BibID} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="p-2 border-b border-gray-100 font-medium text-gray-900 max-w-[14rem]"><div className="line-clamp-2">{r.Title}</div></td>
+                            <td className="p-2 border-b border-gray-100 text-right font-bold text-emerald-700">{r.uniqueBorrowers}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.checkouts}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.renewals}</td>
+                            <td className="p-2 border-b border-gray-100 text-right">{r.transactionsPerBorrower.toFixed(1)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
           )}
