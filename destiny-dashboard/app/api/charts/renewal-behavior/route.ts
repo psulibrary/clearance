@@ -7,8 +7,17 @@ import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 // ranking: a title being renewed repeatedly by the same patron (loan
 // period too short) vs. a title genuinely being borrowed by many
 // different patrons (needs more copies, not a longer loan period).
-// TransType 1 = Checked out, 3 = Renewed (see lib/audit-trans.ts).
-const MIN_TRANSACTIONS = 5;
+//
+// Renewals do NOT come from Audit.TransType — /api/discovery/renewals
+// confirmed this Destiny install has zero Audit rows for a "Renewed"
+// transaction type (whichever code that would be), so renewal events
+// are apparently never logged there. Copy.RenewalCount is used instead:
+// a real, populated per-copy counter independent of Audit. That makes it
+// a live snapshot rather than a dated event log, so — unlike checkouts —
+// it can't be scoped to a particular year; see `diagnostics` in the
+// response for whether it looks like it resets when a copy is checked in
+// (if so, it only reflects currently-active loans, not lifetime history).
+const MIN_CHECKOUTS = 5;
 const LIMIT = 300;
 
 export async function GET(request: Request) {
@@ -19,36 +28,75 @@ export async function GET(request: Request) {
   try {
     const pool = await getPool();
     const p = await getSchemaPrefix();
-    const req = pool.request();
-    req.input('limit', sql.Int, LIMIT);
-    req.input('minTransactions', sql.Int, MIN_TRANSACTIONS);
-    if (year) req.input('year', sql.Int, year);
 
-    const result = await req.query(`
+    const checkoutReq = pool.request();
+    checkoutReq.input('limit', sql.Int, LIMIT);
+    checkoutReq.input('minCheckouts', sql.Int, MIN_CHECKOUTS);
+    if (year) checkoutReq.input('year', sql.Int, year);
+
+    const checkoutResult = await checkoutReq.query(`
       SELECT TOP (@limit)
         bm.BibID,
         bm.Title,
         ISNULL(bm.Author, 'Unknown') AS Author,
         COUNT(DISTINCT a.PatronID) AS uniqueBorrowers,
-        SUM(CASE WHEN a.TransType = 1 THEN 1 ELSE 0 END) AS checkouts,
-        SUM(CASE WHEN a.TransType = 3 THEN 1 ELSE 0 END) AS renewals,
-        SUM(CASE WHEN a.TransType IN (1,3) THEN 1 ELSE 0 END) AS totalTransactions
+        COUNT(*) AS checkouts
       FROM ${t(p,'Audit')} a
       JOIN ${t(p,'Copy')} c ON c.CopyID = a.CopyID
       JOIN ${t(p,'BibMaster')} bm ON bm.BibID = c.BibID
-      WHERE a.TransType IN (1,3) AND a.PatronID IS NOT NULL
+      WHERE a.TransType = 1 AND a.PatronID IS NOT NULL
         ${year ? 'AND YEAR(a.Created) = @year' : ''}
       GROUP BY bm.BibID, bm.Title, bm.Author
-      HAVING SUM(CASE WHEN a.TransType IN (1,3) THEN 1 ELSE 0 END) >= @minTransactions
-      ORDER BY totalTransactions DESC
+      HAVING COUNT(*) >= @minCheckouts
+      ORDER BY checkouts DESC
     `);
 
-    type Row = { BibID: number; Title: string; Author: string; uniqueBorrowers: number; checkouts: number; renewals: number; totalTransactions: number };
-    const rows = (result.recordset as Row[]).map(r => ({
-      ...r,
-      renewalRatio: r.totalTransactions ? r.renewals / r.totalTransactions : 0,
-      transactionsPerBorrower: r.uniqueBorrowers ? r.totalTransactions / r.uniqueBorrowers : 0,
-    }));
+    type CheckoutRow = { BibID: number; Title: string; Author: string; uniqueBorrowers: number; checkouts: number };
+    const checkoutRows = checkoutResult.recordset as CheckoutRow[];
+
+    const bibIds = checkoutRows.map(r => r.BibID);
+    const renewalByBib: Record<number, number> = {};
+    if (bibIds.length > 0) {
+      const renewalResult = await pool.request().query(`
+        SELECT BibID, SUM(ISNULL(RenewalCount, 0)) AS renewals
+        FROM ${t(p,'Copy')}
+        WHERE BibID IN (${bibIds.join(',')})
+        GROUP BY BibID
+      `);
+      for (const r of renewalResult.recordset as { BibID: number; renewals: number }[]) {
+        renewalByBib[r.BibID] = r.renewals;
+      }
+    }
+
+    // Diagnostic: does RenewalCount survive a check-in? If available
+    // (not-checked-out) copies still carry a nonzero count, it persists —
+    // the totals below are real lifetime renewal counts. If it's always 0
+    // once returned, these totals only reflect currently active loans.
+    const diag = await pool.request().query(`
+      SELECT
+        SUM(CASE WHEN PatronID IS NULL AND RenewalCount > 0 THEN 1 ELSE 0 END) AS availableWithRenewals,
+        SUM(CASE WHEN PatronID IS NULL THEN 1 ELSE 0 END) AS availableTotal
+      FROM ${t(p,'Copy')}
+      WHERE DateWithdrawn IS NULL
+    `);
+    const diagRow = diag.recordset[0] as { availableWithRenewals: number; availableTotal: number };
+    const diagnostics = {
+      availableCopiesWithRenewalCount: diagRow.availableWithRenewals,
+      availableCopiesTotal: diagRow.availableTotal,
+      likelyPersistsAfterCheckin: diagRow.availableTotal > 0 ? diagRow.availableWithRenewals > 0 : null,
+    };
+
+    const rows = checkoutRows.map(r => {
+      const renewals = renewalByBib[r.BibID] ?? 0;
+      const total = r.checkouts + renewals;
+      return {
+        ...r,
+        renewals,
+        totalTransactions: total,
+        renewalRatio: total ? renewals / total : 0,
+        transactionsPerBorrower: r.uniqueBorrowers ? total / r.uniqueBorrowers : 0,
+      };
+    });
 
     // Titles where volume is mostly the same one or two patrons renewing —
     // candidates for a longer loan period rather than more copies. Must
@@ -66,7 +114,7 @@ export async function GET(request: Request) {
       .sort((a, b) => b.uniqueBorrowers - a.uniqueBorrowers)
       .slice(0, 25);
 
-    const json = { renewalDriven, broadDemand, minTransactions: MIN_TRANSACTIONS, year };
+    const json = { renewalDriven, broadDemand, minCheckouts: MIN_CHECKOUTS, year, diagnostics };
     cacheSet(key, json);
     return NextResponse.json(json);
   } catch (err: unknown) {

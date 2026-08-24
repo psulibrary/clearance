@@ -2476,7 +2476,8 @@ export default function Dashboard() {
 
   type PotentialErrors = { totalActiveItems: number; blankPubYear: number; futurePubYear: number; samples: { Barcode: string; Title: string; Author: string; PublicationYear: number | null; issueType: 'blank' | 'future' }[] };
   type RenewalBehaviorRow = { BibID: number; Title: string; Author: string; uniqueBorrowers: number; checkouts: number; renewals: number; totalTransactions: number; renewalRatio: number; transactionsPerBorrower: number };
-  const [renewalBehavior, setRenewalBehavior] = useState<{ renewalDriven: RenewalBehaviorRow[]; broadDemand: RenewalBehaviorRow[]; minTransactions: number; year: number | null } | null>(null);
+  type RenewalDiagnostics = { availableCopiesWithRenewalCount: number; availableCopiesTotal: number; likelyPersistsAfterCheckin: boolean | null };
+  const [renewalBehavior, setRenewalBehavior] = useState<{ renewalDriven: RenewalBehaviorRow[]; broadDemand: RenewalBehaviorRow[]; minCheckouts: number; year: number | null; diagnostics: RenewalDiagnostics } | null>(null);
   const [topTitles, setTopTitles]         = useState<TopTitle[]>([]);
   const [collAge, setCollAge]             = useState<CollAgeRow[]>([]);
   const [potentialErrors, setPotentialErrors] = useState<PotentialErrors | null>(null);
@@ -5178,14 +5179,21 @@ export default function Dashboard() {
               </h2>
               <p className="text-xs text-gray-600 mb-4">
                 A high checkout count can mean two very different things: many different patrons borrowing a title, or the same one or two
-                patrons renewing it over and over because the loan period is too short. Titles limited to at least {renewalBehavior.minTransactions} transactions
-                · <span className="font-semibold">{renewalBehavior.year ? `Year ${renewalBehavior.year} only` : 'All-time'}</span> — set by the Year used in the Period filter above.
+                patrons renewing it over and over because the loan period is too short. Titles limited to at least {renewalBehavior.minCheckouts} checkouts
+                · Checkouts: <span className="font-semibold">{renewalBehavior.year ? `Year ${renewalBehavior.year} only` : 'All-time'}</span> (set by the Year in the Period filter above)
+                · Renewals: <span className="font-semibold">current snapshot, not year-filtered</span> — Destiny doesn&apos;t log renewal events on this install, so these come from each copy&apos;s live renewal counter instead.
               </p>
+              {renewalBehavior.diagnostics.likelyPersistsAfterCheckin === false && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                  ⚠️ Renewal counts appear to reset when a copy is checked in ({renewalBehavior.diagnostics.availableCopiesWithRenewalCount} of {renewalBehavior.diagnostics.availableCopiesTotal} available copies show a nonzero count) —
+                  so the numbers below likely only reflect copies currently on loan, not full renewal history. Treat this as a lower bound.
+                </p>
+              )}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                   <div className="bg-amber-600 text-white text-xs font-semibold px-3 py-2">⏱ Renewal-Driven — consider a longer loan period</div>
                   {renewalBehavior.renewalDriven.length === 0 ? (
-                    <p className="p-4 text-xs text-gray-500">No renewals recorded {renewalBehavior.year ? `in ${renewalBehavior.year}` : ''} — nothing here supports a longer loan period right now.</p>
+                    <p className="p-4 text-xs text-gray-500">No copies currently show a renewal count — nothing here supports a longer loan period right now.</p>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs border-collapse">
