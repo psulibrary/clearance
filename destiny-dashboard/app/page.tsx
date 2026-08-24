@@ -219,6 +219,36 @@ function exportPotentialErrorsCsv(items: { Barcode: string; Title: string; Autho
   downloadBlob(lines.join('\n'), `potential-cataloging-errors-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
 }
 
+function exportDuplicateTitlesCsv(items: { BibID: number; Title: string; Author: string; PublicationYear: number | null; ISBN: string | null; CallNumber: string | null; itemCount: number }[]) {
+  const header = ['BibID', 'Title', 'Author', 'PublicationYear', 'ISBN', 'CallNumber', 'ItemCount'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([
+      csvField(r.BibID), csvField(r.Title), csvField(r.Author), csvField(r.PublicationYear ?? ''),
+      csvField(r.ISBN ?? ''), csvField(r.CallNumber ?? ''), csvField(r.itemCount),
+    ].join(','));
+  }
+  downloadBlob(lines.join('\n'), `duplicate-bib-records-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
+function exportDuplicateBarcodesCsv(items: { Barcode: string; Title: string; Author: string; BibID: number }[]) {
+  const header = ['Barcode', 'Title', 'Author', 'BibID'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([csvField(r.Barcode), csvField(r.Title), csvField(r.Author), csvField(r.BibID)].join(','));
+  }
+  downloadBlob(lines.join('\n'), `duplicate-barcodes-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
+function exportMissingCallNumberCsv(items: { Barcode: string; Title: string; Author: string }[]) {
+  const header = ['Barcode', 'Title', 'Author'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([csvField(r.Barcode), csvField(r.Title), csvField(r.Author)].join(','));
+  }
+  downloadBlob(lines.join('\n'), `missing-call-number-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
 function exportTopTitlesCsv(items: { Title: string; Author: string; checkoutCount: number; roomUse?: number; totalUse?: number; currentlyOut: number }[]) {
   const header = ['Title', 'Author', 'Checkouts', 'RoomUse', 'TotalUse', 'CurrentlyOut'];
   const lines = [header.map(csvField).join(',')];
@@ -2507,7 +2537,16 @@ export default function Dashboard() {
   type FineByTypeRow = { patronType: string; patronsWithFines: number; fineCount: number; totalFines: number; avgFine: number };
   type AvgAgeRow     = { range: string; firstDigit: string; avgAgeYears: number; itemCount: number; oldestYear: number; newestYear: number };
 
-  type PotentialErrors = { totalActiveItems: number; blankPubYear: number; futurePubYear: number; samples: { Barcode: string; Title: string; Author: string; PublicationYear: number | null; issueType: 'blank' | 'future' }[] };
+  type DupTitleBib = { BibID: number; Title: string; Author: string; PublicationYear: number | null; ISBN: string | null; CallNumber: string | null; itemCount: number; normTitle: string };
+  type DupBarcodeCopy = { Barcode: string; Title: string; Author: string; BibID: number };
+  type MissingCallNumberRow = { Barcode: string; Title: string; Author: string };
+  type PotentialErrors = {
+    totalActiveItems: number; blankPubYear: number; futurePubYear: number;
+    samples: { Barcode: string; Title: string; Author: string; PublicationYear: number | null; issueType: 'blank' | 'future' }[];
+    duplicateTitleBibCount: number; duplicateTitleBibs: DupTitleBib[];
+    duplicateBarcodeCount: number; duplicateBarcodeCopies: DupBarcodeCopy[];
+    missingCallNumberCount: number; missingCallNumberSamples: MissingCallNumberRow[];
+  };
   type RenewalBehaviorRow = { BibID: number; Title: string; Author: string; uniqueBorrowers: number; checkouts: number; renewals: number; totalTransactions: number; renewalRatio: number; transactionsPerBorrower: number };
   type RenewalDiagnostics = { availableCopiesWithRenewalCount: number; availableCopiesTotal: number; likelyPersistsAfterCheckin: boolean | null };
   const [renewalBehavior, setRenewalBehavior] = useState<{ renewalDriven: RenewalBehaviorRow[]; broadDemand: RenewalBehaviorRow[]; all: RenewalBehaviorRow[]; minCheckouts: number; year: number | null; diagnostics: RenewalDiagnostics } | null>(null);
@@ -2572,6 +2611,9 @@ export default function Dashboard() {
   const [staffTxYear, setStaffTxYear]     = useState<number | null>(null);
   const [renewalBehaviorYear, setRenewalBehaviorYear] = useState<number | null>(null);
   const [exportingPotentialErrors, setExportingPotentialErrors] = useState(false);
+  const [exportingDupTitles, setExportingDupTitles] = useState(false);
+  const [exportingDupBarcodes, setExportingDupBarcodes] = useState(false);
+  const [exportingMissingCallNumber, setExportingMissingCallNumber] = useState(false);
   const [exportingTopTitles, setExportingTopTitles] = useState(false);
 
   type CombinedUseData = {
@@ -3064,6 +3106,9 @@ export default function Dashboard() {
           ['Total Active Items', String(potentialErrors.totalActiveItems)],
           ['Blank Publication Year', String(potentialErrors.blankPubYear)],
           ['Future Publication Year', String(potentialErrors.futurePubYear)],
+          ['Possible Duplicate Bib Records', String(potentialErrors.duplicateTitleBibCount)],
+          ['Duplicate Barcodes', String(potentialErrors.duplicateBarcodeCount)],
+          ['Missing Call Number', String(potentialErrors.missingCallNumberCount)],
         ],
       });
     }
@@ -5095,8 +5140,8 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* ── Potential Errors (blank / future publication year) ── */}
-          {potentialErrors && (potentialErrors.blankPubYear > 0 || potentialErrors.futurePubYear > 0) && (
+          {/* ── Potential Cataloging Errors ── */}
+          {potentialErrors && (potentialErrors.blankPubYear > 0 || potentialErrors.futurePubYear > 0 || potentialErrors.duplicateTitleBibCount > 0 || potentialErrors.duplicateBarcodeCount > 0 || potentialErrors.missingCallNumberCount > 0) && (
             <div className="mb-8" data-print-section="potential-errors">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>⚠️</span>Potential Cataloging Errors
@@ -5160,6 +5205,182 @@ export default function Dashboard() {
                   </table>
                 </div>
                 </DataTable>
+              )}
+
+              {/* Duplicate bib records — same title under different BibIDs */}
+              {potentialErrors.duplicateTitleBibCount > 0 && (
+                <div className="mt-6">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <h3 className="text-sm font-semibold text-gray-700">📚 Possible Duplicate Bib Records ({potentialErrors.duplicateTitleBibCount})</h3>
+                    <button
+                      disabled={exportingDupTitles}
+                      onClick={async () => {
+                        setExportingDupTitles(true);
+                        try {
+                          const res = await fetch('/api/charts/potential-errors?dupTitleLimit=5000');
+                          const d = await res.json();
+                          if (!d.error && Array.isArray(d.duplicateTitleBibs)) exportDuplicateTitlesCsv(d.duplicateTitleBibs);
+                        } catch { /* ignore */ }
+                        setExportingDupTitles(false);
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 print:hidden"
+                    >
+                      {exportingDupTitles ? 'Exporting…' : '⬇️ Export All CSV'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Same title cataloged under more than one BibID — usually a new copy accidentally added as a new title instead of to the existing record.
+                    Different editions can legitimately share a title, so review before merging; matching ISBNs are a much stronger signal than title alone.
+                  </p>
+                  <DataTable label={`View ${potentialErrors.duplicateTitleBibs.length} records`}>
+                    <div className="bg-white rounded-xl shadow-sm overflow-x-auto mt-2">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-amber-600 text-white">
+                            <th className="text-left p-2">Title</th>
+                            <th className="text-left p-2">Author</th>
+                            <th className="text-right p-2">BibID</th>
+                            <th className="text-left p-2">Call Number</th>
+                            <th className="text-left p-2">ISBN</th>
+                            <th className="text-right p-2">Pub. Year</th>
+                            <th className="text-right p-2">Items</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const groups = new Map<string, DupTitleBib[]>();
+                            for (const r of potentialErrors.duplicateTitleBibs) {
+                              if (!groups.has(r.normTitle)) groups.set(r.normTitle, []);
+                              groups.get(r.normTitle)!.push(r);
+                            }
+                            let groupIdx = 0;
+                            return [...groups.values()].map(group => {
+                              const shaded = groupIdx++ % 2 === 1;
+                              return group.map((r, i) => (
+                                <tr key={r.BibID} className={shaded ? 'bg-amber-50' : 'bg-white'}>
+                                  <td className="p-2 border-b border-gray-100 font-medium text-gray-900">{i === 0 ? r.Title : ''}</td>
+                                  <td className="p-2 border-b border-gray-100 text-gray-600">{r.Author}</td>
+                                  <td className="p-2 border-b border-gray-100 text-right font-mono">{r.BibID}</td>
+                                  <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{r.CallNumber || '—'}</td>
+                                  <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{r.ISBN || '—'}</td>
+                                  <td className="p-2 border-b border-gray-100 text-right">{r.PublicationYear ?? '—'}</td>
+                                  <td className="p-2 border-b border-gray-100 text-right">{r.itemCount}</td>
+                                </tr>
+                              ));
+                            });
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </DataTable>
+                </div>
+              )}
+
+              {/* Duplicate barcodes — same CopyBarcode on more than one copy */}
+              {potentialErrors.duplicateBarcodeCount > 0 && (
+                <div className="mt-6">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <h3 className="text-sm font-semibold text-gray-700">🔀 Duplicate Barcodes ({potentialErrors.duplicateBarcodeCount})</h3>
+                    <button
+                      disabled={exportingDupBarcodes}
+                      onClick={async () => {
+                        setExportingDupBarcodes(true);
+                        try {
+                          const res = await fetch('/api/charts/potential-errors?dupBarcodeLimit=5000');
+                          const d = await res.json();
+                          if (!d.error && Array.isArray(d.duplicateBarcodeCopies)) exportDuplicateBarcodesCsv(d.duplicateBarcodeCopies);
+                        } catch { /* ignore */ }
+                        setExportingDupBarcodes(false);
+                      }}
+                      className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 print:hidden"
+                    >
+                      {exportingDupBarcodes ? 'Exporting…' : '⬇️ Export All CSV'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">The same barcode is attached to more than one active copy — shouldn&apos;t be possible, and worth checking whether it&apos;s on two different titles.</p>
+                  <DataTable label={`View ${potentialErrors.duplicateBarcodeCopies.length} copies`}>
+                    <div className="bg-white rounded-xl shadow-sm overflow-x-auto mt-2">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-red-600 text-white">
+                            <th className="text-left p-2">Barcode</th>
+                            <th className="text-left p-2">Title</th>
+                            <th className="text-left p-2">Author</th>
+                            <th className="text-right p-2">BibID</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const groups = new Map<string, DupBarcodeCopy[]>();
+                            for (const r of potentialErrors.duplicateBarcodeCopies) {
+                              if (!groups.has(r.Barcode)) groups.set(r.Barcode, []);
+                              groups.get(r.Barcode)!.push(r);
+                            }
+                            let groupIdx = 0;
+                            return [...groups.values()].map(group => {
+                              const shaded = groupIdx++ % 2 === 1;
+                              return group.map((r, i) => (
+                                <tr key={`${r.Barcode}-${r.BibID}`} className={shaded ? 'bg-red-50' : 'bg-white'}>
+                                  <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{i === 0 ? r.Barcode : ''}</td>
+                                  <td className="p-2 border-b border-gray-100 font-medium text-gray-900">{r.Title}</td>
+                                  <td className="p-2 border-b border-gray-100 text-gray-600">{r.Author}</td>
+                                  <td className="p-2 border-b border-gray-100 text-right font-mono">{r.BibID}</td>
+                                </tr>
+                              ));
+                            });
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </DataTable>
+                </div>
+              )}
+
+              {/* Missing call number */}
+              {potentialErrors.missingCallNumberCount > 0 && (
+                <div className="mt-6">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <h3 className="text-sm font-semibold text-gray-700">🏷️ Missing Call Number ({potentialErrors.missingCallNumberCount.toLocaleString()})</h3>
+                    <button
+                      disabled={exportingMissingCallNumber}
+                      onClick={async () => {
+                        setExportingMissingCallNumber(true);
+                        try {
+                          const res = await fetch('/api/charts/potential-errors?missingCallNumberLimit=5000');
+                          const d = await res.json();
+                          if (!d.error && Array.isArray(d.missingCallNumberSamples)) exportMissingCallNumberCsv(d.missingCallNumberSamples);
+                        } catch { /* ignore */ }
+                        setExportingMissingCallNumber(false);
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 print:hidden"
+                    >
+                      {exportingMissingCallNumber ? 'Exporting…' : '⬇️ Export All CSV'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">Active copies with no call number at all — effectively unshelvable and hard to browse to.</p>
+                  <DataTable label={`View ${potentialErrors.missingCallNumberSamples.length} items`}>
+                    <div className="bg-white rounded-xl shadow-sm overflow-x-auto mt-2">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-amber-600 text-white">
+                            <th className="text-left p-2">Barcode</th>
+                            <th className="text-left p-2">Title</th>
+                            <th className="text-left p-2">Author</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {potentialErrors.missingCallNumberSamples.map((r, i) => (
+                            <tr key={r.Barcode} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="p-2 border-b border-gray-100 font-mono text-gray-600">{r.Barcode}</td>
+                              <td className="p-2 border-b border-gray-100 font-medium text-gray-900">{r.Title}</td>
+                              <td className="p-2 border-b border-gray-100 text-gray-600">{r.Author}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </DataTable>
+                </div>
               )}
             </div>
           )}

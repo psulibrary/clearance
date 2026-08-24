@@ -3,13 +3,21 @@ import { getPool, sql } from '@/lib/db';
 import { getSchemaPrefix, t } from '@/lib/schema';
 import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 
-// Mirrors Destiny's "Collection by Year > Potential Errors" bucket:
-// items with a blank or future publication year — usually a cataloging
-// data-entry issue worth cleaning up before it skews other reports.
+// Mirrors Destiny's "Collection by Year > Potential Errors" bucket (blank/
+// future publication year) plus three more cataloging-integrity checks:
+// duplicate bib records (same title under different BibIDs — usually a
+// new copy accidentally catalogued as a new title instead of added to the
+// existing one), duplicate barcodes (should never happen — a scanning or
+// re-issue mistake), and copies with no call number at all. Each has its
+// own limit param so the page load stays light but a per-section export
+// button can pull the full set.
 export async function GET(request: Request) {
   const searchParams = new URL(request.url).searchParams;
-  // Default display cap stays 25; export uses a much higher explicit limit.
-  const limit = Math.min(5000, Math.max(5, parseInt(searchParams.get('limit') ?? '25', 10)));
+  const capped = (param: string, def: number, max = 5000) => Math.min(max, Math.max(5, parseInt(searchParams.get(param) ?? String(def), 10)));
+  const limit = capped('limit', 25);
+  const dupTitleLimit = capped('dupTitleLimit', 100);
+  const dupBarcodeLimit = capped('dupBarcodeLimit', 100);
+  const missingCallNumberLimit = capped('missingCallNumberLimit', 25);
   const key = cacheKey('/api/charts/potential-errors', searchParams);
 
   try {
@@ -45,12 +53,81 @@ export async function GET(request: Request) {
       ORDER BY bm.Title
     `);
 
+    // Duplicate bib records: same normalized title under 2+ different
+    // BibIDs. Flat rows here (not pre-grouped) — the client groups by
+    // normTitle so it can render each cluster together.
+    const dupTitleReq = pool.request();
+    dupTitleReq.input('dupTitleLimit', sql.Int, dupTitleLimit);
+    const dupTitles = await dupTitleReq.query(`
+      WITH BibAgg AS (
+        SELECT bm.BibID, bm.Title, ISNULL(bm.Author,'Unknown') AS Author, bm.PublicationYear,
+               bm.DisplayableISBNOrISSN AS ISBN, bm.DefaultCallNumber AS CallNumber,
+               COUNT(c.CopyID) AS itemCount,
+               LOWER(LTRIM(RTRIM(bm.Title))) AS normTitle
+        FROM ${t(p,'BibMaster')} bm
+        LEFT JOIN ${t(p,'Copy')} c ON c.BibID = bm.BibID AND c.DateWithdrawn IS NULL
+        WHERE bm.Title IS NOT NULL AND LTRIM(RTRIM(bm.Title)) != ''
+        GROUP BY bm.BibID, bm.Title, bm.Author, bm.PublicationYear, bm.DisplayableISBNOrISSN, bm.DefaultCallNumber
+      ),
+      Dupes AS (
+        SELECT normTitle FROM BibAgg GROUP BY normTitle HAVING COUNT(*) > 1
+      )
+      SELECT TOP (@dupTitleLimit) b.*
+      FROM BibAgg b
+      JOIN Dupes d ON d.normTitle = b.normTitle
+      ORDER BY b.normTitle, b.BibID
+    `);
+
+    // Duplicate barcodes: the same CopyBarcode on more than one active
+    // copy. Flat per-copy rows so the client can group by barcode and
+    // show which (possibly different!) titles are colliding.
+    const dupBarcodeReq = pool.request();
+    dupBarcodeReq.input('dupBarcodeLimit', sql.Int, dupBarcodeLimit);
+    const dupBarcodes = await dupBarcodeReq.query(`
+      WITH Dup AS (
+        SELECT CopyBarcode FROM ${t(p,'Copy')}
+        WHERE DateWithdrawn IS NULL AND CopyBarcode IS NOT NULL AND CopyBarcode != ''
+        GROUP BY CopyBarcode HAVING COUNT(*) > 1
+      )
+      SELECT TOP (@dupBarcodeLimit) c.CopyBarcode AS Barcode, bm.Title, ISNULL(bm.Author,'Unknown') AS Author, c.BibID
+      FROM ${t(p,'Copy')} c
+      JOIN Dup d ON d.CopyBarcode = c.CopyBarcode
+      JOIN ${t(p,'BibMaster')} bm ON bm.BibID = c.BibID
+      WHERE c.DateWithdrawn IS NULL
+      ORDER BY c.CopyBarcode
+    `);
+
+    // Missing call number: active copies with a blank/null CallNumber —
+    // effectively unshelvable/unbrowsable.
+    const missingCallNumberCountRes = await pool.request().query(`
+      SELECT COUNT(*) AS n FROM ${t(p,'Copy')} c
+      WHERE c.DateWithdrawn IS NULL AND (c.CallNumber IS NULL OR LTRIM(RTRIM(c.CallNumber)) = '')
+    `);
+    const missingCallNumberReq = pool.request();
+    missingCallNumberReq.input('missingCallNumberLimit', sql.Int, missingCallNumberLimit);
+    const missingCallNumberSamples = await missingCallNumberReq.query(`
+      SELECT TOP (@missingCallNumberLimit) c.CopyBarcode AS Barcode, bm.Title, ISNULL(bm.Author,'Unknown') AS Author
+      FROM ${t(p,'Copy')} c
+      JOIN ${t(p,'BibMaster')} bm ON bm.BibID = c.BibID
+      WHERE c.DateWithdrawn IS NULL AND (c.CallNumber IS NULL OR LTRIM(RTRIM(c.CallNumber)) = '')
+      ORDER BY bm.Title
+    `);
+
     const row = totals.recordset[0] as { totalActiveItems: number; blankPubYear: number; futurePubYear: number };
+    const dupTitleBibIds = new Set((dupTitles.recordset as { BibID: number }[]).map(r => r.BibID));
+    const dupBarcodeSet = new Set((dupBarcodes.recordset as { Barcode: string }[]).map(r => r.Barcode));
+
     const json = {
       totalActiveItems: row.totalActiveItems,
       blankPubYear: row.blankPubYear ?? 0,
       futurePubYear: row.futurePubYear ?? 0,
       samples: samples.recordset,
+      duplicateTitleBibCount: dupTitleBibIds.size,
+      duplicateTitleBibs: dupTitles.recordset,
+      duplicateBarcodeCount: dupBarcodeSet.size,
+      duplicateBarcodeCopies: dupBarcodes.recordset,
+      missingCallNumberCount: (missingCallNumberCountRes.recordset[0] as { n: number }).n ?? 0,
+      missingCallNumberSamples: missingCallNumberSamples.recordset,
     };
     cacheSet(key, json);
     return NextResponse.json(json);
