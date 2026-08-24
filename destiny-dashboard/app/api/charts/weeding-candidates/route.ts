@@ -6,7 +6,8 @@ import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const years  = Math.min(10, Math.max(1, parseInt(searchParams.get('years') ?? '3', 10)));
-  const limit  = Math.min(100, Math.max(10, parseInt(searchParams.get('limit') ?? '20', 10)));
+  // Default display cap stays 20; export uses a much higher explicit limit.
+  const limit  = Math.min(5000, Math.max(10, parseInt(searchParams.get('limit') ?? '20', 10)));
   const key = cacheKey('/api/charts/weeding-candidates', searchParams);
 
   try {

@@ -12,6 +12,8 @@ import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   const year = parseInt(request.nextUrl.searchParams.get('year') || String(new Date().getFullYear()));
+  // Default display cap stays 20; export uses a much higher explicit limit.
+  const topLimit = Math.min(5000, Math.max(5, parseInt(request.nextUrl.searchParams.get('topLimit') ?? '20', 10)));
   const key = cacheKey('/api/charts/room-use', request.nextUrl.searchParams);
 
   try {
@@ -84,6 +86,7 @@ export async function GET(request: NextRequest) {
     if (inLibModifier !== null) {
       req.input('mod', sql.Int, inLibModifier);
       req.input('typ', sql.TinyInt, checkInType);
+      req.input('topLimit', sql.Int, topLimit);
 
       const summaryRes = await req.query(`
         SELECT COUNT(*) AS totalThisYear
@@ -122,7 +125,7 @@ export async function GET(request: NextRequest) {
       // Top titles via BibID → BibMaster (direct, no Copy join needed)
       try {
         const ttRes = await req.query(`
-          SELECT TOP 20 bm.Title, bm.Author, COUNT(*) AS inLibraryUses
+          SELECT TOP (@topLimit) bm.Title, bm.Author, COUNT(*) AS inLibraryUses
           FROM ${t(p, 'Audit')} a
           JOIN ${t(p, 'BibMaster')} bm ON bm.BibID = a.BibID
           WHERE a.TransType = @typ AND a.TransModifier = @mod AND YEAR(a.Created) = @year

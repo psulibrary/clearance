@@ -5,7 +5,8 @@ import { cacheKey, cacheGet, cacheSet } from '@/lib/cache';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const limit = Math.min(50, Math.max(5, parseInt(searchParams.get('limit') ?? '10', 10)));
+  // Default display cap stays 10; export uses a much higher explicit limit.
+  const limit = Math.min(5000, Math.max(5, parseInt(searchParams.get('limit') ?? '10', 10)));
   const key = cacheKey('/api/charts/longest-overdue', searchParams);
 
   try {

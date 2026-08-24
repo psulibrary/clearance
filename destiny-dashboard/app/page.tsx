@@ -258,6 +258,40 @@ function exportInconsistentCallNumberCsv(items: { BibID: number; Title: string; 
   downloadBlob(lines.join('\n'), `inconsistent-call-numbers-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
 }
 
+function exportLongestOverdueCsv(items: { CopyBarcode: string; Title: string; Author: string; PatronBarcode: string; PatronType: string; DateDue: string; DaysOverdue: number; ReplacementCost: number }[]) {
+  const header = ['ItemBarcode', 'Title', 'Author', 'PatronBarcode', 'PatronType', 'DueDate', 'DaysOverdue', 'ReplacementCost'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([
+      csvField(r.CopyBarcode), csvField(r.Title), csvField(r.Author), csvField(r.PatronBarcode),
+      csvField(r.PatronType), csvField(r.DateDue), csvField(r.DaysOverdue), csvField(r.ReplacementCost),
+    ].join(','));
+  }
+  downloadBlob(lines.join('\n'), `longest-overdue-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
+function exportTopActivePatronsCsv(items: { PatronBarcode: string; LastName: string; FirstName: string; PatronType: string; totalCheckouts: number; checkoutsThisYear: number; overdueCount: number; totalRoomUse?: number; totalUse?: number }[]) {
+  const header = ['PatronBarcode', 'LastName', 'FirstName', 'PatronType', 'TotalCheckouts', 'CheckoutsThisYear', 'OverdueCount', 'TotalRoomUse', 'TotalUse'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([
+      csvField(r.PatronBarcode), csvField(r.LastName), csvField(r.FirstName), csvField(r.PatronType),
+      csvField(r.totalCheckouts), csvField(r.checkoutsThisYear), csvField(r.overdueCount),
+      csvField(r.totalRoomUse ?? 0), csvField(r.totalUse ?? r.totalCheckouts),
+    ].join(','));
+  }
+  downloadBlob(lines.join('\n'), `top-active-patrons-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
+function exportRoomUseTopTitlesCsv(items: { Title: string; Author: string; inLibraryUses: number }[]) {
+  const header = ['Title', 'Author', 'InLibraryUses'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of items) {
+    lines.push([csvField(r.Title), csvField(r.Author), csvField(r.inLibraryUses)].join(','));
+  }
+  downloadBlob(lines.join('\n'), `room-use-top-titles-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+}
+
 function exportTopTitlesCsv(items: { Title: string; Author: string; checkoutCount: number; roomUse?: number; totalUse?: number; currentlyOut: number }[]) {
   const header = ['Title', 'Author', 'Checkouts', 'RoomUse', 'TotalUse', 'CurrentlyOut'];
   const lines = [header.map(csvField).join(',')];
@@ -2627,6 +2661,10 @@ export default function Dashboard() {
   const [exportingDupBarcodes, setExportingDupBarcodes] = useState(false);
   const [exportingMissingCallNumber, setExportingMissingCallNumber] = useState(false);
   const [exportingInconsistentCallNumber, setExportingInconsistentCallNumber] = useState(false);
+  const [exportingLongestOverdue, setExportingLongestOverdue] = useState(false);
+  const [exportingTopActivePatrons, setExportingTopActivePatrons] = useState(false);
+  const [exportingRoomUseTopTitles, setExportingRoomUseTopTitles] = useState(false);
+  const [exportingWeeding, setExportingWeeding] = useState(false);
   const [exportingTopTitles, setExportingTopTitles] = useState(false);
 
   type CombinedUseData = {
@@ -3983,7 +4021,25 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>🥇</span>Top {activePatrons.length} Most Active Patrons
               </h2>
-              <p className="text-xs text-gray-600 mb-4">Patrons ranked by total use (checkouts + in-library room use). Useful for identifying power users and loyal readers.</p>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <p className="text-xs text-gray-600">Patrons ranked by total use (checkouts + in-library room use). Useful for identifying power users and loyal readers.</p>
+                <button
+                  disabled={exportingTopActivePatrons}
+                  onClick={async () => {
+                    setExportingTopActivePatrons(true);
+                    try {
+                      const res = await fetch('/api/charts/top-active-patrons?limit=5000');
+                      const d = await res.json();
+                      const arr = d?.patrons ?? d;
+                      if (Array.isArray(arr)) exportTopActivePatronsCsv(arr);
+                    } catch { /* ignore */ }
+                    setExportingTopActivePatrons(false);
+                  }}
+                  className="bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 print:hidden"
+                >
+                  {exportingTopActivePatrons ? 'Exporting…' : '⬇️ Export All CSV'}
+                </button>
+              </div>
               <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead>
@@ -4371,7 +4427,24 @@ export default function Dashboard() {
                 {/* Top titles */}
                 {roomUse.topTitles && roomUse.topTitles.length > 0 && (
                   <div className="bg-white rounded-xl shadow-sm p-5">
-                    <p className="text-sm font-semibold text-gray-700 mb-3">Most-Used Titles In-Library (Top 20)</p>
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <p className="text-sm font-semibold text-gray-700">Most-Used Titles In-Library (Top 20)</p>
+                      <button
+                        disabled={exportingRoomUseTopTitles}
+                        onClick={async () => {
+                          setExportingRoomUseTopTitles(true);
+                          try {
+                            const res = await fetch(`/api/charts/room-use?year=${year}&topLimit=5000`);
+                            const d = await res.json();
+                            if (Array.isArray(d?.topTitles)) exportRoomUseTopTitlesCsv(d.topTitles);
+                          } catch { /* ignore */ }
+                          setExportingRoomUseTopTitles(false);
+                        }}
+                        className="bg-violet-700 hover:bg-violet-800 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 print:hidden"
+                      >
+                        {exportingRoomUseTopTitles ? 'Exporting…' : '⬇️ Export All CSV'}
+                      </button>
+                    </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs border-collapse">
                         <thead>
@@ -5063,7 +5136,24 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                 <span>⏰</span>Top {longestOverdue.length} Longest-Overdue Items
               </h2>
-              <p className="text-xs text-gray-600 mb-4">Items overdue the longest. Consider escalating to replacement billing for items beyond 90 days.</p>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <p className="text-xs text-gray-600">Items overdue the longest. Consider escalating to replacement billing for items beyond 90 days.</p>
+                <button
+                  disabled={exportingLongestOverdue}
+                  onClick={async () => {
+                    setExportingLongestOverdue(true);
+                    try {
+                      const res = await fetch('/api/charts/longest-overdue?limit=5000');
+                      const d = await res.json();
+                      if (Array.isArray(d)) exportLongestOverdueCsv(d);
+                    } catch { /* ignore */ }
+                    setExportingLongestOverdue(false);
+                  }}
+                  className="bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 print:hidden"
+                >
+                  {exportingLongestOverdue ? 'Exporting…' : '⬇️ Export All CSV'}
+                </button>
+              </div>
               <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead>
@@ -5791,10 +5881,19 @@ export default function Dashboard() {
                 </div>
                 <div className="flex justify-end mb-2 print:hidden">
                   <button
-                    onClick={() => exportWeedingCsv(weedData.items)}
-                    className="bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                    disabled={exportingWeeding}
+                    onClick={async () => {
+                      setExportingWeeding(true);
+                      try {
+                        const res = await fetch('/api/charts/weeding-candidates?years=3&limit=5000');
+                        const d = await res.json();
+                        if (d && !d.error && Array.isArray(d.items)) exportWeedingCsv(d.items);
+                      } catch { /* ignore */ }
+                      setExportingWeeding(false);
+                    }}
+                    className="bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
                   >
-                    ⬇️ Export Worklist CSV
+                    {exportingWeeding ? 'Exporting…' : '⬇️ Export Worklist CSV'}
                   </button>
                 </div>
                 <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
