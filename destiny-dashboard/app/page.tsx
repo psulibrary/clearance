@@ -2590,6 +2590,7 @@ export default function Dashboard() {
   const [strategicLoaded, setStrategicLoaded] = useState(false);
   const [acqData, setAcqData] = useState<{year:number;items:number;titles:number;spend:number}[]>([]);
   const [acqQuarterData, setAcqQuarterData] = useState<{year:number;quarter:number;label:string;items:number;titles:number;spend:number}[]>([]);
+  const [onlineMaterialsQuarterly, setOnlineMaterialsQuarterly] = useState<Record<string, number | string>[]>([]);
   const [chedLoaded, setChedLoaded] = useState(false);
 
   type TopTitle       = { Title: string; Author: string; BibID: number; checkoutCount: number; currentlyOut: number; roomUse?: number; totalUse?: number };
@@ -2886,6 +2887,7 @@ export default function Dashboard() {
       fetch('/api/ched/stats').then(r=>r.json()).then(d=>{ setChedStats(d); }).catch(() => {});
       fetch('/api/ched/acquisition-by-year').then(r=>r.json()).then(d=>{ if(d.data) setAcqData(d.data); }).catch(() => {});
       fetch('/api/ched/acquisition-by-quarter').then(r=>r.json()).then(d=>{ if(d.data) setAcqQuarterData(d.data); }).catch(() => {});
+      fetch('/api/public/online-materials-count?by=quarter').then(r=>r.json()).then(d=>{ if(d.data) setOnlineMaterialsQuarterly(d.data); }).catch(() => {});
     }
     if (activeTab === 'trends' && !trendsLoaded) {
       setTrendsLoaded(true);
@@ -6303,6 +6305,28 @@ export default function Dashboard() {
                           <Legend />
                           <Bar dataKey="items" name="Items Added" fill="#29ABE2" />
                           <Bar dataKey="titles" name="Titles Added" fill="#1B7A3D" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartCard>
+                  </div>
+                </div>
+              )}
+
+              {onlineMaterialsQuarterly.length > 0 && (
+                <div className="mb-8 print:hidden" data-print-section="ched-online-materials-quarterly">
+                  <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <span>🌐</span>Quarterly Online Materials Acquisitions by Material Type
+                  </h2>
+                  <div className="bg-white rounded-xl shadow-sm p-5">
+                    <ChartCard filename="online-materials-quarterly-by-type" data={onlineMaterialsQuarterly}>
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart data={onlineMaterialsQuarterly} margin={{left:20,right:20,top:8,bottom:8}}>
+                          <XAxis dataKey="label" tick={{fontSize:10}} interval={0} angle={-45} textAnchor="end" height={60} />
+                          <YAxis tick={{fontSize:11}} />
+                          <Tooltip formatter={(v:unknown) => Number(v).toLocaleString()} />
+                          <Legend />
+                          <Bar dataKey="Web Resource" name="Web Resource" fill="#8B5CF6" />
+                          <Bar dataKey="e-Book / Digital" name="e-Book / Digital" fill="#EA5B0C" />
                         </BarChart>
                       </ResponsiveContainer>
                     </ChartCard>
