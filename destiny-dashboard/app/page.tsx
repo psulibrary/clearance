@@ -2916,7 +2916,6 @@ export default function Dashboard() {
       fetch('/api/ched/stats').then(r=>r.json()).then(d=>{ setChedStats(d); }).catch(() => {});
       fetch('/api/ched/acquisition-by-year').then(r=>r.json()).then(d=>{ if(d.data) setAcqData(d.data); }).catch(() => {});
       fetch('/api/ched/acquisition-by-quarter').then(r=>r.json()).then(d=>{ if(d.data) setAcqQuarterData(d.data); }).catch(() => {});
-      fetch('/api/public/online-materials-count').then(r=>r.json()).then(d=>{ if(d.breakdown) setOnlineMaterialsCount(d); }).catch(() => {});
     }
     if (activeTab === 'trends' && !trendsLoaded) {
       setTrendsLoaded(true);
@@ -2966,6 +2965,16 @@ export default function Dashboard() {
       })();
     }
   }, [activeTab, chartsLoaded, chedLoaded, strategicLoaded, extraLoaded, extraLoaded2, yoyLoaded, year, patronTiers, trendsLoaded, roomUseLoaded, staffTxYear, campusesLoaded, renewalBehaviorYear]);
+
+  // Online materials counts are subscription totals a librarian can update on
+  // the upstream service at any time — unlike the Destiny-backed CHED data
+  // above, they're cheap to fetch and shouldn't be stuck behind the
+  // once-per-page-load chedLoaded guard, so re-fetch every time this tab is
+  // (re-)visited instead of only the first time.
+  useEffect(() => {
+    if (activeTab !== 'ched') return;
+    fetch('/api/public/online-materials-count', { cache: 'no-store' }).then(r=>r.json()).then(d=>{ if(d.breakdown) setOnlineMaterialsCount(d); }).catch(() => {});
+  }, [activeTab]);
 
   async function reloadCampusesAndAudit() {
     const [campusesRes, { supabase }] = await Promise.all([fetch('/api/charts/campuses').then(r => r.json()), import('@/lib/supabase')]);
