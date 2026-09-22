@@ -2503,6 +2503,35 @@ export default function Dashboard() {
     { id: 'campuses', label: '🏫 Campuses' },
   ];
   const ACCREDITATION_TABS: TabName[] = ['ched', 'aaccup'];
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  // Deep-link support: ?tab=<id> opens straight to that tab, so any tab can
+  // be shared as a plain URL. Read once on mount (after the default
+  // 'overview' render, so SSR/hydration always agree), then keep the address
+  // bar in sync as the user switches tabs — via history.replaceState rather
+  // than Next's router, so it never adds a back-button entry per tab click.
+  useEffect(() => {
+    const urlTab = new URLSearchParams(window.location.search).get('tab');
+    if (urlTab && TAB_META.some(t => t.id === urlTab)) setActiveTab(urlTab as TabName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === activeTab) return;
+    params.set('tab', activeTab);
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  }, [activeTab]);
+
+  function copyTabLink() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', activeTab);
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }).catch(() => {});
+  }
 
   function tabClass(tab: TabName): string {
     if (activeTab === tab) return 'block';
@@ -3566,7 +3595,7 @@ export default function Dashboard() {
         {/* Tab bar — full horizontal strip on desktop; on mobile the strip
             overflows past the viewport with no scroll affordance, so it's
             replaced by a single button that opens a full-width tab sheet. */}
-        <div className="hidden sm:flex gap-2 mb-6 border-b border-gray-200 print:hidden">
+        <div className="hidden sm:flex items-center gap-2 mb-6 border-b border-gray-200 print:hidden">
           {TAB_META.map(({ id, label }) => (
             <button
               key={id}
@@ -3578,16 +3607,26 @@ export default function Dashboard() {
               }`}
             >{label}</button>
           ))}
+          <button
+            onClick={copyTabLink}
+            title="Copy a shareable link to this tab"
+            className="ml-auto mb-2 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-lg px-3 py-1.5 transition-colors shrink-0"
+          >{linkCopied ? '✓ Link copied' : '🔗 Share tab'}</button>
         </div>
 
-        <div className="sm:hidden mb-6 print:hidden">
+        <div className="sm:hidden mb-6 print:hidden flex items-center gap-2">
           <button
             onClick={() => setMobileTabOpen(true)}
-            className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm text-sm font-semibold text-gray-800"
+            className="flex-1 flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm text-sm font-semibold text-gray-800"
           >
             <span>{TAB_META.find(t => t.id === activeTab)?.label}</span>
             <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
           </button>
+          <button
+            onClick={copyTabLink}
+            title="Copy a shareable link to this tab"
+            className="shrink-0 bg-white border border-gray-200 rounded-xl px-3 py-3 shadow-sm text-sm"
+          >{linkCopied ? '✓' : '🔗'}</button>
         </div>
 
         {mobileTabOpen && (
