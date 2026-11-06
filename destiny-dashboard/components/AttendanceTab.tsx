@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import ChartCard from '@/components/ChartCard';
 import ApiChart, { toRows, type Dataset } from '@/components/ApiChart';
+import HeatmapGrid from '@/components/HeatmapGrid';
 
 /** Library attendance statistics from stat.palawansulibrary.com, through /api/stat/* (which holds the key). */
 type Meta = { source?: 'cache'; asOf?: string; error?: string };
@@ -32,33 +33,6 @@ function rangeParams(id: RangeId): string {
 async function load<T>(path: string): Promise<T> {
   const res = await fetch(path);
   return (await res.json().catch(() => ({ error: `Unexpected answer (${res.status})` }))) as T;
-}
-
-function HeatmapGrid({ h }: { h: Heatmap }) {
-  const days = h.days ?? [], matrix = h.matrix ?? [], max = Math.max(1, h.max ?? 1);
-  const used = (h.hours ?? []).filter(hr => matrix.some(row => (row[hr] ?? 0) > 0));
-  if (used.length === 0) return <p className="text-sm text-gray-400 py-10 text-center">No visits in this period.</p>;
-  const hours = Array.from({ length: used[used.length - 1] - used[0] + 1 }, (_, i) => used[0] + i);
-  const label = (hr: number) => `${hr % 12 === 0 ? 12 : hr % 12}${hr < 12 ? 'a' : 'p'}`;
-  return (
-    <div className="overflow-x-auto">
-      <table className="text-xs border-separate" style={{ borderSpacing: 2 }}>
-        <thead><tr><th></th>{hours.map(hr => <th key={hr} className="font-normal text-gray-500 px-1">{label(hr)}</th>)}</tr></thead>
-        <tbody>
-          {days.map((day, d) => (
-            <tr key={day}>
-              <th className="text-left font-medium text-gray-600 pr-2 whitespace-nowrap">{day.slice(0, 3)}</th>
-              {hours.map(hr => {
-                const v = matrix[d]?.[hr] ?? 0;
-                return <td key={hr} title={`${day} ${label(hr)}: ${v.toLocaleString()} visits`} className="w-9 h-7 text-center rounded"
-                  style={{ background: v ? `rgba(37,99,235,${0.12 + 0.88 * (v / max)})` : '#f3f4f6', color: v / max > 0.55 ? '#fff' : '#374151' }}>{v || ''}</td>;
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 function Card({ ds, filename }: { ds: Chart; filename: string }) {
@@ -161,7 +135,7 @@ export default function AttendanceTab({ active }: { active: boolean }) {
           <div className="bg-white rounded-xl shadow-sm p-5">
             <h3 className="text-sm font-semibold text-gray-700">{heatmap.title}</h3>
             {heatmap.note && <p className="text-xs text-gray-400 mb-3">{heatmap.note}</p>}
-            <HeatmapGrid h={heatmap} />
+            <HeatmapGrid days={heatmap.days ?? []} hours={heatmap.hours ?? []} matrix={heatmap.matrix ?? []} max={heatmap.max ?? 1} noun="visits" />
           </div>
         )}
         {BREAKDOWNS.map(b => breakdowns[b.group] && !breakdowns[b.group].error && <Card key={b.group} ds={breakdowns[b.group]} filename={`attendance-by-${b.file}`} />)}

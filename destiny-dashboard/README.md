@@ -60,3 +60,14 @@ It calls `/api/stat/[dataset]`, which adds the key on the server. Set in Vercel,
 |---|---|
 | `STAT_API_KEY` | A key made on stat.palawansulibrary.com → API Access (super-admin) |
 | `STAT_API_URL` | Optional. Defaults to the address above. |
+
+## Reservations tab (room reservation analytics API)
+
+The **Reservations** tab (`?tab=reservations`) shows room usage, demand, cancellations, approvals backlog and recommendations from
+`https://reserve.palawansulibrary.com/Web/analytics-api.php` (totals only: no names, e-mails or event titles).
+It calls `/api/reservations/[report]`, which adds the key on the server. Set in Vercel, then redeploy:
+
+| Variable | Value |
+|---|---|
+| `RESERVE_API_KEY` | A key made on the reservation site → Analytics → "Connect other apps (API)" (application admin) |
+| `RESERVE_API_URL` | Optional. Defaults to the address above. |
