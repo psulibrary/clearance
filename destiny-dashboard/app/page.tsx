@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
 import ChartCard from '@/components/ChartCard';
 import ThesesTab from '@/components/ThesesTab';
+import AttendanceTab from '@/components/AttendanceTab';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
   constructor(props: { children: ReactNode }) {
@@ -2484,7 +2485,7 @@ export default function Dashboard() {
   const [genderActivity, setGenderActivity]       = useState<ActivityRow[]>([]);
   const [patronTypeActivity, setPatronTypeActivity] = useState<ActivityRow[]>([]);
 
-  type TabName = 'overview'|'patrons'|'collection'|'iso'|'ched'|'aaccup'|'insights'|'trends'|'campuses'|'theses';
+  type TabName = 'overview'|'patrons'|'collection'|'iso'|'ched'|'aaccup'|'insights'|'trends'|'campuses'|'theses'|'attendance';
   const [activeTab, setActiveTab] = useState<TabName>('overview');
   type PrintMode = 'none' | 'accreditation' | 'custom';
   const [printMode, setPrintMode] = useState<PrintMode>('none');
@@ -2503,6 +2504,7 @@ export default function Dashboard() {
     { id: 'trends', label: '📈 Trends' },
     { id: 'campuses', label: '🏫 Campuses' },
     { id: 'theses', label: '🎓 Theses' },
+    { id: 'attendance', label: '🚪 Attendance' },
   ];
   const ACCREDITATION_TABS: TabName[] = ['ched', 'aaccup'];
   const [linkCopied, setLinkCopied] = useState(false);
@@ -3472,7 +3474,7 @@ export default function Dashboard() {
               {(['overview','patrons','collection','iso','ched','aaccup','insights','trends','campuses'] as TabName[]).map(tabName => {
                 const sections = PRINTABLE_SECTIONS.filter(s => s.tab === tabName);
                 if (sections.length === 0) return null;
-                const tabLabels: Record<TabName,string> = { overview:'Overview', patrons:'Patrons', collection:'Collection', iso:'Intl Standards', ched:'CHED CMO 22', aaccup:'AACCUP Area VII', insights:'Insights', trends:'Trends', campuses:'Campuses', theses:'Theses' };
+                const tabLabels: Record<TabName,string> = { overview:'Overview', patrons:'Patrons', collection:'Collection', iso:'Intl Standards', ched:'CHED CMO 22', aaccup:'AACCUP Area VII', insights:'Insights', trends:'Trends', campuses:'Campuses', theses:'Theses', attendance:'Attendance' };
                 return (
                   <div key={tabName} className="mb-4">
                     <div className="flex items-center justify-between mb-1.5">
@@ -7510,6 +7512,11 @@ export default function Dashboard() {
         {/* Theses and dissertations: charts from the ThesesVault API (see /api/theses/*). */}
         <div className={tabClass('theses')} data-print-section="theses">
           <ThesesTab active={activeTab === 'theses'} />
+        </div>
+
+        {/* Library visits: charts from the attendance system API (see /api/stat/*). */}
+        <div className={tabClass('attendance')} data-print-section="attendance">
+          <AttendanceTab active={activeTab === 'attendance'} />
         </div>
       </main>
     </div>
