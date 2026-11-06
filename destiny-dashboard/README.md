@@ -34,3 +34,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Theses tab (ThesesVault API)
+
+The **Theses** tab (`?tab=theses`) draws charts from the ThesesVault API (`https://thesesvault.palawansulibrary.com/api/v1`).
+The browser never sees the key: it calls `/api/theses/[dataset]`, which adds the key on the server.
+
+Set these in Vercel (Project → Settings → Environment Variables), then redeploy:
+
+| Variable | Value |
+|---|---|
+| `THESESVAULT_API_KEY` | A key made in ThesesVault → Settings → API access (permissions: insights, demand, collection) |
+| `THESESVAULT_API_URL` | Optional. Defaults to the address above. |
+
+New charts added to the ThesesVault API (`insights.datasets`) appear here automatically: each one describes its own type
+(`bar`, `hbar`, `line`, `doughnut`, `stacked`), labels and series, and `components/ThesesTab.tsx` draws it.
