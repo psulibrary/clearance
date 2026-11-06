@@ -49,3 +49,14 @@ Set these in Vercel (Project → Settings → Environment Variables), then redep
 
 New charts added to the ThesesVault API (`insights.datasets`) appear here automatically: each one describes its own type
 (`bar`, `hbar`, `line`, `doughnut`, `stacked`), labels and series, and `components/ThesesTab.tsx` draws it.
+
+## Attendance tab (library attendance API)
+
+The **Attendance** tab (`?tab=attendance`) draws visits, trends, breakdowns by college/program/facility/purpose, yearly
+comparison and peak hours from `https://stat.palawansulibrary.com/api/v1` (aggregates only, no visitor names or IDs).
+It calls `/api/stat/[dataset]`, which adds the key on the server. Set in Vercel, then redeploy:
+
+| Variable | Value |
+|---|---|
+| `STAT_API_KEY` | A key made on stat.palawansulibrary.com → API Access (super-admin) |
+| `STAT_API_URL` | Optional. Defaults to the address above. |
